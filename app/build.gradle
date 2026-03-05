@@ -1,0 +1,18 @@
+plugins {
+    alias(libs.plugins.spring.boot)
+}
+
+description = 'Demo project for Spring Boot'
+
+dependencies {
+    rootProject.subprojects.each {
+        if (it.name != project.name) {
+            implementation project(it.path)
+        }
+    }
+
+    // Core spring boot dependency needed for SpringApplication
+    implementation libs.spring.boot.starter
+
+    developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
+}

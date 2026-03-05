@@ -1,0 +1,5 @@
+rootProject.name = 'log-analyzer'
+
+include 'log-processing'
+include 'app'
+include 'common'
