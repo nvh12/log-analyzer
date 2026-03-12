@@ -1,6 +1,45 @@
-dependencies {
-    implementation project(":common")
-    implementation libs.spring.boot.starter.webmvc
-    testImplementation platform(libs.junit.bom)
-    testImplementation libs.junit.jupiter
+plugins {
+    id 'java'
+    alias(libs.plugins.spring.boot) apply false
+    alias(libs.plugins.spring.dependency.management) apply false
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'io.spring.dependency-management'
+
+    group = 'com.nvh12'
+    version = '0.0.1-SNAPSHOT'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    configurations {
+        compileOnly {
+            extendsFrom annotationProcessor
+        }
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencyManagement {
+        imports {
+            mavenBom org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES
+        }
+    }
+
+    dependencies {
+        compileOnly libs.lombok
+        annotationProcessor libs.lombok
+        testRuntimeOnly libs.junit.platform.launcher
+    }
+
+    tasks.named('test') {
+        useJUnitPlatform()
+    }
 }
