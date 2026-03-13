@@ -1,45 +1,40 @@
 plugins {
-    id 'java'
-    alias(libs.plugins.spring.boot) apply false
-    alias(libs.plugins.spring.dependency.management) apply false
+	id 'java'
+	id 'org.springframework.boot' version '4.0.3'
+	id 'io.spring.dependency-management' version '1.1.7'
 }
 
-subprojects {
-    apply plugin: 'java'
-    apply plugin: 'io.spring.dependency-management'
+group = 'com.nvh12'
+version = '0.0.1-SNAPSHOT'
+description = 'Processing service'
 
-    group = 'com.nvh12'
-    version = '0.0.1-SNAPSHOT'
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
 
-    java {
-        toolchain {
-            languageVersion = JavaLanguageVersion.of(21)
-        }
-    }
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
 
-    configurations {
-        compileOnly {
-            extendsFrom annotationProcessor
-        }
-    }
+repositories {
+	mavenCentral()
+}
 
-    repositories {
-        mavenCentral()
-    }
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-amqp'
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+	testImplementation 'org.springframework.boot:spring-boot-starter-amqp-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-data-redis-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
 
-    dependencyManagement {
-        imports {
-            mavenBom org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES
-        }
-    }
-
-    dependencies {
-        compileOnly libs.lombok
-        annotationProcessor libs.lombok
-        testRuntimeOnly libs.junit.platform.launcher
-    }
-
-    tasks.named('test') {
-        useJUnitPlatform()
-    }
+tasks.named('test') {
+	useJUnitPlatform()
 }

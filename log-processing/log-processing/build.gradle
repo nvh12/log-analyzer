@@ -1,7 +1,0 @@
-dependencies {
-    implementation project(":common")
-    implementation libs.spring.boot.starter.webmvc
-    implementation libs.spring.boot.starter.data.redis
-    testImplementation platform(libs.junit.bom)
-    testImplementation libs.junit.jupiter
-}

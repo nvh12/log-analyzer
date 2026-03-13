@@ -1,0 +1,56 @@
+name: log-analyzer
+
+#template for compose, change the values for deployment
+services:
+  rabbitmq:
+    image: rabbitmq:4.2.4-management
+    container_name: rabbitmq-log-analyzer
+    hostname: rabbit-server
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: sa
+      RABBITMQ_DEFAULT_PASS: 1234
+      RABBITMQ_DEFAULT_VHOST: /
+    labels:
+      org.springframework.boot.service-connection: rabbitmq
+    volumes:
+      - rabbit-data:/var/lib/rabbitmq
+    networks:
+      - log-analyzer
+
+  postgres-db:
+    image: postgres:17.5
+    container_name: postgres-log-analyzer
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: sa
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: log-analyzer
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    labels:
+      org.springframework.boot.service-connection: postgres
+    networks:
+      - log-analyzer
+
+  redis:
+    image: redis:7.4
+    container_name: redis-log-analyzer
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - log-analyzer
+
+volumes:
+  db-data:
+  redis-data:
+  rabbit-data:
+
+networks:
+  log-analyzer:
+    driver: bridge
