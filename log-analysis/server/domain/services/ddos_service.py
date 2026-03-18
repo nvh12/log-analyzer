@@ -1,6 +1,6 @@
 from domain.repository.model_repository import ModelRepository
-from domain.services.input.ddos_input import DDoSInput
-from domain.services.results.ddos_result import DDoSResult
+from domain.models.input import DDoSInput
+from domain.models.results import DDoSResult
 
 def detect(vec: DDoSInput, repo: ModelRepository) -> DDoSResult:
     vector = [[

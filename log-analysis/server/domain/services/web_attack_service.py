@@ -3,8 +3,8 @@ import math
 import numpy as np
 from collections import Counter
 from domain.repository.model_repository import ModelRepository
-from domain.services.input.web_attack_input import WebAttackInput
-from domain.services.results.web_attack_result import WebAttackResult
+from domain.models.input import WebAttackInput
+from domain.models.results import WebAttackResult
 
 
 # ── Layer 1: Rule Engine (Regex signatures) ───────────────────────────────────

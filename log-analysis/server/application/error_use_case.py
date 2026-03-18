@@ -1,7 +1,7 @@
 from domain.repository.model_repository import ModelRepository
 from domain.services.error_service import detect
-from domain.services.input.error_input import ErrorInput
-from domain.services.results.error_result import ErrorResult
+from domain.models.input import ErrorInput
+from domain.models.results import ErrorResult
 
 class ErrorUseCase:
     """

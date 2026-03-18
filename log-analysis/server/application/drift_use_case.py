@@ -1,6 +1,6 @@
 from domain.services.drift_service import detect
-from domain.services.input.drift_input import DriftInput
-from domain.services.results.drift_result import DriftResult
+from domain.models.input import DriftInput
+from domain.models.results import DriftResult
 
 class DriftUseCase:
     """

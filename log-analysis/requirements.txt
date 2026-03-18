@@ -6,3 +6,4 @@ statsmodels
 ruptures
 joblib
 pydantic
+dependency-injector
