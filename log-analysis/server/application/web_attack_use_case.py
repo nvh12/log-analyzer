@@ -1,7 +1,7 @@
 from domain.repository.model_repository import ModelRepository
 from domain.services.web_attack_service import detect
-from domain.services.input.web_attack_input import WebAttackInput
-from domain.services.results.web_attack_result import WebAttackResult
+from domain.models.input import WebAttackInput
+from domain.models.results import WebAttackResult
 
 class WebAttackUseCase:
     """

@@ -1,6 +1,6 @@
 import numpy as np
-from domain.services.input.drift_input import DriftInput
-from domain.services.results.drift_result import DriftResult
+from domain.models.input import DriftInput
+from domain.models.results import DriftResult
 
 
 # ── PELT (changepoint detection) ─────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import numpy as np
 from domain.repository.model_repository import ModelRepository
-from domain.services.input.traffic_input import TrafficInput
-from domain.services.results.traffic_result import TrafficResult
+from domain.models.input import TrafficInput
+from domain.models.results import TrafficResult
 
 
 # ── Thresholds (tune during evaluation) ──────────────────────────────────────

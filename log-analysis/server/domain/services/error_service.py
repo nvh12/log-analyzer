@@ -1,7 +1,7 @@
 import numpy as np
 from domain.repository.model_repository import ModelRepository
-from domain.services.input.error_input import ErrorInput
-from domain.services.results.error_result import ErrorResult
+from domain.models.input import ErrorInput
+from domain.models.results import ErrorResult
 
 
 def _fit_arima_forecast(series: list[float]) -> float:
