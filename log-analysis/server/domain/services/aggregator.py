@@ -1,30 +1,39 @@
+from datetime import datetime, timezone
 import math
 from collections import Counter
 from domain.models.log import Log
 from domain.models.input import (
-    TrafficInput, DDoSInput, WebRequestInput,
+    TrafficInput, DDoSInput, WebAttackInput,
     ErrorInput, DriftInput
 )
 
 class LogWindowAggregator:
-    """
-    Takes a list of Log entries representing one time window
-    and produces the input schema expected by each detection service.
-    """
+    """Groups logs into input models for detection use cases."""
 
     def __init__(self, logs: list[Log], tick_seconds: int = 60):
+        """Initializes aggregator with a window of logs and a time tick duration."""
         self.logs = logs
         self.tick_seconds = tick_seconds
 
-    # Traffic Spike 
+        # Calculate window boundaries
+        if logs:
+            ts = [log.timestamp for log in logs]
+            self.window_start = datetime.fromtimestamp(min(ts), tz=timezone.utc)
+            self.window_end = datetime.fromtimestamp(max(ts), tz=timezone.utc)
+        else:
+            self.window_start = self.window_end = None
+
+    # Traffic
     def to_traffic_input(self, history: list[float]) -> TrafficInput:
         current_count = float(len(self.logs))
         return TrafficInput(
             req_counts=history + [current_count],
             tick_seconds=self.tick_seconds,
+            window_start=self.window_start,
+            window_end=self.window_end,
         )
 
-    # DDoS 
+    # DDoS
     def to_ddos_input(self) -> DDoSInput:
         n = len(self.logs)
         if n == 0:
@@ -32,6 +41,7 @@ class LogWindowAggregator:
                 req_per_sec=0, req_per_min=0,
                 inter_arrival_time_mean=0, req_per_ip=0,
                 error_rate=0, url_entropy=0, unique_url_ratio=0,
+                window_start=None, window_end=None,
             )
 
         window_secs = self.tick_seconds
@@ -50,27 +60,33 @@ class LogWindowAggregator:
             req_per_sec=n / window_secs,
             req_per_min=n / (window_secs / 60),
             inter_arrival_time_mean=(
-                sum(inter_arrivals) / len(inter_arrivals) if inter_arrivals else 0.0
+                sum(inter_arrivals) / len(inter_arrivals) if inter_arrivals else float(window_secs)
             ),
             req_per_ip=n / max(len(req_per_ip_counts), 1),
             error_rate=errors / n,
             url_entropy=self._entropy(urls),
             unique_url_ratio=len(set(urls)) / n,
+            window_start=self.window_start,
+            window_end=self.window_end,
         )
 
-    # Web Attack     
-    def to_web_requests(self) -> list[WebRequestInput]:
+    # Web Attack
+    def to_web_requests(self) -> list[WebAttackInput]:
         return [
-            WebRequestInput(
+            WebAttackInput(
                 method=log.method,
                 url=log.url,
                 headers=log.headers,
                 body=log.body,
+                source_ip=log.ip,
+                timestamp=datetime.fromtimestamp(log.timestamp, tz=timezone.utc),
+                window_start=self.window_start,
+                window_end=self.window_end,
             )
             for log in self.logs
         ]
 
-    # Error Spike 
+    # Error Spike
     def to_error_input(
         self,
         error_history: list[float],
@@ -86,9 +102,11 @@ class LogWindowAggregator:
             error_5xx_counts=error_5xx_history + [float(errors_5xx)],
             total_requests=total_history + [float(total)],
             tick_seconds=self.tick_seconds,
+            window_start=self.window_start,
+            window_end=self.window_end,
         )
 
-    # Drift 
+    # Drift
     def to_drift_input(self, rate_history: list[float]) -> DriftInput:
         total  = len(self.logs)
         errors = sum(1 for log in self.logs if log.status_code >= 400)
@@ -97,9 +115,10 @@ class LogWindowAggregator:
         return DriftInput(
             error_rates=rate_history + [rate],
             tick_seconds=self.tick_seconds,
+            window_start=self.window_start,
+            window_end=self.window_end,
         )
 
-    # Helpers 
     @staticmethod
     def _entropy(values: list[str]) -> float:
         if not values:

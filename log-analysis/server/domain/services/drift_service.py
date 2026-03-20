@@ -1,14 +1,12 @@
 import numpy as np
 from domain.models.input import DriftInput
-from domain.models.results import DriftResult
+from domain.models.results import DriftResult, Severity
 
 
-# ── PELT (changepoint detection) ─────────────────────────────────────────────
+# PELT (changepoint detection)
 
 def _pelt_detect(series: list[float]) -> int | None:
-    """
-    Wrapper around ruptures PELT. Returns index of first changepoint or None.
-    """
+    """Returns index of first changepoint or None."""
     try:
         import ruptures as rpt
         signal = np.array(series).reshape(-1, 1)
@@ -22,13 +20,10 @@ def _pelt_detect(series: list[float]) -> int | None:
     return None
 
 
-# ── ADWIN (drift detection) ───────────────────────────────────────────────────
+# ADWIN (drift detection)
 
 class ADWIN:
-    """
-    Lightweight ADWIN implementation.
-    Splits the window at each point; flags drift when bucket means diverge significantly.
-    """
+    """Lightweight ADWIN. Splits windows to find significantly diverging means."""
     def __init__(self, delta: float = 0.002):
         self.delta = delta
 
@@ -51,12 +46,17 @@ class ADWIN:
 _adwin = ADWIN()
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# Main
 
 def detect(window: DriftInput) -> DriftResult:
+    """Detects drift or step changes in error rates."""
+
     series = window.error_rates
     if len(series) < 10:
-        return DriftResult(change_detected=False, change_type=None, detected_at_index=None)
+        return DriftResult(
+            change_detected=False, change_type=None, detected_at_index=None,
+            window_start=window.window_start, window_end=window.window_end
+        )
 
     cp_index = _pelt_detect(series)
     if cp_index is not None:
@@ -64,6 +64,9 @@ def detect(window: DriftInput) -> DriftResult:
             change_detected=True,
             change_type="step_change",
             detected_at_index=cp_index,
+            severity=Severity.HIGH,
+            window_start=window.window_start,
+            window_end=window.window_end,
         )
 
     if _adwin.detect(series):
@@ -71,6 +74,16 @@ def detect(window: DriftInput) -> DriftResult:
             change_detected=True,
             change_type="drift",
             detected_at_index=None,   # ADWIN doesn't pinpoint exact index
+            severity=Severity.MEDIUM,
+            window_start=window.window_start,
+            window_end=window.window_end,
         )
 
-    return DriftResult(change_detected=False, change_type=None, detected_at_index=None)
+    return DriftResult(
+        change_detected=False,
+        change_type=None,
+        detected_at_index=None,
+        severity=Severity.LOW,
+        window_start=window.window_start,
+        window_end=window.window_end,
+    )

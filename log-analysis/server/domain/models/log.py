@@ -2,6 +2,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Log:
+    """Represents a single log entry with structured metadata."""
+
     timestamp: float
     ip: str
     method: str

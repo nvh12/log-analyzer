@@ -1,10 +1,10 @@
 import numpy as np
 from domain.repository.model_repository import ModelRepository
 from domain.models.input import TrafficInput
-from domain.models.results import TrafficResult
+from domain.models.results import TrafficResult, Severity
 
 
-# ── Thresholds (tune during evaluation) ──────────────────────────────────────
+# Thresholds
 Z_SCORE_EXTREME   = 3.5   # immediate flag, skip IF
 IQR_MULTIPLIER    = 1.5
 EMA_ALPHA         = 0.3   # smoothing factor
@@ -39,9 +39,18 @@ def _ema_deviation(values: list[float], ema: list[float]) -> float:
 
 
 def detect(window: TrafficInput, repo: ModelRepository) -> TrafficResult:
+    """Detects traffic anomalies using stats and ML."""
+
     vals = np.array(window.req_counts)
     if len(vals) < 5:
-        return TrafficResult(anomaly=False, anomaly_score=0.0, method_flags={})
+        return TrafficResult(
+            anomaly=False,
+            anomaly_score=0.0,
+            method_flags={},
+            severity=Severity.LOW,
+            window_start=window.window_start,
+            window_end=window.window_end,
+        )
 
     z   = _z_score(vals)
     iqr = _iqr_flag(vals)
@@ -54,23 +63,50 @@ def detect(window: TrafficInput, repo: ModelRepository) -> TrafficResult:
         "ema":     abs(ema_dev) > 2.0,
     }
 
-    # Extreme threshold → immediate response, skip IF
+    # Early exit: Extreme threshold
     if abs(z) > Z_SCORE_EXTREME:
-        return TrafficResult(anomaly=True, anomaly_score=1.0, method_flags=method_flags)
+        return TrafficResult(
+            anomaly=True,
+            anomaly_score=1.0,
+            method_flags=method_flags,
+            severity=Severity.CRITICAL,
+            window_start=window.window_start,
+            window_end=window.window_end,
+        )
 
     # Pass to Isolation Forest for deeper analysis
     model = repo.get("traffic_if")
     if model is None:
         # Model not trained yet — fall back to statistical methods
         anomaly = any(method_flags.values())
-        return TrafficResult(anomaly=anomaly, anomaly_score=float(anomaly), method_flags=method_flags)
+        return TrafficResult(
+            anomaly=anomaly,
+            anomaly_score=float(anomaly),
+            method_flags=method_flags,
+            severity=Severity.MEDIUM if anomaly else Severity.LOW,
+            window_start=window.window_start,
+            window_end=window.window_end,
+        )
 
     vector = [[vals[-1], z, float(iqr), ema_dev]]
     score  = float(model.decision_function(vector)[0])
     pred   = model.predict(vector)[0]          # -1 = anomaly, 1 = normal
 
+    anomaly = pred == -1
+    severity = Severity.LOW
+    if anomaly:
+        if abs(z) > Z_SCORE_EXTREME or score < -0.8:
+            severity = Severity.CRITICAL
+        elif score < -0.5:
+            severity = Severity.HIGH
+        else:
+            severity = Severity.MEDIUM
+
     return TrafficResult(
-        anomaly=pred == -1,
+        anomaly=anomaly,
         anomaly_score=-score,                  # negate: higher = more anomalous
         method_flags=method_flags,
+        severity=severity,
+        window_start=window.window_start,
+        window_end=window.window_end,
     )

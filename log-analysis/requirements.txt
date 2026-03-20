@@ -7,3 +7,7 @@ ruptures
 joblib
 pydantic
 dependency-injector
+apscheduler
+aio-pika
+redis
+

@@ -4,10 +4,10 @@ import numpy as np
 from collections import Counter
 from domain.repository.model_repository import ModelRepository
 from domain.models.input import WebAttackInput
-from domain.models.results import WebAttackResult
+from domain.models.results import WebAttackResult, Severity
 
 
-# ── Layer 1: Rule Engine (Regex signatures) ───────────────────────────────────
+# Rule Engine (Regex signatures)
 
 SIGNATURES = {
     "sqli":           re.compile(
@@ -30,7 +30,7 @@ def _rule_engine(req: WebAttackInput) -> tuple[bool, str | None]:
     return False, None
 
 
-# ── Layer 2 & 3: Feature extraction ──────────────────────────────────────────
+# Feature extraction
 
 def _url_entropy(url: str) -> float:
     if not url:
@@ -52,17 +52,28 @@ def _extract_features(req: WebAttackInput) -> list[float]:
     ]
 
 
-# ── Main pipeline ─────────────────────────────────────────────────────────────
+# Main pipeline
 
 def detect(req: WebAttackInput, repo: ModelRepository) -> WebAttackResult:
-    # Layer 1 — Rule engine
+    """Detects web attacks using multiple defensive layers."""
+
+    # Layer 1: Rule engine
     matched, sig_name = _rule_engine(req)
     if matched:
-        return WebAttackResult(anomaly=True, layer_triggered=f"rule_engine:{sig_name}", confidence=1.0)
+        return WebAttackResult(
+            anomaly=True,
+            layer_triggered=f"rule_engine:{sig_name}",
+            confidence=1.0,
+            source_ip=req.source_ip,
+            log_timestamp=req.timestamp,
+            window_start=req.window_start,
+            window_end=req.window_end,
+            severity=Severity.HIGH if sig_name in ["sqli", "rce"] else Severity.MEDIUM,
+        )
 
     features = _extract_features(req)
 
-    # Layer 2 — Isolation Forest (structural anomaly)
+    # Layer 2: Isolation Forest
     if_model = repo.get("web_if")
     if if_model is not None:
         score = float(if_model.decision_function([features])[0])
@@ -72,9 +83,14 @@ def detect(req: WebAttackInput, repo: ModelRepository) -> WebAttackResult:
                 anomaly=True,
                 layer_triggered="isolation_forest",
                 confidence=min(1.0, -score),
+                source_ip=req.source_ip,
+                log_timestamp=req.timestamp,
+                window_start=req.window_start,
+                window_end=req.window_end,
+                severity=Severity.HIGH if -score > 0.5 else Severity.MEDIUM,
             )
 
-    # Layer 3 — One-Class SVM (zero-day)
+    # Layer 3: One-Class SVM
     svm_model = repo.get("web_svm")
     if svm_model is not None:
         pred = svm_model.predict([features])[0]   # -1 = outlier (attack)
@@ -84,6 +100,20 @@ def detect(req: WebAttackInput, repo: ModelRepository) -> WebAttackResult:
                 anomaly=True,
                 layer_triggered="one_class_svm",
                 confidence=min(1.0, -score),
+                source_ip=req.source_ip,
+                log_timestamp=req.timestamp,
+                window_start=req.window_start,
+                window_end=req.window_end,
+                severity=Severity.MEDIUM,
             )
 
-    return WebAttackResult(anomaly=False, layer_triggered=None, confidence=0.0)
+    return WebAttackResult(
+        anomaly=False,
+        layer_triggered=None,
+        confidence=0.0,
+        source_ip=req.source_ip,
+        log_timestamp=req.timestamp,
+        window_start=req.window_start,
+        window_end=req.window_end,
+        severity=Severity.LOW,
+    )

@@ -3,6 +3,7 @@ from typing import Optional
 from domain.models.log import Log
 
 class LogMessage(BaseModel):
+    """API schema for normalized log messages received from RabbitMQ."""
     timestamp: float          # unix epoch
     ip: str
     method: str
@@ -13,6 +14,8 @@ class LogMessage(BaseModel):
     headers: Optional[dict] = {}
 
     def to_domain(self) -> Log:
+        """Converts the API schema to a domain Log model."""
+
         return Log(
             timestamp=self.timestamp,
             ip=self.ip,

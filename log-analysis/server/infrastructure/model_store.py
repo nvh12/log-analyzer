@@ -1,16 +1,20 @@
 import os
 import joblib
 import logging
+from pathlib import Path
 from typing import Any
 from domain.repository.model_repository import ModelRepository
 
 logger = logging.getLogger(__name__)
 
+# Anchor model paths to this file's directory
+_BASE_DIR = Path(__file__).parent
+
 MODEL_PATHS = {
-    "traffic_if":  "models/isolation_forest/traffic.pkl",
-    "ddos_if":     "models/isolation_forest/ddos.pkl",
-    "web_if":      "models/isolation_forest/web.pkl",
-    "web_svm":     "models/one_class_svm/web.pkl",
+    "traffic_if":  _BASE_DIR / "models/isolation_forest/traffic.pkl",
+    "ddos_if":     _BASE_DIR / "models/isolation_forest/ddos.pkl",
+    "web_if":      _BASE_DIR / "models/isolation_forest/web.pkl",
+    "web_svm":     _BASE_DIR / "models/one_class_svm/web.pkl",
 }
 
 class LocalModelStore(ModelRepository):
@@ -18,7 +22,7 @@ class LocalModelStore(ModelRepository):
         self._models: dict[str, Any] = {}
 
     def load_all(self) -> None:
-        """Load all models into the repository."""
+        """Load all models from MODEL_PATHS."""
         for key, path in MODEL_PATHS.items():
             if os.path.exists(path):
                 try:
@@ -32,12 +36,14 @@ class LocalModelStore(ModelRepository):
                 logger.warning(f"Model not found, skipping: {path}")
 
     def unload_all(self) -> None:
-        """Unload all models from the repository."""
+        """Removes all models from memory."""
         self._models.clear()
 
+
     def get(self, key: str) -> Any:
-        """Retrieve a model by its key."""
+        """Retrieves a loaded model by key from the store."""
         return self._models.get(key)
+
 
 # Singleton instance
 store = LocalModelStore()
