@@ -1,6 +1,6 @@
 # Web Attack Detection Strategy
 
-This document outlines a **multi-layered approach** to detecting web-based attacks (SQLi, XSS, etc.) within server logs. The strategy demonstrates the transition from static signatures to behavioral anomaly detection.
+This document outlines a **2-layer detection strategy** to identifying web-based attacks (SQLi, XSS, etc.) within server logs. The strategy moves from fast rule-based signature checks to deep classification using machine learning.
 
 ---
 
@@ -18,20 +18,19 @@ Rule engines are brittle against **evasion techniques**. Obfuscated payloads (e.
 
 ---
 
-# 2. Layer 2 — Behavioral Anomaly Detection
+# 2. Layer 2 — Deep Classification (XGBoost)
 
-Instead of looking for specific strings, Layer 2 focuses on the **structural characteristics** of the request using **Isolation Forest**.
+The second layer is a supervised **XGBoost** model trained on both benign and attack traces. This layer serves as the final arbiter for requests, performing high-precision classification based on engineered features.
 
 ### Feature Engineering
-We engineer numerical features that capture typical attack behaviors:
 
-| Feature | Unit | Detection Rationale |
+Features are extracted by analyzing the structure and vocabulary of the HTTP request. The XGBoost model utilizes **12 dimensional features**:
+
+| Feature Category | Features | Description |
 | :--- | :--- | :--- |
-| **Request Length** | chars | Payloads for SQLi/XSS are often unusually long. |
-| **Special Char Count** | count | High density of `'`, `"`, `<`, `>`, `;`, or `--`. |
-| **URL Entropy** | bits | Encoded or obfuscated attacks exhibit high randomness. |
-| **Param Count** | count | Deviations from the standard endpoint schema. |
-| **Status Codes** | code | High frequency of 400/500 errors during probing phases. |
+| **Structural** | `request_length`, `special_char_count`, `special_char_ratio`, `param_count`, `has_body` | Basic request properties and complexity. |
+| **Complexity** | `url_entropy`, `body_entropy`, `url_path_depth`, `max_param_value_length` | Measures of randomness and structural depth. |
+| **Vocabulary** | `unknown_param_name_count`, `unknown_param_name_ratio`, `max_param_name_min_edit_dist` | Statistical distance to known "benign" parameter patterns. |
 
 ### Mathematical Definition: URL Entropy
 
@@ -48,18 +47,10 @@ Where:
 
 ---
 
-# 3. Layer 3 — Zero-Signature Detection
-
-For novel attacks ("Zero-Days"), we use **One-Class SVM (Support Vector Machine)**. Unlike traditional classifiers, OC-SVM is trained **only on legitimate traffic** (e.g., the "Normal" set from CSIC 2010).
-
-*   **Training**: The model learns a tight boundary around "Benign" behavior.
-*   **Inference**: Any request falling outside this hypersphere is flagged as malicious, even if the attack type has never been seen before.
-
-# 4. Data Sources
+# 3. Data Sources
 
 Detection strategies are validated using:
 *   **CSIC 2010 HTTP Dataset**: Standard benchmark for web-based attacks (SQLi, XSS).
-*   **Zanbil eCommerce Logs**: Supplementary benign traffic to increase model robustness against modern ecommerce behavior.
 *   **Synthetic Payloads**: Purpose-built obfuscated requests to test the resilience of entropy-based detection.
 
 ---
@@ -68,6 +59,5 @@ Detection strategies are validated using:
 
 | Layer | Method | Targeted Threats | Key Advantage |
 | :--- | :--- | :--- | :--- |
-| **1** | Rule Engine | Known, exact patterns | Fast, low computational cost |
-| **2** | Isolation Forest | Structurally anomalous requests | Resilient to encoding/obfuscation |
-| **3** | One-Class SVM | Zero-day / Novel attacks | No attack signatures required |
+| **1** | Regex Rule Engine | Known signatures (SQLi, XSS, traversal) | Near-instant execution |
+| **2** | XGBoost | High-precision attack classification | Identifies complex malicious intent |

@@ -1,188 +1,158 @@
-import os
 import logging
-import asyncio
+import numpy as np
+from datetime import datetime, timezone, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from infrastructure.config.settings import settings
 from domain.services.aggregator import LogWindowAggregator
 from application.ports import WindowPort, HistoryPort, LockPort
+from application.ports.lock_port import LockNotAcquiredError
 from application.traffic_use_case import TrafficUseCase
-from application.ddos_use_case import DDoSUseCase
 from application.web_attack_use_case import WebAttackUseCase
-from application.error_use_case import ErrorUseCase
-from application.drift_use_case import DriftUseCase
 
 
 logger = logging.getLogger(__name__)
 
-class DetectionJobRunner:
 
-    """Orchestrates periodic execution of detection jobs."""
+class DetectionJobRunner:
+    """Orchestrates periodic execution of HTTP-track detection jobs (UC1 Traffic, UC3 Web Attack).
+
+    Flow-track jobs (UC2 DDoS, UC4 Brute Force) run per-record in the flow consumer.
+    """
+
     def __init__(
         self,
         window_adapter: WindowPort,
         history_adapter: HistoryPort,
         lock_adapter: LockPort,
         traffic_use_case: TrafficUseCase,
-        ddos_use_case: DDoSUseCase,
         web_attack_use_case: WebAttackUseCase,
-        error_use_case: ErrorUseCase,
-        drift_use_case: DriftUseCase,
+        traffic_history_key: str,
+        seasonal_history_key: str,
     ):
         self._window_adapter = window_adapter
         self._history_adapter = history_adapter
         self._lock_adapter = lock_adapter
-
         self._traffic_use_case = traffic_use_case
-        self._ddos_use_case = ddos_use_case
         self._web_attack_use_case = web_attack_use_case
-        self._error_use_case = error_use_case
-        self._drift_use_case = drift_use_case
+        self._traffic_history_key = traffic_history_key
+        self._seasonal_history_key = seasonal_history_key
+        self._last_web_attack_run: float = 0.0
+        self._last_traffic_hour: int = datetime.now(timezone.utc).hour
 
         self._scheduler = AsyncIOScheduler()
+        self._consecutive_failures: dict[str, int] = {"Traffic": 0, "WebAttack": 0}
+
+    def job_status(self) -> dict[str, int]:
+        """Returns consecutive failure counts per job. 0 means last run succeeded or not yet run."""
+        return dict(self._consecutive_failures)
 
     def _get_trigger(self, cron_str: str):
-        """Creates an APScheduler CronTrigger from a cron string."""
         fields = cron_str.split()
         if len(fields) == 6:
-            # Assume: second minute hour day month day_of_week
             return CronTrigger(
-                second=fields[0],
-                minute=fields[1],
-                hour=fields[2],
-                day=fields[3],
-                month=fields[4],
-                day_of_week=fields[5]
+                second=fields[0], minute=fields[1], hour=fields[2],
+                day=fields[3], month=fields[4], day_of_week=fields[5],
+                timezone="UTC",
             )
         elif len(fields) == 5:
-            # Standard cron: minute hour day month day_of_week
             return CronTrigger(
-                minute=fields[0],
-                hour=fields[1],
-                day=fields[2],
-                month=fields[3],
-                day_of_week=fields[4]
+                minute=fields[0], hour=fields[1], day=fields[2],
+                month=fields[3], day_of_week=fields[4],
+                timezone="UTC",
             )
         else:
             raise ValueError(f"Invalid cron expression: {cron_str}. Expected 5 or 6 fields.")
 
     def start(self):
-        """Starts the scheduler and registers jobs."""
-
-
-        # Wrap use cases in distributed lock
         async def run_safe(name, func):
             try:
-                # Use distributed lock to prevent concurrent execution across workers
-                async with self._lock_adapter.lock(f"job:{name.lower()}", timeout=30):
-                    logger.info(f"Running detection job: {name}")
+                async with self._lock_adapter.lock(f"job:{name.lower()}", timeout=settings.LOCK_TIMEOUT_SECONDS):
+                    logger.info("Running detection job: %s", name)
                     await func()
-            except RuntimeError as e:
-                # Lock not acquired, skip execution silently or log debug
-                logger.debug(f"Skipping job {name}: {e}")
+                self._consecutive_failures[name] = 0
+            except LockNotAcquiredError as e:
+                logger.debug("Skipping job %s: %s", name, e)
             except Exception as e:
-                logger.error(f"Error in detection job {name}: {e}", exc_info=True)
+                count = self._consecutive_failures.get(name, 0) + 1
+                self._consecutive_failures[name] = count
+                logger.error("Error in detection job %s (consecutive failures: %d): %s", name, count, e, exc_info=True)
 
-        # 1. DDoS Job
         self._scheduler.add_job(
-            run_safe,
-            self._get_trigger(os.getenv("CRON_DDOS", "*/10 * * * * *")),
-            args=["DDoS", self._run_ddos],
-            name="ddos_job"
+            run_safe, self._get_trigger(settings.CRON_TRAFFIC),
+            args=["Traffic", self._run_traffic], name="traffic_job"
         )
-
-        # 2. Traffic Job
         self._scheduler.add_job(
-            run_safe,
-            self._get_trigger(os.getenv("CRON_TRAFFIC", "*/10 * * * * *")),
-            args=["Traffic", self._run_traffic],
-            name="traffic_job"
-        )
-
-        # 3. Web Attack Job
-        self._scheduler.add_job(
-            run_safe,
-            self._get_trigger(os.getenv("CRON_WEB_ATTACK", "*/5 * * * * *")),
-            args=["WebAttack", self._run_web_attack],
-            name="web_attack_job"
-        )
-
-        # 4. Error Job
-        self._scheduler.add_job(
-            run_safe,
-            self._get_trigger(os.getenv("CRON_ERROR", "0 * * * * *")),
-            args=["Error", self._run_error],
-            name="error_job"
-        )
-
-        # 5. Drift Job
-        self._scheduler.add_job(
-            run_safe,
-            self._get_trigger(os.getenv("CRON_DRIFT", "0 * * * * *")),
-            args=["Drift", self._run_drift],
-            name="drift_job"
+            run_safe, self._get_trigger(settings.CRON_WEB_ATTACK),
+            args=["WebAttack", self._run_web_attack], name="web_attack_job"
         )
 
         self._scheduler.start()
-        logger.info("DetectionJobRunner started with independent jobs and distributed locking.")
+        logger.info("DetectionJobRunner started (HTTP track: Traffic, WebAttack).")
+
+    def stop(self) -> None:
+        if self._scheduler.running:
+            self._scheduler.shutdown(wait=True)
+            logger.info("DetectionJobRunner stopped.")
 
     async def _get_aggregator(self):
-        """Returns a LogWindowAggregator for the current window."""
-
         logs = await self._window_adapter.get_window()
         return LogWindowAggregator(logs)
 
-    async def _run_ddos(self):
-        """Executes the DDoS detection job."""
-
-        agg = await self._get_aggregator()
-        input_data = agg.to_ddos_input()
-        await self._ddos_use_case.execute(input_data)
-
     async def _run_traffic(self):
-        """Executes the traffic anomaly detection job."""
-
-        history = await self._history_adapter.get_history("traffic")
+        history = await self._history_adapter.get_history(self._traffic_history_key)
         agg = await self._get_aggregator()
         input_data = agg.to_traffic_input(history)
-        await self._traffic_use_case.execute(input_data)
-        # Update history (keep last 60 ticks)
-        await self._history_adapter.update_history("traffic", input_data.req_counts, limit=60)
+
+        if input_data.window_end is None:
+            return
+
+        current_ts = input_data.window_end.timestamp()
+        current_hour = input_data.window_end.hour
+
+        # Build phase: Hourly rollover summary calculation (Seasonal Baseline V2)
+        if current_hour != self._last_traffic_hour:
+            # We assume req_counts contains enough samples for the hour (limit=360 at 10s interval)
+            # Use samples from the previous hour (all but the latest one)
+            prev_samples = input_data.req_counts[:-1]
+            if len(prev_samples) >= 2:
+                median = float(np.median(prev_samples))
+                q1, q3 = np.percentile(prev_samples, [25, 75])
+                iqr = float(q3 - q1)
+
+                # Previous hour timestamp
+                prev_hour_ts = (input_data.window_end.replace(minute=0, second=0, microsecond=0) - timedelta(seconds=1)).timestamp()
+                await self._history_adapter.update_timed_history(
+                    self._seasonal_history_key, prev_hour_ts, median, iqr
+                )
+                logger.info("Committed hourly traffic summary (V2): m=%.2f, i=%.2f", median, iqr)
+
+        self._last_traffic_hour = current_hour
+
+        # Detection phase
+        seasonal_summaries: list[tuple[float, float]] = await self._history_adapter.get_seasonal_bucket(
+            self._seasonal_history_key, current_ts
+        )
+
+        await self._traffic_use_case.execute(input_data, seasonal_summaries=seasonal_summaries)
+
+        # Update rolling history (limit=360 = 1 hour of 10s samples, matching ROLL_WINDOW=60 mins)
+        await self._history_adapter.update_history(self._traffic_history_key, input_data.req_counts, limit=360)
 
     async def _run_web_attack(self):
-        """Executes the web attack detection job, publishing a single aggregated result."""
-
         agg = await self._get_aggregator()
-        inputs = agg.to_web_requests()
-        await self._web_attack_use_case.execute_batch(inputs)
-
-    async def _run_error(self):
-        """Executes the error rate anomaly detection job."""
-
-        # Fetch histories from Redis
-        error_history = await self._history_adapter.get_history("error_counts")
-        error_5xx_history = await self._history_adapter.get_history("error_5xx_counts")
-        total_history = await self._history_adapter.get_history("total_requests")
-
-        agg = await self._get_aggregator()
-        input_data = agg.to_error_input(
-            error_history,
-            error_5xx_history,
-            total_history
-        )
-        await self._error_use_case.execute(input_data)
-
-        # Update histories in Redis
-        await self._history_adapter.update_history("error_counts", input_data.error_counts, limit=60)
-        await self._history_adapter.update_history("error_5xx_counts", input_data.error_5xx_counts, limit=60)
-        await self._history_adapter.update_history("total_requests", input_data.total_requests, limit=60)
-
-    async def _run_drift(self):
-        """Executes the data drift detection job."""
-
-        history = await self._history_adapter.get_history("drift_rates")
-        agg = await self._get_aggregator()
-        input_data = agg.to_drift_input(history)
-        await self._drift_use_case.execute(input_data)
-        # Update history
-        await self._history_adapter.update_history("drift_rates", input_data.error_rates, limit=60)
+        new_logs = [log for log in agg.logs if log.timestamp > self._last_web_attack_run]
+        if new_logs:
+            self._last_web_attack_run = max(log.timestamp for log in new_logs)
+        sub_agg = LogWindowAggregator(new_logs)
+        for input_data in sub_agg.to_web_requests():
+            try:
+                await self._web_attack_use_case.execute(
+                    input_data, window_start=sub_agg.window_start, window_end=sub_agg.window_end
+                )
+            except Exception as e:
+                logger.error(
+                    "Web attack detection failed for request (source_ip=%s): %s",
+                    getattr(input_data, "source_ip", "?"), e, exc_info=True,
+                )

@@ -1,68 +1,56 @@
-# DDoS Detection using Isolation Forest
+# DDoS Detection using XGBoost
 
-This document explains the application of the **Isolation Forest** algorithm for detecting Distributed Denial of Service (DDoS) attacks within server logs.
+This document explains the application of the **XGBoost** algorithm for detecting Distributed Denial of Service (DDoS) attacks using network flow records from the CICIDS2017 dataset.
 
 ---
 
 # 1. Core Idea
 
-DDoS attacks are characterized by large volumes of requests that often originate from many sources but target specific endpoints or patterns. In a high-dimensional feature space, these malicious patterns are **anomalous**—they are rare and statistically different from legitimate user behavior.
+DDoS attacks aim to overwhelm system resources through massive volumes of traffic. Unlike application-layer logs which only capture request metadata, **network flow records** provide deep visibility into connection patterns, packet sizing, and timing intervals.
 
-The **Isolation Forest** detects these spikes by isolating them through random partitioning. Because anomalies are "few and far between," they require significantly fewer splits to be isolated in a tree compared to normal points.
+By utilizing **XGBoost** (Extreme Gradient Boosting), we can perform high-precision binary classification (Benign vs. DDoS) on these flow vectors. This approach is superior to unsupervised methods as it learns the specific structural signatures of known DDoS campaigns (such as those in the Friday afternoon segment of CICIDS2017).
 
 ---
 
 # 2. Feature Engineering
 
-To effectively detect DDoS patterns, we aggregate raw logs into a multidimensional feature set:
+The system processes flow records extracted by **CICFlowMeter**, which initially provides ~80 features. Through preprocessing (removing constants, handling NaN/Infinity, and correlation analysis), the feature space is reduced to exactly **45 critical features** (ensuring feature parity with UC4), including:
 
-| Feature | Unit | Description |
-| :--- | :--- | :--- |
-| **Requests per second** | req/s | Total traffic volume in the last second. |
-| **Unique IPs** | IP/min | Count of distinct source IP addresses. |
-| **Requests per IP** | requests/IP | Ratio of total requests to unique IPs. |
-| **Error rate** | % | Percentage of 4xx and 5xx response codes. |
-| **Endpoint entropy** | bits | Measure of diversity in requested URLs/endpoints. |
-
----
-
-# 3. Feature Vector
-
-At any time $t$, the state of the system is represented by the feature vector $x_t$:
-
-$$
-x_t = [\text{req\_per\_sec}, \text{unique\_ips}, \text{req\_per\_ip}, \text{error\_rate}, \text{entropy}]
-$$
-
-These features allow the model to distinguish between a legitimate traffic spike (e.g., a viral event) and a malicious attack (e.g., high req/IP and low entropy).
+| Feature | Description |
+| :--- | :--- |
+| **Total Length of Fwd Packets** | Cumulative size of payloads in the forward direction. |
+| **Total Bwd Packets** | Count of packets sent in the backward direction. |
+| **Flow Bytes/s** | Throughput in bytes per second. |
+| **Flow Packets/s** | Throughput in packets per second. |
+| **Flow IAT Mean/Std/Min** | Statistical properties of inter-arrival times between packets. |
+| **Fwd/Bwd Packet Length Max/Min/Mean** | Statistical properties of packet sizes across the flow. |
+| **Flags (FIN, PSH, ACK, URG)** | Specific TCP flags present in the flow, captured as counts. |
+| **Init_Win_bytes** | Initial window size in forward and backward directions (TCP). |
 
 ---
 
-# 4. Mechanism
+# 3. Model: XGBoost
 
-The algorithm constructs an ensemble of **Isolation Trees**. For each point $x$:
+**XGBoost** is an optimized distributed gradient boosting library designed to be highly efficient, flexible, and portable. In our Detection microservice, it operates as a binary classifier.
 
-1.  A feature is randomly selected.
-2.  A split value is randomly chosen between the min and max of that feature.
-3.  The process repeats until all points are isolated.
+### Workflow:
+1.  **Normalization**: Flow features are normalized to handle scale differences.
+2.  **Data Cleaning**: Replaces `Infinity` (often resulting from zero-duration flows in CICFlowMeter) and `NaN` values with `0`.
+3.  **Training**: The model is trained on the **Monday (Benign)** and **Friday Afternoon (DDoS)** portions of the CICIDS2017 dataset.
+4.  **Inference**: Incoming flow records are vectorized and passed through the XGBoost model to produce a probability score and a classification label.
 
-**Anomaly Score**:
-Points with a short average **path length** across the forest are flagged as DDoS candidates.
+---
 
-$$
-s(x) = 2^{-\frac{E(h(x))}{c(n)}}
-$$
+# 4. Synergy with UC4
 
-Where:
-* $E(h(x))$ = average path length to isolate point $x$.
-* $s(x) \to 1$: Highly likely to be a DDoS attack.
-* $s(x) < 0.5$: Likely normal traffic.
+UC2 and UC4 (Brute Force Detection) run concurrently within the Detection microservice. They share the same feature parity provided by the **Processing** service, meaning a single incoming flow record is evaluated against both models simultaneously.
+
+*   **UC2 (DDoS)**: Focuses on volumetric attacks and high-velocity packet flows.
+*   **UC4 (Brute Force)**: Focuses on repetitive authentication attempts and specific connection patterns (RST flags).
 
 ---
 
 # 5. Data Sources
 
-The detection model is evaluated against:
-*   **WordPress DDoS Logs**: Real-world attack patterns targeting application-layer assets.
-*   **Normal Baseline**: NASA or Zanbil datasets are used for the benign class.
-*   **Synthetic Variants**: Simulation of **HTTP Floods** and **Slowloris** patterns injected onto benign traffic to test generalization beyond specific datasets.
+*   **CICIDS2017**: The primary source for ground-truth DDoS patterns.
+*   **Friday Afternoon Dataset**: Specifically contains the DDoS (LOIC) attack traces used for training and testing.

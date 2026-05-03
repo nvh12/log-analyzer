@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+dependency-injector
+apscheduler
+aio-pika
+redis
+minio
+scikit-learn
+xgboost
+numpy
+joblib
+pytest
+testcontainers[minio,rabbitmq]
+pytest-asyncio

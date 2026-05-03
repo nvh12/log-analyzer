@@ -1,21 +1,22 @@
 package com.nvh12.log_processing.domain.model;
 
-import javax.print.attribute.standard.Severity;
-import java.time.Instant;
+import tools.jackson.databind.PropertyNamingStrategies;
+import tools.jackson.databind.annotation.JsonNaming;
+
 import java.util.Map;
 
-public class NormalizedLog {
-    private String id;
-    private Instant timestamp;
-
-    private String serviceName;
-    private Severity severity;
-    private String eventType;
-
-    private String userId;
-    private String sourceIp;
-    private String traceId;
-    private String sessionId;
-
-    private Map<String, Object> attributes;
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+public record NormalizedLog(
+        double timestamp,
+        String ip,
+        String method,
+        String url,
+        int statusCode,
+        int responseSize,
+        String queryString,
+        String body,
+        Map<String, String> headers,
+        String userAgent,
+        String referer
+) {
 }

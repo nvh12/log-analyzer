@@ -9,5 +9,5 @@ class TrafficResult(DetectionResult):
     detection_type: Literal[DetectionType.TRAFFIC] = DetectionType.TRAFFIC
 
     anomaly: bool
-    anomaly_score: float
-    method_flags: dict            # {"z_score": True, "iqr": False, "ema": True}
+    confidence: float
+    method_flags: dict[str, bool]  # {"z_score": True, "iqr": False, "ema": True}

@@ -9,5 +9,5 @@ class WebAttackResult(DetectionResult):
     detection_type: Literal[DetectionType.WEB_ATTACK] = DetectionType.WEB_ATTACK
 
     anomaly: bool
-    layer_triggered: Optional[str]   # "rule_engine" | "isolation_forest" | "one_class_svm" | None
+    layer_triggered: Optional[str] = None  # "rule_engine" | "xgboost" | None
     confidence: float

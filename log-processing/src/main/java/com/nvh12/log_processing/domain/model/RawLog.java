@@ -1,17 +1,25 @@
 package com.nvh12.log_processing.domain.model;
 
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Builder;
+import lombok.Value;
+import tools.jackson.databind.annotation.JsonDeserialize;
+import tools.jackson.databind.annotation.JsonPOJOBuilder;
 
 import java.time.Instant;
 import java.util.Map;
 
-@Getter
-@Setter
+@Value
+@Builder
+@lombok.AllArgsConstructor(access = lombok.AccessLevel.PUBLIC)
+@JsonDeserialize(builder = RawLog.RawLogBuilder.class)
 public class RawLog {
-  String id; // generated UUID
-  String rawMessage; // original log text or JSON string
-  String source; // service name or log origin
-  Instant receivedAt; // ingestion timestamp
-  Map<String, Object> headers; // optional transport metadata
+    String id;
+    String rawMessage;
+    String source;
+    Instant receivedAt;
+    Map<String, String> headers;
+
+    @JsonPOJOBuilder(withPrefix = "")
+    public static final class RawLogBuilder {
+    }
 }

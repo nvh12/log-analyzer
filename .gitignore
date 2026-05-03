@@ -1,0 +1,78 @@
+# --- Global Patterns ---
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# IDE & Notebooks
+.idea/
+.vscode/
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# Python & Testing
+__pycache__/
+*.pyc
+.pytest_cache/
+**/.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+
+# Environment Files
+.env
+.env.*
+!.env.example
+
+
+# --- log-analysis specific ---
+
+log-analysis/**/data/*
+!log-analysis/**/data/.gitkeep
+log-analysis/**/models/*
+!log-analysis/**/models/.gitkeep
+log-analysis/**/outputs/*
+!log-analysis/**/outputs/.gitkeep
+log-analysis/.devcontainer/
+
+
+# --- log-processing specific ---
+
+log-processing/HELP.md
+log-processing/.gradle/
+log-processing/build/
+log-processing/out/
+log-processing/bin/
+log-processing/.local/
+
+# Build artifacts
+log-processing/**/*.class
+log-processing/**/*.jar
+log-processing/**/*.war
+log-processing/**/*.ear
+
+# Configuration overrides
+log-processing/**/application-local.yml
+log-processing/**/application-dev.yml
+log-processing/**/application-test.yml
+
+# Keep gradle wrapper
+!log-processing/gradle/wrapper/gradle-wrapper.jar
+
+# IDE Specific (Java)
+log-processing/.apt_generated
+log-processing/.classpath
+log-processing/.factorypath
+log-processing/.project
+log-processing/.settings
+log-processing/.springBeans
+log-processing/.sts4-cache
+log-processing/*.iws
+log-processing/*.iml
+log-processing/*.ipr

@@ -25,13 +25,30 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'tools.jackson.core:jackson-databind'
+
+	implementation 'org.springframework.boot:spring-boot-starter-json'
+
+    implementation 'org.springframework.boot:spring-boot-starter'
 	implementation 'org.springframework.boot:spring-boot-starter-amqp'
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.flywaydb:flyway-core'
+	runtimeOnly 'org.postgresql:postgresql'
+	runtimeOnly 'org.flywaydb:flyway-database-postgresql'
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-amqp-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-redis-test'
+	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+	testImplementation platform('org.testcontainers:testcontainers-bom:1.20.4')
+	testImplementation 'org.testcontainers:junit-jupiter'
+	testImplementation 'org.testcontainers:postgresql'
+	testImplementation 'org.testcontainers:rabbitmq'
+	testImplementation 'com.redis:testcontainers-redis:2.2.3'
+	testImplementation 'org.awaitility:awaitility'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

@@ -8,6 +8,4 @@ public interface QueueService {
     boolean enqueue(RawLog rawLog);
 
     List<RawLog> dequeueBatch(int batchSize);
-
-    RawLog dequeue();
 }

@@ -1,0 +1,141 @@
+name: log-analyzer
+
+services:
+  rabbitmq:
+    image: rabbitmq:4.2.4-management
+    container_name: rabbitmq-log-analyzer
+    hostname: rabbit-server
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-sa}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-1234}
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      - rabbit-data:/var/lib/rabbitmq
+    networks:
+      - log-analyzer
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-db:
+    image: postgres:17.5
+    container_name: postgres-log-analyzer
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASS:-1234}
+      POSTGRES_DB: ${POSTGRES_DB:-log-analyzer}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - log-analyzer
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sa} -d ${POSTGRES_DB:-log-analyzer}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.4
+    container_name: redis-log-analyzer
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - log-analyzer
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio-log-analyzer
+    ports:
+      - "${MINIO_PORT:-9000}:9000"   # S3 API
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"   # Web console
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASS:-minioadmin}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - log-analyzer
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  log-processing:
+    build:
+      context: ./log-processing
+      dockerfile: Dockerfile
+    container_name: log-processing
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      POSTGRES_HOST: postgres-db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-sa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASS:-1234}
+      POSTGRES_DB: ${POSTGRES_DB:-log-analyzer}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USER:-sa}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASS:-1234}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - log-analyzer
+
+  log-analysis:
+    build:
+      context: ./log-analysis
+      dockerfile: server/Dockerfile
+    container_name: log-analysis
+    ports:
+      - "${DETECTION_PORT:-8000}:8000"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-sa}:${RABBITMQ_PASS:-1234}@rabbitmq/
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_PASS:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-models}
+      MINIO_SECURE: "${MINIO_SECURE:-false}"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - log-analyzer
+
+volumes:
+  db-data:
+  redis-data:
+  rabbit-data:
+  minio-data:
+
+networks:
+  log-analyzer:
+    driver: bridge

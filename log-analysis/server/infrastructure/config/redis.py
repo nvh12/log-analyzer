@@ -1,14 +1,13 @@
 """Redis client configuration and initialization."""
 import redis.asyncio as redis
-
-import os
-
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+from infrastructure.config.settings import settings
 
 redis_client = redis.from_url(
-    REDIS_URL,
+    settings.REDIS_URL,
     encoding="utf-8",
     decode_responses=True,
-    max_connections=100,
-    health_check_interval=30
+    max_connections=settings.REDIS_MAX_CONNECTIONS,
+    health_check_interval=settings.REDIS_HEALTH_CHECK_INTERVAL,
+    socket_connect_timeout=settings.REDIS_SOCKET_CONNECT_TIMEOUT,
+    socket_timeout=settings.REDIS_SOCKET_TIMEOUT,
 )

@@ -1,0 +1,11 @@
+scikit-learn
+numpy
+statsmodels
+ruptures
+pandas
+matplotlib
+seaborn
+joblib
+notebook
+minio
+xgboost
