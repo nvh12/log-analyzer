@@ -6,18 +6,15 @@ import com.nvh12.log_processing.domain.model.ProcessingResult;
 import com.nvh12.log_processing.domain.service.ProcessedLogRepository;
 import com.nvh12.log_processing.infrastructure.persistence.entity.NormalizedFlowEntity;
 import com.nvh12.log_processing.infrastructure.persistence.entity.NormalizedHttpEntity;
+import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 @Repository
+@AllArgsConstructor
 public class PostgresProcessedLogRepository implements ProcessedLogRepository {
 
     private final NormalizedHttpJpaRepository httpRepository;
     private final NormalizedFlowJpaRepository flowRepository;
-
-    public PostgresProcessedLogRepository(NormalizedHttpJpaRepository httpRepository, NormalizedFlowJpaRepository flowRepository) {
-        this.httpRepository = httpRepository;
-        this.flowRepository = flowRepository;
-    }
 
     @Override
     public void save(ProcessingResult result) {

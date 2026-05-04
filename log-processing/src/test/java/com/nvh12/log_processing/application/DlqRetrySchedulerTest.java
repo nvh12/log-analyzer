@@ -44,7 +44,8 @@ class DlqRetrySchedulerTest {
     void setUp() {
         LogProcessingProperties properties = new LogProcessingProperties(
                 10, 1, 10000, 40, 10000, 2000, 3, 30000L, 5000L,
-                new LogProcessingProperties.ThreadPool(2, 4, 10, 5));
+                new LogProcessingProperties.ThreadPool(2, 4, 10, 5),
+                new LogProcessingProperties.Validation(45, 2048, 512));
         maxRetries = properties.maxRetries();
         scheduler = new DlqRetryScheduler(
                 failedLogRepository, logProcessingService, eventService, processedLogRepository,

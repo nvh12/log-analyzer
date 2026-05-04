@@ -30,7 +30,9 @@ public class DeadLetterConsumer {
         try {
             dropAuditRepository.recordDeadLetter(body, logId, reason);
         } catch (Exception e) {
-            log.error("Failed to persist dead-letter to audit store. logId={}, reason={}", logId, reason, e);
+            // Log full body so the message can be recovered from logs if persistence fails.
+            log.error("Failed to persist dead-letter to audit store. logId={}, reason={}, body={}",
+                    logId, reason, body, e);
         }
     }
 

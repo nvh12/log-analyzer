@@ -3,8 +3,8 @@ spring:
     name: log-processing
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:log-analyzer}
-    username: ${POSTGRES_USER:sa}
-    password: ${POSTGRES_PASSWORD:1234}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -22,26 +22,10 @@ spring:
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USERNAME:sa}
-    password: ${RABBITMQ_PASSWORD:1234}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
     connection-timeout: 5000
   data:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-
-log-processing:
-  batch-size: 10
-  batch-size-min: 1
-  batch-size-max: 10000
-  backpressure-threshold: 40
-  main-queue-capacity: 10000
-  dlq-capacity: 2000
-  max-retries: 3
-  retry-delay-ms: 30000
-  retry-jitter-ms: 5000
-  thread-pool:
-    core-pool-size: 4
-    max-pool-size: 12
-    queue-capacity: 50
-    await-termination-seconds: 30

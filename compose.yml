@@ -9,8 +9,8 @@ services:
       - "5672:5672"   # AMQP
       - "15672:15672" # Management UI
     environment:
-      RABBITMQ_DEFAULT_USER: sa
-      RABBITMQ_DEFAULT_PASS: 1234
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
       RABBITMQ_DEFAULT_VHOST: /
     labels:
       org.springframework.boot.service-connection: rabbitmq
@@ -30,9 +30,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: sa
-      POSTGRES_PASSWORD: 1234
-      POSTGRES_DB: log-analyzer
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-log-analyzer}
     volumes:
       - db-data:/var/lib/postgresql/data
     labels:
@@ -40,7 +40,7 @@ services:
     networks:
       - log-analyzer
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sa -d log-analyzer"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -67,8 +67,8 @@ services:
       - "9000:9000"   # S3 API
       - "9001:9001"   # Web console
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD}
     command: server /data --console-address ":9001"
     volumes:
       - minio-data:/data
@@ -90,13 +90,13 @@ services:
     environment:
       POSTGRES_HOST: postgres-db
       POSTGRES_PORT: 5432
-      POSTGRES_USER: sa
-      POSTGRES_PASSWORD: 1234
-      POSTGRES_DB: log-analyzer
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-log-analyzer}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
-      RABBITMQ_USERNAME: sa
-      RABBITMQ_PASSWORD: 1234
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       REDIS_HOST: redis
       REDIS_PORT: 6379
     depends_on:
@@ -118,10 +118,10 @@ services:
       - "8000:8000"
     environment:
       REDIS_URL: redis://redis:6379/0
-      RABBITMQ_URL: amqp://sa:1234@rabbitmq/
+      RABBITMQ_URL: amqp://${RABBITMQ_USERNAME}:${RABBITMQ_PASSWORD}@rabbitmq/
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
+      MINIO_ACCESS_KEY: ${MINIO_USER}
+      MINIO_SECRET_KEY: ${MINIO_PASSWORD}
       MINIO_BUCKET: models
       MINIO_SECURE: "false"
     depends_on:

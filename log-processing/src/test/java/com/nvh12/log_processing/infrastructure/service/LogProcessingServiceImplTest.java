@@ -4,6 +4,7 @@ import com.nvh12.log_processing.domain.model.NormalizedFlowRecord;
 import com.nvh12.log_processing.domain.model.NormalizedLog;
 import com.nvh12.log_processing.domain.model.ProcessingResult;
 import com.nvh12.log_processing.domain.model.RawLog;
+import com.nvh12.log_processing.infrastructure.config.LogProcessingProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -18,9 +19,14 @@ class LogProcessingServiceImplTest {
 
     private LogProcessingServiceImpl service;
 
+    private static final LogProcessingProperties PROPERTIES = new LogProcessingProperties(
+            10, 1, 10000, 40, 10000, 2000, 3, 30000L, 5000L,
+            new LogProcessingProperties.ThreadPool(4, 12, 50, 30),
+            new LogProcessingProperties.Validation(45, 2048, 512));
+
     @BeforeEach
     void setUp() {
-        service = new LogProcessingServiceImpl(new ObjectMapper());
+        service = new LogProcessingServiceImpl(new ObjectMapper(), PROPERTIES);
     }
 
     private RawLog rawLog(String source, String message) {

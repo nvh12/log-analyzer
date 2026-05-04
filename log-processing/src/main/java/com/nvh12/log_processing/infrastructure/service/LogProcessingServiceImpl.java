@@ -5,6 +5,7 @@ import com.nvh12.log_processing.domain.model.NormalizedLog;
 import com.nvh12.log_processing.domain.model.ProcessingResult;
 import com.nvh12.log_processing.domain.model.RawLog;
 import com.nvh12.log_processing.domain.service.LogProcessingService;
+import com.nvh12.log_processing.infrastructure.config.LogProcessingProperties;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
@@ -13,6 +14,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,10 +30,16 @@ public class LogProcessingServiceImpl implements LogProcessingService {
     private static final DateTimeFormatter CLF_DATE =
             DateTimeFormatter.ofPattern("dd/MMM/yyyy:HH:mm:ss Z", Locale.ENGLISH);
 
-    private final ObjectMapper objectMapper;
+    private static final Set<String> ALLOWED_METHODS = Set.of(
+            "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS", "TRACE", "CONNECT"
+    );
 
-    public LogProcessingServiceImpl(ObjectMapper objectMapper) {
+    private final ObjectMapper objectMapper;
+    private final LogProcessingProperties.Validation validation;
+
+    public LogProcessingServiceImpl(ObjectMapper objectMapper, LogProcessingProperties properties) {
         this.objectMapper = objectMapper;
+        this.validation = properties.validation();
     }
 
     @Override
@@ -43,12 +51,40 @@ public class LogProcessingServiceImpl implements LogProcessingService {
     }
 
     private NormalizedLog parseHttp(RawLog rawLog) {
-        Matcher m = CLF_PATTERN.matcher(rawLog.getRawMessage().trim());
+        String rawMessage = rawLog.getRawMessage();
+        if (rawMessage == null || rawMessage.isBlank()) {
+            throw new IllegalArgumentException("Raw message is null or blank for log id=" + rawLog.getId());
+        }
+
+        Matcher m = CLF_PATTERN.matcher(rawMessage.trim());
         if (!m.matches()) {
             throw new IllegalArgumentException("Unparseable CLF entry for log id=" + rawLog.getId());
         }
 
+        String ip     = m.group(1);
+        String method = m.group(3);
         String fullUrl = m.group(4);
+        String statusStr = m.group(5);
+        String userAgent = m.group(8);
+
+        if (ip.length() > validation.maxIpLength()) {
+            throw new IllegalArgumentException("IP field too long in log id=" + rawLog.getId());
+        }
+        if (!ALLOWED_METHODS.contains(method)) {
+            throw new IllegalArgumentException("Unknown HTTP method '" + method + "' in log id=" + rawLog.getId());
+        }
+        if (fullUrl.length() > validation.maxUrlLength()) {
+            throw new IllegalArgumentException("URL exceeds max length in log id=" + rawLog.getId());
+        }
+        if (userAgent != null && userAgent.length() > validation.maxUaLength()) {
+            userAgent = userAgent.substring(0, validation.maxUaLength());
+        }
+
+        int statusCode = Integer.parseInt(statusStr);
+        if (statusCode < 100 || statusCode > 599) {
+            throw new IllegalArgumentException("Invalid status code " + statusCode + " in log id=" + rawLog.getId());
+        }
+
         int q = fullUrl.indexOf('?');
         String url = q >= 0 ? fullUrl.substring(0, q) : fullUrl;
         String queryString = q >= 0 ? fullUrl.substring(q + 1) : "";
@@ -60,23 +96,27 @@ public class LogProcessingServiceImpl implements LogProcessingService {
 
         return new NormalizedLog(
                 timestamp,
-                m.group(1),
-                m.group(3),
+                ip,
+                method,
                 url,
-                Integer.parseInt(m.group(5)),
+                statusCode,
                 responseSize,
                 queryString,
                 null,
                 rawLog.getHeaders() != null ? rawLog.getHeaders() : Map.of(),
-                m.group(8),   // user-agent (null if CLF without combined fields)
+                userAgent,
                 m.group(7)    // referer
         );
     }
 
     @SuppressWarnings("unchecked")
     private NormalizedFlowRecord parseFlow(RawLog rawLog) {
+        String rawMessage = rawLog.getRawMessage();
+        if (rawMessage == null || rawMessage.isBlank()) {
+            throw new IllegalArgumentException("Raw message is null or blank for log id=" + rawLog.getId());
+        }
         try {
-            Map<String, Object> root = objectMapper.readValue(rawLog.getRawMessage(), Map.class);
+            Map<String, Object> root = objectMapper.readValue(rawMessage, Map.class);
 
             double timestamp = toDouble(root.get("timestamp"));
             String sourceIp = root.get("source_ip") != null ? String.valueOf(root.get("source_ip")) : "";
