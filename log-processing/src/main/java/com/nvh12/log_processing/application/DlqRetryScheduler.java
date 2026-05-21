@@ -19,14 +19,13 @@ import java.util.concurrent.*;
 @Slf4j
 public class DlqRetryScheduler {
 
-    private static final int RETRY_BATCH_SIZE = 50;
-
     private final FailedLogRepository failedLogRepository;
     private final LogProcessingService logProcessingService;
     private final EventService eventService;
     private final ProcessedLogRepository processedLogRepository;
     private final DropAuditRepository dropAuditRepository;
     private final int maxRetries;
+    private final int retryBatchSize;
     private final long retryDelayMs;
     private final long retryJitterMs;
     private final Counter retrySuccessCounter;
@@ -53,6 +52,7 @@ public class DlqRetryScheduler {
         this.processedLogRepository = processedLogRepository;
         this.dropAuditRepository = dropAuditRepository;
         this.maxRetries = properties.maxRetries();
+        this.retryBatchSize = properties.retryBatchSize();
         this.retryDelayMs = properties.retryDelayMs();
         this.retryJitterMs = properties.retryJitterMs();
         this.retrySuccessCounter = meterRegistry.counter("logs.retry", "result", "success");
@@ -80,8 +80,13 @@ public class DlqRetryScheduler {
         long jitter = ThreadLocalRandom.current().nextLong(-retryJitterMs, retryJitterMs + 1);
         try {
             scheduler.schedule(() -> {
-                retryFailedLogs();
-                scheduleNext();
+                try {
+                    retryFailedLogs();
+                } catch (Exception e) {
+                    log.error("Unexpected error in DLQ retry cycle — rescheduling", e);
+                } finally {
+                    scheduleNext();
+                }
             }, retryDelayMs + jitter, TimeUnit.MILLISECONDS);
         } catch (RejectedExecutionException e) {
             log.debug("DlqRetryScheduler shut down — not scheduling next retry");
@@ -89,7 +94,7 @@ public class DlqRetryScheduler {
     }
 
     void retryFailedLogs() {
-        List<FailedLogEntry> entries = failedLogRepository.getFailedLogEntries(RETRY_BATCH_SIZE);
+        List<FailedLogEntry> entries = failedLogRepository.getFailedLogEntries(retryBatchSize);
 
         for (FailedLogEntry entry : entries) {
             if (entry.retryCount() >= maxRetries) {

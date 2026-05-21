@@ -1,13 +1,14 @@
 package com.nvh12.log_processing.infrastructure.persistence.entity;
 
 import com.nvh12.log_processing.domain.model.DropReason;
+import com.nvh12.log_processing.domain.model.LogSource;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
 
 @Entity
-@Table(name = "drop_audit", indexes = {
+@Table(name = "drop_audit", schema = "log_processing", indexes = {
         @Index(name = "idx_drop_audit_log_id", columnList = "log_id"),
         @Index(name = "idx_drop_audit_dropped_at", columnList = "dropped_at"),
         @Index(name = "idx_drop_audit_drop_reason", columnList = "drop_reason")
@@ -26,8 +27,9 @@ public class DropAuditEntity {
     @Column(name = "log_id")
     private String logId;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "source", length = 64)
-    private String source;
+    private LogSource source;
 
     @Column(name = "raw_message", columnDefinition = "text")
     private String rawMessage;

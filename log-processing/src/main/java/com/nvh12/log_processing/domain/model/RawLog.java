@@ -15,7 +15,7 @@ import java.util.Map;
 public class RawLog {
     String id;
     String rawMessage;
-    String source;
+    LogSource source;
     Instant receivedAt;
     Map<String, String> headers;
 

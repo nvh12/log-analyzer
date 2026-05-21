@@ -10,7 +10,7 @@ import java.time.Instant;
 import java.util.Map;
 
 @Entity
-@Table(name = "normalized_flow")
+@Table(name = "normalized_flow", schema = "log_processing")
 @Getter
 @Setter
 @AllArgsConstructor

@@ -1,6 +1,7 @@
 package com.nvh12.log_processing.infrastructure.service;
 
 import com.nvh12.log_processing.domain.model.RawLog;
+import com.nvh12.log_processing.domain.service.DropAuditRepository;
 import com.nvh12.log_processing.domain.service.QueueService;
 import com.nvh12.log_processing.infrastructure.config.LogProcessingProperties;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -30,14 +31,17 @@ public class RedisQueueService implements QueueService {
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final DropAuditRepository dropAuditRepository;
     private final int capacity;
 
     public RedisQueueService(StringRedisTemplate redisTemplate,
                              ObjectMapper objectMapper,
+                             DropAuditRepository dropAuditRepository,
                              LogProcessingProperties properties,
                              MeterRegistry meterRegistry) {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
+        this.dropAuditRepository = dropAuditRepository;
         this.capacity = properties.mainQueueCapacity();
 
         meterRegistry.gauge("logs.queue.size", this, svc -> {
@@ -85,7 +89,13 @@ public class RedisQueueService implements QueueService {
                     try {
                         return objectMapper.readValue(v, RawLog.class);
                     } catch (Exception e) {
-                        log.error("Failed to deserialize queue entry — discarding", e);
+                        log.error("Failed to deserialize queue entry — auditing and discarding", e);
+                        try {
+                            dropAuditRepository.recordDeadLetter(v, null,
+                                    "Queue deserialization failure: " + e.getMessage());
+                        } catch (Exception ae) {
+                            log.error("Failed to persist corrupt queue entry to audit store", ae);
+                        }
                         return null;
                     }
                 })

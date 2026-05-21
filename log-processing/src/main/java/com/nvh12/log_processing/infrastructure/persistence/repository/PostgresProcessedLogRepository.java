@@ -33,7 +33,6 @@ public class PostgresProcessedLogRepository implements ProcessedLogRepository {
                 .statusCode(log.statusCode())
                 .responseSize(log.responseSize())
                 .queryString(log.queryString())
-                .body(log.body())
                 .headers(log.headers())
                 .userAgent(log.userAgent())
                 .referer(log.referer())

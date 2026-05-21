@@ -81,6 +81,11 @@ public class RedisDlqRepository implements FailedLogRepository {
             }
         } catch (Exception e) {
             log.error("Failed to persist to DLQ. id={}", entry.rawLog().getId(), e);
+            try {
+                dropAuditRepository.record(entry, DropReason.DLQ_SAVE_FAILED);
+            } catch (Exception ae) {
+                log.error("Failed to persist DLQ save failure to audit store. id={}", entry.rawLog().getId(), ae);
+            }
         }
     }
 
@@ -95,7 +100,13 @@ public class RedisDlqRepository implements FailedLogRepository {
                     try {
                         return objectMapper.readValue(v, FailedLogEntry.class);
                     } catch (Exception e) {
-                        log.error("Failed to deserialize DLQ entry — discarding", e);
+                        log.error("Failed to deserialize DLQ entry — auditing and discarding", e);
+                        try {
+                            dropAuditRepository.recordDeadLetter(v, null,
+                                    "DLQ deserialization failure: " + e.getMessage());
+                        } catch (Exception ae) {
+                            log.error("Failed to persist corrupt DLQ entry to audit store", ae);
+                        }
                         return null;
                     }
                 })

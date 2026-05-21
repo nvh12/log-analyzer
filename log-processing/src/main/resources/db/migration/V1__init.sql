@@ -1,7 +1,6 @@
--- Initial schema for log-processing
+CREATE SCHEMA IF NOT EXISTS log_processing;
 
--- Drop Audit table for tracking failed/dropped logs
-CREATE TABLE drop_audit
+CREATE TABLE log_processing.drop_audit
 (
     id             BIGSERIAL PRIMARY KEY,
     log_id         VARCHAR(255),
@@ -15,33 +14,30 @@ CREATE TABLE drop_audit
     dropped_at     TIMESTAMPTZ NOT NULL
 );
 
-CREATE INDEX idx_drop_audit_log_id ON drop_audit (log_id);
-CREATE INDEX idx_drop_audit_dropped_at ON drop_audit (dropped_at);
-CREATE INDEX idx_drop_audit_drop_reason ON drop_audit (drop_reason);
+CREATE INDEX idx_drop_audit_log_id ON log_processing.drop_audit (log_id);
+CREATE INDEX idx_drop_audit_dropped_at ON log_processing.drop_audit (dropped_at);
+CREATE INDEX idx_drop_audit_drop_reason ON log_processing.drop_audit (drop_reason);
 
--- Normalized HTTP logs
-CREATE TABLE normalized_http
+CREATE TABLE log_processing.normalized_http
 (
-    id               BIGSERIAL PRIMARY KEY,
-    timestamp        DOUBLE PRECISION NOT NULL,
-    ip               VARCHAR(64),
-    method           VARCHAR(16),
-    url              TEXT,
-    status_code      INT,
-    response_size    INT,
-    query_string     TEXT,
-    body             TEXT,
-    headers          JSONB,
-    user_agent       TEXT,
-    referer          TEXT,
-    processed_at     TIMESTAMPTZ      NOT NULL DEFAULT NOW()
+    id            BIGSERIAL PRIMARY KEY,
+    timestamp     DOUBLE PRECISION NOT NULL,
+    ip            VARCHAR(45),
+    method        VARCHAR(16),
+    url           TEXT,
+    status_code   INT,
+    response_size INT,
+    query_string  TEXT,
+    headers       JSONB,
+    user_agent    TEXT,
+    referer       TEXT,
+    processed_at  TIMESTAMPTZ      NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_normalized_http_timestamp ON normalized_http (timestamp);
-CREATE INDEX idx_normalized_http_ip ON normalized_http (ip);
+CREATE INDEX idx_normalized_http_timestamp ON log_processing.normalized_http (timestamp);
+CREATE INDEX idx_normalized_http_ip ON log_processing.normalized_http (ip);
 
--- Normalized Flow logs
-CREATE TABLE normalized_flow
+CREATE TABLE log_processing.normalized_flow
 (
     id           BIGSERIAL PRIMARY KEY,
     timestamp    DOUBLE PRECISION NOT NULL,
@@ -53,5 +49,5 @@ CREATE TABLE normalized_flow
     processed_at TIMESTAMPTZ      NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_normalized_flow_timestamp ON normalized_flow (timestamp);
-CREATE INDEX idx_normalized_flow_source_ip ON normalized_flow (source_ip);
+CREATE INDEX idx_normalized_flow_timestamp ON log_processing.normalized_flow (timestamp);
+CREATE INDEX idx_normalized_flow_source_ip ON log_processing.normalized_flow (source_ip);

@@ -1,5 +1,6 @@
 package com.nvh12.log_processing.infrastructure.service;
 
+import com.nvh12.log_processing.domain.model.HttpMethod;
 import com.nvh12.log_processing.domain.model.NormalizedFlowRecord;
 import com.nvh12.log_processing.domain.model.NormalizedLog;
 import com.nvh12.log_processing.domain.model.ProcessingResult;
@@ -14,7 +15,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -30,10 +30,6 @@ public class LogProcessingServiceImpl implements LogProcessingService {
     private static final DateTimeFormatter CLF_DATE =
             DateTimeFormatter.ofPattern("dd/MMM/yyyy:HH:mm:ss Z", Locale.ENGLISH);
 
-    private static final Set<String> ALLOWED_METHODS = Set.of(
-            "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS", "TRACE", "CONNECT"
-    );
-
     private final ObjectMapper objectMapper;
     private final LogProcessingProperties.Validation validation;
 
@@ -44,10 +40,10 @@ public class LogProcessingServiceImpl implements LogProcessingService {
 
     @Override
     public ProcessingResult process(RawLog rawLog) {
-        if ("flow".equals(rawLog.getSource())) {
-            return new ProcessingResult.Flow(parseFlow(rawLog));
-        }
-        return new ProcessingResult.Http(parseHttp(rawLog));
+        return switch (rawLog.getSource()) {
+            case FLOW -> new ProcessingResult.Flow(parseFlow(rawLog));
+            case HTTP -> new ProcessingResult.Http(parseHttp(rawLog));
+        };
     }
 
     private NormalizedLog parseHttp(RawLog rawLog) {
@@ -61,8 +57,7 @@ public class LogProcessingServiceImpl implements LogProcessingService {
             throw new IllegalArgumentException("Unparseable CLF entry for log id=" + rawLog.getId());
         }
 
-        String ip     = m.group(1);
-        String method = m.group(3);
+        String ip      = m.group(1);
         String fullUrl = m.group(4);
         String statusStr = m.group(5);
         String userAgent = m.group(8);
@@ -70,8 +65,11 @@ public class LogProcessingServiceImpl implements LogProcessingService {
         if (ip.length() > validation.maxIpLength()) {
             throw new IllegalArgumentException("IP field too long in log id=" + rawLog.getId());
         }
-        if (!ALLOWED_METHODS.contains(method)) {
-            throw new IllegalArgumentException("Unknown HTTP method '" + method + "' in log id=" + rawLog.getId());
+        HttpMethod method;
+        try {
+            method = HttpMethod.valueOf(m.group(3));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Unknown HTTP method '" + m.group(3) + "' in log id=" + rawLog.getId());
         }
         if (fullUrl.length() > validation.maxUrlLength()) {
             throw new IllegalArgumentException("URL exceeds max length in log id=" + rawLog.getId());
@@ -102,10 +100,9 @@ public class LogProcessingServiceImpl implements LogProcessingService {
                 statusCode,
                 responseSize,
                 queryString,
-                null,
                 rawLog.getHeaders() != null ? rawLog.getHeaders() : Map.of(),
                 userAgent,
-                m.group(7)    // referer
+                m.group(7)
         );
     }
 

@@ -1,5 +1,6 @@
 package com.nvh12.log_processing.infrastructure.persistence.repository;
 
+import com.nvh12.log_processing.domain.model.HttpMethod;
 import com.nvh12.log_processing.domain.model.NormalizedFlowRecord;
 import com.nvh12.log_processing.domain.model.NormalizedLog;
 import com.nvh12.log_processing.domain.model.ProcessingResult;
@@ -35,7 +36,7 @@ class PostgresProcessedLogRepositoryTest {
     @Test
     void saveHttpVariantMapsToHttpEntity() {
         NormalizedLog log = new NormalizedLog(
-                1688000000.0, "1.2.3.4", "GET", "/api", 200, 1024, "q=1", "body", Map.of("Host", "localhost"), "Mozilla", "http://ref");
+                1688000000.0, "1.2.3.4", HttpMethod.GET, "/api", 200, 1024, "q=1", Map.of("Host", "localhost"), "Mozilla", "http://ref");
         ProcessingResult result = new ProcessingResult.Http(log);
 
         repository.save(result);
@@ -46,12 +47,11 @@ class PostgresProcessedLogRepositoryTest {
         NormalizedHttpEntity saved = captor.getValue();
         assertThat(saved.getTimestamp()).isEqualTo(1688000000.0);
         assertThat(saved.getIp()).isEqualTo("1.2.3.4");
-        assertThat(saved.getMethod()).isEqualTo("GET");
+        assertThat(saved.getMethod()).isEqualTo(HttpMethod.GET);
         assertThat(saved.getUrl()).isEqualTo("/api");
         assertThat(saved.getStatusCode()).isEqualTo(200);
         assertThat(saved.getResponseSize()).isEqualTo(1024);
         assertThat(saved.getQueryString()).isEqualTo("q=1");
-        assertThat(saved.getBody()).isEqualTo("body");
         assertThat(saved.getHeaders()).containsEntry("Host", "localhost");
         assertThat(saved.getUserAgent()).isEqualTo("Mozilla");
         assertThat(saved.getReferer()).isEqualTo("http://ref");

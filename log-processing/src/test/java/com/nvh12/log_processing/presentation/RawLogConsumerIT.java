@@ -1,6 +1,7 @@
 package com.nvh12.log_processing.presentation;
 
 import com.nvh12.log_processing.AbstractContainerIT;
+import com.nvh12.log_processing.domain.model.LogSource;
 import com.nvh12.log_processing.domain.model.RawLog;
 import com.nvh12.log_processing.infrastructure.config.RabbitMqConfig;
 import com.nvh12.log_processing.infrastructure.polling.LogProcessingPoller;
@@ -38,7 +39,7 @@ class RawLogConsumerIT extends AbstractContainerIT {
 
     @Test
     void publishValidRawLog_appearsInRedis() {
-        RawLog rawLog = RawLog.builder().id("id-raw-1").source("src").rawMessage("msg").receivedAt(Instant.now()).build();
+        RawLog rawLog = RawLog.builder().id("id-raw-1").source(LogSource.HTTP).rawMessage("msg").receivedAt(Instant.now()).build();
         rabbitTemplate.convertAndSend(RabbitMqConfig.QUEUE_RAW, rawLog);
 
         await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {

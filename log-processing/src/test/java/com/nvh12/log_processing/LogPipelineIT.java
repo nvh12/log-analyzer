@@ -1,6 +1,7 @@
 package com.nvh12.log_processing;
 
 import com.nvh12.log_processing.application.DlqRetryScheduler;
+import com.nvh12.log_processing.domain.model.LogSource;
 import com.nvh12.log_processing.domain.model.RawLog;
 import com.nvh12.log_processing.infrastructure.config.RabbitMqConfig;
 import com.nvh12.log_processing.infrastructure.service.RedisQueueService;
@@ -37,7 +38,7 @@ class LogPipelineIT extends AbstractContainerIT {
     @Test
     void fullHttpPipeline_success() {
         String clf = "192.168.1.1 - - [03/May/2026:15:00:00 +0000] \"POST /login HTTP/1.1\" 401 256";
-        RawLog raw = RawLog.builder().id("id-full-1").source("auth-service").rawMessage(clf).receivedAt(Instant.now()).build();
+        RawLog raw = RawLog.builder().id("id-full-1").source(LogSource.HTTP).rawMessage(clf).receivedAt(Instant.now()).build();
 
         rabbitTemplate.convertAndSend(RabbitMqConfig.QUEUE_RAW, raw);
 
@@ -54,7 +55,7 @@ class LogPipelineIT extends AbstractContainerIT {
     @Test
     void fullFlowPipeline_success() {
         String flowJson = "{\"timestamp\":1714730000,\"source_ip\":\"10.0.0.5\",\"dest_ip\":\"10.0.0.6\",\"source_port\":54321,\"dest_port\":80,\"features\":{\"f1\":0.9}}";
-        RawLog raw = RawLog.builder().id("id-full-flow").source("flow").rawMessage(flowJson).receivedAt(Instant.now()).build();
+        RawLog raw = RawLog.builder().id("id-full-flow").source(LogSource.FLOW).rawMessage(flowJson).receivedAt(Instant.now()).build();
 
         rabbitTemplate.convertAndSend(RabbitMqConfig.QUEUE_RAW, raw);
 

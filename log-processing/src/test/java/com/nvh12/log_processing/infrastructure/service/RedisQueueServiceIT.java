@@ -1,6 +1,7 @@
 package com.nvh12.log_processing.infrastructure.service;
 
 import com.nvh12.log_processing.AbstractContainerIT;
+import com.nvh12.log_processing.domain.model.LogSource;
 import com.nvh12.log_processing.domain.model.RawLog;
 import com.nvh12.log_processing.domain.service.EventService;
 import com.nvh12.log_processing.domain.service.FailedLogRepository;
@@ -46,7 +47,7 @@ class RedisQueueServiceIT extends AbstractContainerIT {
     void enqueueOneLog_returnsTrue() {
         RawLog rawLog = RawLog.builder()
                 .id("id-1")
-                .source("service")
+                .source(LogSource.HTTP)
                 .rawMessage("message")
                 .receivedAt(Instant.now())
                 .build();
@@ -62,12 +63,12 @@ class RedisQueueServiceIT extends AbstractContainerIT {
         Instant now = Instant.now();
         for (int i = 0; i < 10; i++) {
             boolean accepted = redisQueueService.enqueue(RawLog.builder()
-                    .id("id-cap-" + i).source("s").rawMessage("m").receivedAt(now.plusSeconds(i)).build());
+                    .id("id-cap-" + i).source(LogSource.HTTP).rawMessage("m").receivedAt(now.plusSeconds(i)).build());
             assertThat(accepted).isTrue();
         }
 
         boolean overflow = redisQueueService.enqueue(RawLog.builder()
-                .id("id-overflow").source("s").rawMessage("m").receivedAt(now.plusSeconds(10)).build());
+                .id("id-overflow").source(LogSource.HTTP).rawMessage("m").receivedAt(now.plusSeconds(10)).build());
 
         assertThat(overflow).isFalse();
         assertThat(redisTemplate.opsForZSet().zCard(RedisQueueService.QUEUE_KEY)).isEqualTo(10L);
@@ -76,9 +77,9 @@ class RedisQueueServiceIT extends AbstractContainerIT {
     @Test
     void dequeueBatchAfterThreeEnqueues_returnsInOrder() {
         Instant now = Instant.now();
-        RawLog log1 = RawLog.builder().id("id-1").source("s").rawMessage("m1").receivedAt(now.plusSeconds(10)).build();
-        RawLog log2 = RawLog.builder().id("id-2").source("s").rawMessage("m2").receivedAt(now.plusSeconds(5)).build();
-        RawLog log3 = RawLog.builder().id("id-3").source("s").rawMessage("m3").receivedAt(now.plusSeconds(15)).build();
+        RawLog log1 = RawLog.builder().id("id-1").source(LogSource.HTTP).rawMessage("m1").receivedAt(now.plusSeconds(10)).build();
+        RawLog log2 = RawLog.builder().id("id-2").source(LogSource.HTTP).rawMessage("m2").receivedAt(now.plusSeconds(5)).build();
+        RawLog log3 = RawLog.builder().id("id-3").source(LogSource.HTTP).rawMessage("m3").receivedAt(now.plusSeconds(15)).build();
 
         redisQueueService.enqueue(log1);
         redisQueueService.enqueue(log2);
@@ -96,7 +97,7 @@ class RedisQueueServiceIT extends AbstractContainerIT {
     void enqueueLogWithNullReceivedAt_returnsFalse() {
         RawLog rawLog = RawLog.builder()
                 .id("id-1")
-                .source("service")
+                .source(LogSource.HTTP)
                 .rawMessage("message")
                 .receivedAt(null)
                 .build();

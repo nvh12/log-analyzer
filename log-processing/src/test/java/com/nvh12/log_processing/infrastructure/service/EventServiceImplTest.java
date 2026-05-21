@@ -1,5 +1,6 @@
 package com.nvh12.log_processing.infrastructure.service;
 
+import com.nvh12.log_processing.domain.model.HttpMethod;
 import com.nvh12.log_processing.domain.model.NormalizedFlowRecord;
 import com.nvh12.log_processing.domain.model.NormalizedLog;
 import com.nvh12.log_processing.domain.model.ProcessingResult;
@@ -27,8 +28,8 @@ class EventServiceImplTest {
     @Test
     void routesHttpResultToHttpQueue() {
         NormalizedLog log = new NormalizedLog(
-                1688000000.0, "1.2.3.4", "GET", "/index.html",
-                200, 512, "", null, Map.of(), null, null);
+                1688000000.0, "1.2.3.4", HttpMethod.GET, "/index.html",
+                200, 512, "", Map.of(), null, null);
         ProcessingResult result = new ProcessingResult.Http(log);
 
         eventService.publish(result);

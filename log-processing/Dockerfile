@@ -9,7 +9,9 @@ COPY src/ src/
 RUN ./gradlew bootJar --no-daemon -x test
 
 FROM eclipse-temurin:21-jre-alpine
+RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app
-COPY --from=build /app/build/libs/*.jar app.jar
+COPY --from=build --chown=app:app /app/build/libs/*.jar app.jar
 EXPOSE 8080
+USER app
 ENTRYPOINT ["java", "-jar", "app.jar"]

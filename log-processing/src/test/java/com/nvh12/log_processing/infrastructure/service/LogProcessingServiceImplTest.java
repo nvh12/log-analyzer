@@ -1,5 +1,7 @@
 package com.nvh12.log_processing.infrastructure.service;
 
+import com.nvh12.log_processing.domain.model.HttpMethod;
+import com.nvh12.log_processing.domain.model.LogSource;
 import com.nvh12.log_processing.domain.model.NormalizedFlowRecord;
 import com.nvh12.log_processing.domain.model.NormalizedLog;
 import com.nvh12.log_processing.domain.model.ProcessingResult;
@@ -20,7 +22,7 @@ class LogProcessingServiceImplTest {
     private LogProcessingServiceImpl service;
 
     private static final LogProcessingProperties PROPERTIES = new LogProcessingProperties(
-            10, 1, 10000, 40, 10000, 2000, 3, 30000L, 5000L,
+            10, 1, 10000, 40, 10000, 2000, 3, 50, 30000L, 5000L,
             new LogProcessingProperties.ThreadPool(4, 12, 50, 30),
             new LogProcessingProperties.Validation(45, 2048, 512));
 
@@ -29,7 +31,7 @@ class LogProcessingServiceImplTest {
         service = new LogProcessingServiceImpl(new ObjectMapper(), PROPERTIES);
     }
 
-    private RawLog rawLog(String source, String message) {
+    private RawLog rawLog(LogSource source, String message) {
         return RawLog.builder()
                 .id(UUID.randomUUID().toString())
                 .source(source)
@@ -44,12 +46,12 @@ class LogProcessingServiceImplTest {
     void parsesMinimalClfEntry() {
         String clf = "192.168.1.1 - - [01/Jul/1995:00:00:01 +0000] \"GET /index.html HTTP/1.0\" 200 1234";
 
-        ProcessingResult result = service.process(rawLog("http", clf));
+        ProcessingResult result = service.process(rawLog(LogSource.HTTP,clf));
 
         assertThat(result).isInstanceOf(ProcessingResult.Http.class);
         NormalizedLog log = ((ProcessingResult.Http) result).log();
         assertThat(log.ip()).isEqualTo("192.168.1.1");
-        assertThat(log.method()).isEqualTo("GET");
+        assertThat(log.method()).isEqualTo(HttpMethod.GET);
         assertThat(log.url()).isEqualTo("/index.html");
         assertThat(log.statusCode()).isEqualTo(200);
         assertThat(log.responseSize()).isEqualTo(1234);
@@ -62,7 +64,7 @@ class LogProcessingServiceImplTest {
     void parsesCombinedLogFormatWithRefererAndUserAgent() {
         String combined = "10.0.0.2 - - [15/Mar/2023:12:00:00 +0000] \"POST /api/login HTTP/1.1\" 401 512 \"https://example.com\" \"Mozilla/5.0\"";
 
-        NormalizedLog log = ((ProcessingResult.Http) service.process(rawLog("http", combined))).log();
+        NormalizedLog log = ((ProcessingResult.Http) service.process(rawLog(LogSource.HTTP,combined))).log();
 
         assertThat(log.ip()).isEqualTo("10.0.0.2");
         assertThat(log.statusCode()).isEqualTo(401);
@@ -74,7 +76,7 @@ class LogProcessingServiceImplTest {
     void extractsQueryStringFromUrl() {
         String clf = "1.2.3.4 - - [01/Jul/1995:00:00:01 +0000] \"GET /search?q=test&page=2 HTTP/1.0\" 200 500";
 
-        NormalizedLog log = ((ProcessingResult.Http) service.process(rawLog("http", clf))).log();
+        NormalizedLog log = ((ProcessingResult.Http) service.process(rawLog(LogSource.HTTP,clf))).log();
 
         assertThat(log.url()).isEqualTo("/search");
         assertThat(log.queryString()).isEqualTo("q=test&page=2");
@@ -84,22 +86,14 @@ class LogProcessingServiceImplTest {
     void handlesHyphenResponseSizeAsZero() {
         String clf = "1.2.3.4 - - [01/Jul/1995:00:00:01 +0000] \"HEAD / HTTP/1.0\" 304 -";
 
-        NormalizedLog log = ((ProcessingResult.Http) service.process(rawLog("http", clf))).log();
+        NormalizedLog log = ((ProcessingResult.Http) service.process(rawLog(LogSource.HTTP,clf))).log();
 
         assertThat(log.responseSize()).isEqualTo(0);
     }
 
     @Test
-    void nonFlowSourceDefaultsToHttpParsing() {
-        String clf = "1.2.3.4 - - [01/Jul/1995:00:00:01 +0000] \"GET / HTTP/1.0\" 200 100";
-
-        assertThat(service.process(rawLog("unknown-source", clf)))
-                .isInstanceOf(ProcessingResult.Http.class);
-    }
-
-    @Test
     void throwsOnUnparsableClfEntry() {
-        assertThatThrownBy(() -> service.process(rawLog("http", "not a valid log line")))
+        assertThatThrownBy(() -> service.process(rawLog(LogSource.HTTP,"not a valid log line")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unparseable CLF entry");
     }
@@ -122,7 +116,7 @@ class LogProcessingServiceImplTest {
                 }
                 """;
 
-        ProcessingResult result = service.process(rawLog("flow", json));
+        ProcessingResult result = service.process(rawLog(LogSource.FLOW,json));
 
         assertThat(result).isInstanceOf(ProcessingResult.Flow.class);
         NormalizedFlowRecord rec = ((ProcessingResult.Flow) result).record();
@@ -147,7 +141,7 @@ class LogProcessingServiceImplTest {
                 }
                 """;
 
-        NormalizedFlowRecord rec = ((ProcessingResult.Flow) service.process(rawLog("flow", json))).record();
+        NormalizedFlowRecord rec = ((ProcessingResult.Flow) service.process(rawLog(LogSource.FLOW,json))).record();
 
         assertThat(rec.sourceIp()).isEmpty();
         assertThat(rec.destIp()).isEmpty();
@@ -164,7 +158,7 @@ class LogProcessingServiceImplTest {
                 }
                 """;
 
-        NormalizedFlowRecord rec = ((ProcessingResult.Flow) service.process(rawLog("flow", json))).record();
+        NormalizedFlowRecord rec = ((ProcessingResult.Flow) service.process(rawLog(LogSource.FLOW,json))).record();
 
         assertThat(rec.features())
                 .containsEntry("zeroed_feature", 0.0)
@@ -173,7 +167,7 @@ class LogProcessingServiceImplTest {
 
     @Test
     void throwsOnInvalidFlowJson() {
-        assertThatThrownBy(() -> service.process(rawLog("flow", "definitely not json")))
+        assertThatThrownBy(() -> service.process(rawLog(LogSource.FLOW,"definitely not json")))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Failed to parse flow record");
     }

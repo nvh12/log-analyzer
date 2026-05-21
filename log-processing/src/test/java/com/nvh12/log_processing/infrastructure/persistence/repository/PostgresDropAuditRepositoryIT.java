@@ -3,6 +3,7 @@ package com.nvh12.log_processing.infrastructure.persistence.repository;
 import com.nvh12.log_processing.AbstractContainerIT;
 import com.nvh12.log_processing.domain.model.DropReason;
 import com.nvh12.log_processing.domain.model.FailedLogEntry;
+import com.nvh12.log_processing.domain.model.LogSource;
 import com.nvh12.log_processing.domain.model.RawLog;
 import com.nvh12.log_processing.domain.service.EventService;
 import com.nvh12.log_processing.domain.service.FailedLogRepository;
@@ -46,7 +47,7 @@ class PostgresDropAuditRepositoryIT extends AbstractContainerIT {
 
     @Test
     void record_persistsWithCorrectReason() {
-        RawLog raw = RawLog.builder().id("id-1").source("src").rawMessage("msg").receivedAt(Instant.now()).build();
+        RawLog raw = RawLog.builder().id("id-1").source(LogSource.HTTP).rawMessage("msg").receivedAt(Instant.now()).build();
         FailedLogEntry entry = new FailedLogEntry(raw, "fail", Instant.now(), 3);
 
         repository.record(entry, DropReason.RETRY_EXHAUSTED);
@@ -68,7 +69,7 @@ class PostgresDropAuditRepositoryIT extends AbstractContainerIT {
 
     @Test
     void recordWithNullReceivedAt_succeeds() {
-        RawLog raw = RawLog.builder().id("id-null").source("src").rawMessage("msg").receivedAt(null).build();
+        RawLog raw = RawLog.builder().id("id-null").source(LogSource.HTTP).rawMessage("msg").receivedAt(null).build();
         FailedLogEntry entry = new FailedLogEntry(raw, "fail", Instant.now(), 0);
 
         repository.record(entry, DropReason.DLQ_OVERFLOW);

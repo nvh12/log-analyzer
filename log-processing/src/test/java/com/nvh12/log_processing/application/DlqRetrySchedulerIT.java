@@ -2,6 +2,7 @@ package com.nvh12.log_processing.application;
 
 import com.nvh12.log_processing.AbstractContainerIT;
 import com.nvh12.log_processing.domain.model.FailedLogEntry;
+import com.nvh12.log_processing.domain.model.LogSource;
 import com.nvh12.log_processing.domain.model.RawLog;
 import com.nvh12.log_processing.domain.service.FailedLogRepository;
 import com.nvh12.log_processing.infrastructure.config.RabbitMqConfig;
@@ -52,7 +53,7 @@ class DlqRetrySchedulerIT extends AbstractContainerIT {
     void retrySuccessful_persistsAndPublishes() {
         // Seed Redis DLQ with a valid HTTP log (CLF format)
         String clf = "127.0.0.1 - - [03/May/2026:12:00:00 +0000] \"GET /index.html HTTP/1.1\" 200 1024";
-        RawLog raw = RawLog.builder().id("id-retry-ok").source("web").rawMessage(clf).receivedAt(Instant.now()).build();
+        RawLog raw = RawLog.builder().id("id-retry-ok").source(LogSource.HTTP).rawMessage(clf).receivedAt(Instant.now()).build();
         failedLogRepository.save(raw, "first-fail");
 
         retryScheduler.retryFailedLogs();
@@ -69,7 +70,7 @@ class DlqRetrySchedulerIT extends AbstractContainerIT {
     @Test
     void retryExhausted_persistsToDropAudit() {
         // Seed DLQ with a log at retryCount == maxRetries (default is 3)
-        RawLog raw = RawLog.builder().id("id-exhausted").source("src").rawMessage("msg").receivedAt(Instant.now()).build();
+        RawLog raw = RawLog.builder().id("id-exhausted").source(LogSource.HTTP).rawMessage("msg").receivedAt(Instant.now()).build();
         FailedLogEntry entry = FailedLogEntry.builder()
                 .rawLog(raw)
                 .failureReason("too many fails")

@@ -3,6 +3,7 @@ package com.nvh12.log_processing.infrastructure.persistence.repository;
 import com.nvh12.log_processing.AbstractContainerIT;
 import com.nvh12.log_processing.domain.model.DropReason;
 import com.nvh12.log_processing.domain.model.FailedLogEntry;
+import com.nvh12.log_processing.domain.model.LogSource;
 import com.nvh12.log_processing.domain.model.RawLog;
 import com.nvh12.log_processing.domain.service.DropAuditRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +38,7 @@ class RedisDlqRepositoryIT extends AbstractContainerIT {
 
     @Test
     void saveOneEntry_returnsMatchingEntry() {
-        RawLog rawLog = RawLog.builder().id("id-1").source("service").rawMessage("msg").receivedAt(Instant.now()).build();
+        RawLog rawLog = RawLog.builder().id("id-1").source(LogSource.HTTP).rawMessage("msg").receivedAt(Instant.now()).build();
         redisDlqRepository.save(rawLog, "some failure");
 
         List<FailedLogEntry> failedLogs = redisDlqRepository.getFailedLogEntries(1);
@@ -54,7 +55,7 @@ class RedisDlqRepositoryIT extends AbstractContainerIT {
         // or just rely on the @TestPropertySource in AbstractContainerIT if I add it there.
         
         // For now, let's just assume we can fill it.
-        RawLog rawLog = RawLog.builder().id("id-cap").source("service").rawMessage("msg").receivedAt(Instant.now()).build();
+        RawLog rawLog = RawLog.builder().id("id-cap").source(LogSource.HTTP).rawMessage("msg").receivedAt(Instant.now()).build();
         
         // If capacity is 2 (let's set it in AbstractContainerIT)
         redisDlqRepository.save(rawLog, "f1");
@@ -66,8 +67,8 @@ class RedisDlqRepositoryIT extends AbstractContainerIT {
 
     @Test
     void getFailedLogEntries_popsExactlyN_FIFO() {
-        RawLog log1 = RawLog.builder().id("id-1").source("s").rawMessage("m1").receivedAt(Instant.now()).build();
-        RawLog log2 = RawLog.builder().id("id-2").source("s").rawMessage("m2").receivedAt(Instant.now()).build();
+        RawLog log1 = RawLog.builder().id("id-1").source(LogSource.HTTP).rawMessage("m1").receivedAt(Instant.now()).build();
+        RawLog log2 = RawLog.builder().id("id-2").source(LogSource.HTTP).rawMessage("m2").receivedAt(Instant.now()).build();
         
         redisDlqRepository.save(log1, "f1");
         redisDlqRepository.save(log2, "f2");

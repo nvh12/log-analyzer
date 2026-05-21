@@ -18,6 +18,10 @@ public class RawLogConsumer {
 
     @RabbitListener(queues = RabbitMqConfig.QUEUE_RAW)
     public void onMessage(RawLog rawLog) {
+        if (rawLog.getReceivedAt() == null) {
+            log.warn("Rejecting log id={} — null receivedAt, acking silently", rawLog.getId());
+            return;
+        }
         boolean accepted;
         try {
             accepted = queueService.enqueue(rawLog);

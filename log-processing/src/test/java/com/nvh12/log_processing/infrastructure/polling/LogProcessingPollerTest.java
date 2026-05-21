@@ -1,6 +1,7 @@
 package com.nvh12.log_processing.infrastructure.polling;
 
 import com.nvh12.log_processing.application.LogProcessingWorker;
+import com.nvh12.log_processing.domain.model.LogSource;
 import com.nvh12.log_processing.domain.model.RawLog;
 import com.nvh12.log_processing.domain.service.QueueService;
 import com.nvh12.log_processing.infrastructure.config.LogProcessingProperties;
@@ -31,7 +32,7 @@ class LogProcessingPollerTest {
     private LogProcessingPoller poller;
 
     private static final LogProcessingProperties PROPERTIES = new LogProcessingProperties(
-            10, 1, 10000, 40, 10000, 2000, 3, 30000L, 5000L,
+            10, 1, 10000, 5, 10000, 2000, 3, 50, 30000L, 5000L,
             new LogProcessingProperties.ThreadPool(2, 4, 10, 5),
             new LogProcessingProperties.Validation(45, 2048, 512));
 
@@ -56,7 +57,7 @@ class LogProcessingPollerTest {
         return RawLog.builder()
                 .id(id)
                 .rawMessage("1.2.3.4 - - [01/Jul/1995:00:00:01 +0000] \"GET / HTTP/1.0\" 200 100")
-                .source("http")
+                .source(LogSource.HTTP)
                 .receivedAt(Instant.now())
                 .build();
     }

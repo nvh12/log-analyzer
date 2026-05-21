@@ -13,6 +13,7 @@ public record LogProcessingProperties(
         @DefaultValue("10000") int mainQueueCapacity,
         @DefaultValue("2000")  int dlqCapacity,
         @DefaultValue("3")     int maxRetries,
+        @DefaultValue("50")    int retryBatchSize,
         @DefaultValue("30000") long retryDelayMs,
         @DefaultValue("5000")  long retryJitterMs,
         @DefaultValue ThreadPool threadPool,
@@ -23,6 +24,11 @@ public record LogProcessingProperties(
             throw new IllegalArgumentException(
                     "log-processing.batch-size must be between " + batchSizeMin +
                             " and " + batchSizeMax + ", got " + batchSize);
+        }
+        if (backpressureThreshold >= threadPool.queueCapacity()) {
+            throw new IllegalArgumentException(
+                    "log-processing.backpressure-threshold (" + backpressureThreshold +
+                            ") must be less than thread-pool.queue-capacity (" + threadPool.queueCapacity() + ")");
         }
     }
 

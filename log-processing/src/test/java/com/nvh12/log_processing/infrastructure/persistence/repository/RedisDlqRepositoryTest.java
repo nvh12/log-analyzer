@@ -1,6 +1,8 @@
 package com.nvh12.log_processing.infrastructure.persistence.repository;
 
+import com.nvh12.log_processing.domain.model.DropReason;
 import com.nvh12.log_processing.domain.model.FailedLogEntry;
+import com.nvh12.log_processing.domain.model.LogSource;
 import com.nvh12.log_processing.domain.model.RawLog;
 import com.nvh12.log_processing.domain.service.DropAuditRepository;
 import com.nvh12.log_processing.infrastructure.config.LogProcessingProperties;
@@ -40,7 +42,7 @@ class RedisDlqRepositoryTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private static final LogProcessingProperties PROPERTIES = new LogProcessingProperties(
-            10, 1, 10000, 40, 10000, 2000, 3, 30000L, 5000L,
+            10, 1, 10000, 5, 10000, 2000, 3, 50, 30000L, 5000L,
             new LogProcessingProperties.ThreadPool(2, 4, 10, 5),
             new LogProcessingProperties.Validation(45, 2048, 512));
 
@@ -51,7 +53,7 @@ class RedisDlqRepositoryTest {
     }
 
     private RawLog makeRawLog(String id) {
-        return RawLog.builder().id(id).rawMessage("raw").source("http").receivedAt(Instant.now()).build();
+        return RawLog.builder().id(id).rawMessage("raw").source(LogSource.HTTP).receivedAt(Instant.now()).build();
     }
 
     @Test
@@ -104,5 +106,27 @@ class RedisDlqRepositoryTest {
         when(listOps.leftPop(anyString(), anyLong())).thenReturn(null);
 
         assertThat(repository.getFailedLogEntries(10)).isEmpty();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void saveAuditsDlqSaveFailureWhenRedisThrows() {
+        when(redisTemplate.execute(any(RedisScript.class), anyList(), any(), any()))
+                .thenThrow(new RuntimeException("Redis unavailable"));
+
+        repository.save(makeRawLog("id-redis-down"), "processing error");
+
+        verify(dropAuditRepository).record(any(FailedLogEntry.class), eq(DropReason.DLQ_SAVE_FAILED));
+    }
+
+    @Test
+    void getFailedLogEntriesAuditsCorruptEntry() {
+        when(listOps.leftPop(anyString(), anyLong())).thenReturn(List.of("not-valid-json"));
+
+        List<FailedLogEntry> result = repository.getFailedLogEntries(10);
+
+        assertThat(result).isEmpty();
+        verify(dropAuditRepository).recordDeadLetter(eq("not-valid-json"), isNull(),
+                contains("DLQ deserialization failure"));
     }
 }

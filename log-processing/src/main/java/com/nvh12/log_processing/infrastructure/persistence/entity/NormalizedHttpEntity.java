@@ -1,5 +1,6 @@
 package com.nvh12.log_processing.infrastructure.persistence.entity;
 
+import com.nvh12.log_processing.domain.model.HttpMethod;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.ColumnDefault;
@@ -10,7 +11,7 @@ import java.time.Instant;
 import java.util.Map;
 
 @Entity
-@Table(name = "normalized_http")
+@Table(name = "normalized_http", schema = "log_processing")
 @Getter
 @Setter
 @AllArgsConstructor
@@ -25,11 +26,12 @@ public class NormalizedHttpEntity {
     @Column(name = "timestamp", nullable = false)
     private Double timestamp;
 
-    @Column(name = "ip", length = 64)
+    @Column(name = "ip", length = 45)
     private String ip;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "method", length = 16)
-    private String method;
+    private HttpMethod method;
 
     @Column(name = "url", columnDefinition = "text")
     private String url;
@@ -42,9 +44,6 @@ public class NormalizedHttpEntity {
 
     @Column(name = "query_string", columnDefinition = "text")
     private String queryString;
-
-    @Column(name = "body", columnDefinition = "text")
-    private String body;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "headers", columnDefinition = "jsonb")

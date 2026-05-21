@@ -9,12 +9,11 @@ import java.util.Map;
 public record NormalizedLog(
         double timestamp,
         String ip,
-        String method,
+        HttpMethod method,
         String url,
         int statusCode,
         int responseSize,
         String queryString,
-        String body,
         Map<String, String> headers,
         String userAgent,
         String referer

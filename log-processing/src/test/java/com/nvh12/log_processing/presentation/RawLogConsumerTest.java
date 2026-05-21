@@ -1,5 +1,6 @@
 package com.nvh12.log_processing.presentation;
 
+import com.nvh12.log_processing.domain.model.LogSource;
 import com.nvh12.log_processing.domain.model.RawLog;
 import com.nvh12.log_processing.domain.service.QueueService;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,7 @@ class RawLogConsumerTest {
         return RawLog.builder()
                 .id(id)
                 .rawMessage("1.2.3.4 - - [01/Jul/1995:00:00:01 +0000] \"GET / HTTP/1.0\" 200 100")
-                .source("http")
+                .source(LogSource.HTTP)
                 .receivedAt(Instant.now())
                 .build();
     }

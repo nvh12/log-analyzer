@@ -79,4 +79,15 @@ public class RabbitMqConfig {
         factory.setDefaultRequeueRejected(false);
         return factory;
     }
+
+    // DLQ consumer must not use Jackson — the body may be non-JSON garbage that caused the
+    // original failure, and re-running Jackson would trigger a second fatal conversion error
+    // (Spring AMQP then silently discards messages that have both x-death and a fatal exception).
+    @Bean("dlqContainerFactory")
+    public SimpleRabbitListenerContainerFactory dlqContainerFactory(ConnectionFactory connectionFactory) {
+        SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
+        factory.setConnectionFactory(connectionFactory);
+        factory.setDefaultRequeueRejected(false);
+        return factory;
+    }
 }

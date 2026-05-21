@@ -1,6 +1,8 @@
 package com.nvh12.log_processing.application;
 
 import com.nvh12.log_processing.domain.model.FailedLogEntry;
+import com.nvh12.log_processing.domain.model.HttpMethod;
+import com.nvh12.log_processing.domain.model.LogSource;
 import com.nvh12.log_processing.domain.model.NormalizedLog;
 import com.nvh12.log_processing.domain.model.ProcessingResult;
 import com.nvh12.log_processing.domain.model.RawLog;
@@ -43,7 +45,7 @@ class DlqRetrySchedulerTest {
     @BeforeEach
     void setUp() {
         LogProcessingProperties properties = new LogProcessingProperties(
-                10, 1, 10000, 40, 10000, 2000, 3, 30000L, 5000L,
+                10, 1, 10000, 5, 10000, 2000, 3, 50, 30000L, 5000L,
                 new LogProcessingProperties.ThreadPool(2, 4, 10, 5),
                 new LogProcessingProperties.Validation(45, 2048, 512));
         maxRetries = properties.maxRetries();
@@ -56,7 +58,7 @@ class DlqRetrySchedulerTest {
         return RawLog.builder()
                 .id(id)
                 .rawMessage("1.2.3.4 - - [01/Jul/1995:00:00:01 +0000] \"GET / HTTP/1.0\" 200 100")
-                .source("http")
+                .source(LogSource.HTTP)
                 .receivedAt(Instant.now())
                 .build();
     }
@@ -72,7 +74,7 @@ class DlqRetrySchedulerTest {
 
     private ProcessingResult successResult() {
         NormalizedLog normalized = new NormalizedLog(
-                1688000000.0, "1.2.3.4", "GET", "/", 200, 100, "", null, Map.of(), null, null);
+                1688000000.0, "1.2.3.4", HttpMethod.GET, "/", 200, 100, "", Map.of(), null, null);
         return new ProcessingResult.Http(normalized);
     }
 

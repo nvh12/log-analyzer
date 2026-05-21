@@ -1,6 +1,7 @@
 package com.nvh12.log_processing.infrastructure.persistence.repository;
 
 import com.nvh12.log_processing.AbstractContainerIT;
+import com.nvh12.log_processing.domain.model.HttpMethod;
 import com.nvh12.log_processing.domain.model.NormalizedFlowRecord;
 import com.nvh12.log_processing.domain.model.NormalizedLog;
 import com.nvh12.log_processing.domain.model.ProcessingResult;
@@ -42,8 +43,8 @@ class PostgresProcessedLogRepositoryIT extends AbstractContainerIT {
     @Test
     void saveHttpResult_persistsToDatabase() {
         NormalizedLog log = new NormalizedLog(
-                1714730000.0, "1.2.3.4", "GET", "/test", 200, 1024,
-                "q=1", "body", Map.of("X-Test", "Value"), "UA", "Ref"
+                1714730000.0, "1.2.3.4", HttpMethod.GET, "/test", 200, 1024,
+                "q=1", Map.of("X-Test", "Value"), "UA", "Ref"
         );
         ProcessingResult.Http result = new ProcessingResult.Http(log);
 
@@ -76,8 +77,8 @@ class PostgresProcessedLogRepositoryIT extends AbstractContainerIT {
     @Test
     void nullHeadersMap_saveSucceeds() {
         NormalizedLog log = new NormalizedLog(
-                1714730000.0, "1.2.3.4", "GET", "/test", 200, 1024,
-                null, null, null, null, null
+                1714730000.0, "1.2.3.4", HttpMethod.GET, "/test", 200, 1024,
+                null, null, null, null
         );
         repository.save(new ProcessingResult.Http(log));
 

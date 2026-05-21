@@ -1,6 +1,7 @@
 package com.nvh12.log_processing.infrastructure.service;
 
 import com.nvh12.log_processing.AbstractContainerIT;
+import com.nvh12.log_processing.domain.model.HttpMethod;
 import com.nvh12.log_processing.domain.model.NormalizedFlowRecord;
 import com.nvh12.log_processing.domain.model.NormalizedLog;
 import com.nvh12.log_processing.domain.model.ProcessingResult;
@@ -45,8 +46,8 @@ class EventServiceImplIT extends AbstractContainerIT {
     @Test
     void publishHttp_sendsToCorrectQueue() {
         NormalizedLog log = new NormalizedLog(
-                1.0, "1.1.1.1", "POST", "/api", 201, 10,
-                null, null, Map.of(), "UA", null
+                1.0, "1.1.1.1", HttpMethod.POST, "/api", 201, 10,
+                null, Map.of(), "UA", null
         );
         eventService.publish(new ProcessingResult.Http(log));
 

@@ -21,7 +21,7 @@ public class DeadLetterConsumer {
     private final DropAuditRepository dropAuditRepository;
     private final ObjectMapper objectMapper;
 
-    @RabbitListener(queues = RabbitMqConfig.QUEUE_RAW_DLQ)
+    @RabbitListener(queues = RabbitMqConfig.QUEUE_RAW_DLQ, containerFactory = "dlqContainerFactory")
     public void onDeadLetter(Message message) {
         String body = new String(message.getBody(), StandardCharsets.UTF_8);
         String logId = extractLogId(body);

@@ -1,5 +1,7 @@
 package com.nvh12.log_processing.application;
 
+import com.nvh12.log_processing.domain.model.HttpMethod;
+import com.nvh12.log_processing.domain.model.LogSource;
 import com.nvh12.log_processing.domain.model.NormalizedLog;
 import com.nvh12.log_processing.domain.model.ProcessingResult;
 import com.nvh12.log_processing.domain.model.RawLog;
@@ -44,7 +46,7 @@ class LogProcessingWorkerTest {
         return RawLog.builder()
                 .id(id)
                 .rawMessage("1.2.3.4 - - [01/Jul/1995:00:00:01 +0000] \"GET / HTTP/1.0\" 200 100")
-                .source("http")
+                .source(LogSource.HTTP)
                 .receivedAt(Instant.now())
                 .build();
     }
@@ -53,7 +55,7 @@ class LogProcessingWorkerTest {
     void successfulLogIsProcessedAndPublished() {
         RawLog rawLog = makeRawLog("id-ok");
         NormalizedLog normalized = new NormalizedLog(
-                1688000000.0, "1.2.3.4", "GET", "/", 200, 100, "", null, Map.of(), null, null);
+                1688000000.0, "1.2.3.4", HttpMethod.GET, "/", 200, 100, "", Map.of(), null, null);
         ProcessingResult result = new ProcessingResult.Http(normalized);
 
         when(logProcessingService.process(rawLog)).thenReturn(result);
