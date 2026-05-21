@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+dependency-injector
+aio-pika
+redis
+pytest
+pytest-asyncio
+httpx
+testcontainers[rabbitmq]
