@@ -9,7 +9,7 @@ class LogMessage(BaseModel):
     method: str
     url: str
     status_code: int
-    response_time_ms: float
+    response_time_ms: float = 0.0
     response_size: int
     query_string: str = ""
     body: Optional[str] = None

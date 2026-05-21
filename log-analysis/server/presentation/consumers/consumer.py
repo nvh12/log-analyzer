@@ -3,7 +3,7 @@ import logging
 import aio_pika
 from pydantic import ValidationError
 from dependency_injector.wiring import inject, Provide
-from infrastructure.config.rabbitmq import channel
+from infrastructure.config import rabbitmq
 from infrastructure.config.settings import settings
 from presentation.schemas.log_message import LogMessage
 from application.ports.window_port import WindowPort
@@ -43,8 +43,8 @@ async def start_consumer() -> None:
     """
     Initializes and starts the RabbitMQ consumer for normalized logs.
     """
-    if channel is None:
+    if rabbitmq.channel is None:
         raise RuntimeError("RabbitMQ channel not initialized — cannot start HTTP log consumer")
-    queue = await channel.declare_queue(settings.QUEUE_IN_HTTP, durable=True)
+    queue = await rabbitmq.channel.declare_queue(settings.QUEUE_IN_HTTP, durable=True)
     await queue.consume(handle_message)
     await asyncio.Future()

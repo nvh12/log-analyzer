@@ -93,6 +93,7 @@ def detect(
             confidence=0.0,
             method_flags={"z_score": False, "iqr": False, "ema": False, "seasonal": False},
             severity=Severity.LOW,
+            log_timestamp=window.window_end,
             window_start=window.window_start,
             window_end=window.window_end,
         )
@@ -146,6 +147,7 @@ def detect(
         confidence=confidence,
         method_flags=method_flags,
         severity=severity,
+        log_timestamp=window.window_end,
         window_start=window.window_start,
         window_end=window.window_end,
     )

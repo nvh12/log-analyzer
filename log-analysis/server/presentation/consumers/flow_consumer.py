@@ -3,7 +3,7 @@ import logging
 import aio_pika
 from pydantic import ValidationError
 from dependency_injector.wiring import inject, Provide
-from infrastructure.config.rabbitmq import channel
+from infrastructure.config import rabbitmq
 from infrastructure.config.settings import settings
 from presentation.schemas.flow_message import FlowMessage
 from domain.models.input import DDoSInput, BruteForceInput
@@ -65,8 +65,8 @@ async def handle_flow_message(
 
 async def start_flow_consumer() -> None:
     """Initializes and starts the RabbitMQ consumer for normalized flow records."""
-    if channel is None:
+    if rabbitmq.channel is None:
         raise RuntimeError("RabbitMQ channel not initialized — cannot start flow consumer")
-    queue = await channel.declare_queue(settings.QUEUE_IN_FLOW, durable=True)
+    queue = await rabbitmq.channel.declare_queue(settings.QUEUE_IN_FLOW, durable=True)
     await queue.consume(handle_flow_message)
     await asyncio.Future()

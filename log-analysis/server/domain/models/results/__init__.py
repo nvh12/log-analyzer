@@ -1,6 +1,7 @@
 """Result models for detection use cases."""
 from .detection_type import DetectionType
 from .severity import Severity
+from .network_layer import NetworkLayer
 from .detection_result import DetectionResult
 from .brute_force_result import BruteForceResult
 from .ddos_result import DDoSResult

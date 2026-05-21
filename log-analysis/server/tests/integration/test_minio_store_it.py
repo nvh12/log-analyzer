@@ -10,10 +10,10 @@ from infrastructure.config.settings import settings
 from infrastructure.model_store import MinIOModelStore
 
 DUMMY_JSON_KEY = "ddos_feature_cols"
-DUMMY_JSON_OBJECT = "xgboost/uc2_feature_cols.json"
+DUMMY_JSON_OBJECT = "ddos/feature_cols.json"
 
 DUMMY_PKL_KEY = "ddos_xgb"
-DUMMY_PKL_OBJECT = "xgboost/ddos.pkl"
+DUMMY_PKL_OBJECT = "ddos/xgboost.pkl"
 
 @pytest.fixture(scope="module")
 def minio_container():

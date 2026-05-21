@@ -21,19 +21,18 @@ logger = logging.getLogger(__name__)
 
 # Maps model key → MinIO object name. Keys ending in .json are loaded as JSON lists/dicts.
 MODEL_OBJECT_KEYS: dict[str, str] = {
-    # Flow track — UC2 (DDoS) and UC4 (Brute Force) share the same feature columns
-    "ddos_xgb": "xgboost/ddos.pkl",
-    "brute_force_xgb": "xgboost/brute_force.pkl",
-    "ddos_feature_cols": "xgboost/uc2_feature_cols.json",
-    # HTTP track — Web Attack (UC3)
-    "web_if": "isolation_forest/web.pkl",
-    "web_svm": "one_class_svm/web.pkl",
-    "web_xgb": "xgboost/web.pkl",
-    "web_vocab": "metadata/web_vocab.json",
-    "traffic_calibration": "metadata/traffic_thresholds.json",
+    "ddos_xgb": "flow/ddos/xgboost.pkl",
+    "brute_force_xgb": "flow/bruteforce/xgboost.pkl",
+    "ddos_feature_cols": "flow/feature_cols.json",
+
+    "web_if": "webattack/isolation_forest.pkl",
+    "web_svm": "webattack/one_class_svm.pkl",
+    "web_xgb": "webattack/xgboost.pkl",
+    "web_vocab": "webattack/vocab.json",
+
+    "traffic_calibration": "trafficspike/thresholds.json",
 }
-
-
+ 
 class MinIOModelStore(ModelRepository):
     def __init__(self):
         self._models: dict[str, Any] = {}

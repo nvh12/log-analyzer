@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel, Field
 from .detection_type import DetectionType
+from .network_layer import NetworkLayer
 from .severity import Severity
 
 
@@ -25,6 +26,7 @@ class DetectionResult(BaseModel, ABC):
     """
 
     detection_type: DetectionType
+    network_layer: NetworkLayer
 
     log_timestamp: Optional[datetime] = Field(
         default=None,

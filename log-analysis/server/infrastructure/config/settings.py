@@ -6,6 +6,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
     # External services
+    POSTGRES_DSN: str = "postgresql://localhost:5432/log-analyzer"
+    POSTGRES_MIN_CONNECTIONS: int = 2
+    POSTGRES_MAX_CONNECTIONS: int = 10
     REDIS_URL: str = "redis://localhost:6379/0"
     REDIS_SOCKET_CONNECT_TIMEOUT: int = 5
     REDIS_SOCKET_TIMEOUT: int = 5

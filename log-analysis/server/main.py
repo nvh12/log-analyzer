@@ -4,8 +4,10 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from infrastructure.model_store import store, MODEL_OBJECT_KEYS
-from infrastructure.config.rabbitmq import connect, close
+from infrastructure.config.rabbitmq import connect as rabbitmq_connect, close as rabbitmq_close
+from infrastructure.config import postgres
 from infrastructure.config.redis import redis_client
+from infrastructure.migrations.runner import run as run_migrations
 from dependencies.container import Container
 from presentation.consumers import start_consumer, start_flow_consumer
 
@@ -19,7 +21,9 @@ async def lifespan(app: FastAPI):
     app.container = container
 
     await store.load_all_async()
-    await connect()
+    await rabbitmq_connect()
+    await postgres.connect()
+    await run_migrations(postgres.pool)
 
     # Start RabbitMQ consumers
     http_consumer_task = asyncio.create_task(start_consumer())
@@ -39,7 +43,8 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
     store.unload_all()
-    await close()
+    await rabbitmq_close()
+    await postgres.close()
 
 
 app = FastAPI(title="Detection Service", lifespan=lifespan)
@@ -63,6 +68,17 @@ async def health() -> JSONResponse:
         "ok" if rmq_connection and not rmq_connection.is_closed else "unavailable"
     )
 
+    # PostgreSQL
+    try:
+        if postgres.pool is None:
+            checks["postgres"] = "unavailable"
+        else:
+            async with postgres.pool.acquire() as conn:
+                await conn.fetchval("SELECT 1")
+            checks["postgres"] = "ok"
+    except Exception as e:
+        checks["postgres"] = f"error: {e}"
+
     # Models
     checks["models"] = {
         key: ("loaded" if store.get(key) is not None else "missing")
@@ -79,6 +95,7 @@ async def health() -> JSONResponse:
     degraded = (
         checks["redis"] != "ok"
         or checks["rabbitmq"] != "ok"
+        or checks["postgres"] != "ok"
         or any(f > 0 for f in job_failures.values())
         or any(status == "missing" for status in checks["models"].values())
     )

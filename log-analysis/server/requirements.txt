@@ -5,6 +5,7 @@ pydantic-settings
 dependency-injector
 apscheduler
 aio-pika
+asyncpg
 redis
 minio
 scikit-learn
@@ -12,5 +13,5 @@ xgboost
 numpy
 joblib
 pytest
-testcontainers[minio,rabbitmq]
+testcontainers[minio,rabbitmq,postgres]
 pytest-asyncio

@@ -3,6 +3,7 @@ from infrastructure.config.settings import settings
 from infrastructure.model_store import store
 from infrastructure.ports.window import RedisWindowAdapter
 from infrastructure.ports.publish import RabbitMQPublisherAdapter
+from infrastructure.ports.result_repository import PostgresDetectionResultRepository
 from infrastructure.ports.history import RedisHistoryAdapter
 from infrastructure.ports.lock import RedisLockAdapter
 
@@ -12,6 +13,11 @@ from application.ddos_use_case import DDoSUseCase
 from application.brute_force_use_case import BruteForceUseCase
 from application.web_attack_use_case import WebAttackUseCase
 from domain.models.input import TrafficThresholds
+
+
+def _get_traffic_calibration(repo) -> dict:
+    result = repo.get("traffic_calibration")
+    return result if result is not None else {}
 
 
 def create_traffic_thresholds(data: dict, settings) -> TrafficThresholds:
@@ -59,14 +65,17 @@ class Container(containers.DeclarativeContainer):
         window_seconds=settings.WINDOW_SECONDS,
         window_key=f"{settings.REDIS_NAMESPACE}:window:logs",
     )
-    publisher_adapter = providers.Singleton(RabbitMQPublisherAdapter, queue_name=settings.QUEUE_OUT)
+    publisher_adapter = providers.Singleton(RabbitMQPublisherAdapter, exchange_name=settings.QUEUE_OUT)
+    result_repository_adapter = providers.Singleton(PostgresDetectionResultRepository)
     history_adapter = providers.Singleton(RedisHistoryAdapter, history_ttl_seconds=settings.HISTORY_TTL_SECONDS)
     lock_adapter = providers.Singleton(RedisLockAdapter, key_prefix=f"{settings.REDIS_NAMESPACE}:lock:")
 
     # Use case providers
+    _traffic_calibration = providers.Callable(_get_traffic_calibration, repo=repository)
+
     traffic_thresholds = providers.Factory(
         create_traffic_thresholds,
-        data=repository.provided.get.call("traffic_calibration").provided.or_default({}),
+        data=_traffic_calibration,
         settings=settings,
     )
 
@@ -74,6 +83,7 @@ class Container(containers.DeclarativeContainer):
         TrafficUseCase,
         publisher=publisher_adapter,
         thresholds=traffic_thresholds,
+        result_repository=result_repository_adapter,
     )
 
     # Flow track use cases (UC2 + UC4) — injected into the flow consumer
@@ -81,18 +91,21 @@ class Container(containers.DeclarativeContainer):
         DDoSUseCase,
         repository=repository,
         publisher=publisher_adapter,
+        result_repository=result_repository_adapter,
     )
 
     brute_force_use_case = providers.Singleton(
         BruteForceUseCase,
         repository=repository,
         publisher=publisher_adapter,
+        result_repository=result_repository_adapter,
     )
 
     web_attack_use_case = providers.Singleton(
         WebAttackUseCase,
         repository=repository,
         publisher=publisher_adapter,
+        result_repository=result_repository_adapter,
     )
 
     # HTTP-track job runner (UC1 Traffic, UC3 Web Attack)
