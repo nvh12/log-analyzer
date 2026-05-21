@@ -28,18 +28,18 @@ MINIO_CONFIG = {
 # Format: (Source Local Path, Target MinIO Object Key)
 ARTIFACT_MAP = [
     # Flow Track (UC2 & UC4)
-    ("training/ddos/models/uc2_xgboost.joblib",          "xgboost/ddos.pkl"),
-    ("training/bruteforce/models/uc4_xgboost.joblib",   "xgboost/brute_force.pkl"),
-    ("training/webattack/data/uc2_feature_cols.json",   "xgboost/uc2_feature_cols.json"),
+    ("training/ddos/models/ddos_xgboost.pkl",            "flow/ddos/xgboost.pkl"),
+    ("training/bruteforce/models/brute_force_xgboost.pkl", "flow/bruteforce/xgboost.pkl"),
+    ("training/ddos/data/flow_feature_cols.json",        "flow/feature_cols.json"),
     
     # HTTP Track (UC3)
-    ("training/webattack/models/web_attack_xgboost.pkl", "xgboost/web.pkl"),
-    ("training/webattack/models/web_vocab.json",        "metadata/web_vocab.json"),
-    ("training/webattack/models/uc3_layer2_if.pkl",     "isolation_forest/web.pkl"),
-    ("training/webattack/models/uc3_layer3_ocsvm.pkl",  "one_class_svm/web.pkl"),
+    ("training/webattack/models/web_attack_xgboost.pkl", "webattack/xgboost.pkl"),
+    ("training/webattack/models/web_vocab.json",        "webattack/vocab.json"),
+    ("training/webattack/models/web_attack_if.pkl",     "webattack/isolation_forest.pkl"),
+    ("training/webattack/models/web_attack_ocsvm.pkl",  "webattack/one_class_svm.pkl"),
     
     # Traffic Track (UC1)
-    ("training/trafficspike/outputs/uc1/uc1_ensemble_calibration.json", "metadata/traffic_thresholds.json"),
+    ("training/trafficspike/outputs/ensemble_calibration.json", "trafficspike/thresholds.json"),
 ]
 
 def compute_sha256(path: str) -> str:

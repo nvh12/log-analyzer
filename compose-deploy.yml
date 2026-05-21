@@ -46,22 +46,28 @@ services:
     container_name: redis-log-analyzer
     ports:
       - "${REDIS_PORT:-6379}:6379"
+    environment:
+      REDIS_PASS: ${REDIS_PASS}
+    command:
+      - sh
+      - -c
+      - redis-server --requirepass "$REDIS_PASS"
     volumes:
       - redis-data:/data
     networks:
       - log-analyzer
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$REDIS_PASS\" ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     container_name: minio-log-analyzer
     ports:
-      - "${MINIO_PORT:-9000}:9000"   # S3 API
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"   # Web console
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_PASS}
@@ -95,6 +101,7 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASS}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASS}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -113,13 +120,14 @@ services:
     ports:
       - "${DETECTION_PORT:-8000}:8000"
     environment:
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASS}@redis:6379/0
       RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq/
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_USER}
       MINIO_SECRET_KEY: ${MINIO_PASS}
       MINIO_BUCKET: ${MINIO_BUCKET:-models}
       MINIO_SECURE: "${MINIO_SECURE:-false}"
+      POSTGRES_DSN: postgresql://${POSTGRES_USER}:${POSTGRES_PASS}@postgres-db:5432/${POSTGRES_DB:-log-analyzer}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -127,8 +135,120 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      postgres-db:
+        condition: service_healthy
     networks:
       - log-analyzer
+
+  simulation:
+    build:
+      context: ./simulation
+      dockerfile: Dockerfile
+    container_name: simulation
+    ports:
+      - "${SIMULATION_PORT:-8001}:8001"
+    environment:
+      REDIS_URL: redis://:${REDIS_PASS}@redis:6379/0
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq/
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - log-analyzer
+
+  reaction:
+    build:
+      context: ./reaction
+      dockerfile: Dockerfile
+    container_name: reaction
+    ports:
+      - "${REACTION_PORT:-8082}:8080"
+    environment:
+      POSTGRES_HOST: postgres-db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASS}
+      POSTGRES_DB: ${POSTGRES_DB:-log-analyzer}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASS}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASS}
+      ALERT_DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      ALERT_PROVIDER: ${ALERT_PROVIDER:-smtp}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      ALERT_MAIL_FROM: ${ALERT_MAIL_FROM:-}
+      ALERT_MAIL_TO: ${ALERT_MAIL_TO:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - log-analyzer
+
+  dashboard-fe:
+    build:
+      context: ./dashboard-fe
+      dockerfile: Dockerfile
+    container_name: dashboard-fe
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      dashboard:
+        condition: service_healthy
+    networks:
+      - log-analyzer
+
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: dashboard
+    ports:
+      - "${DASHBOARD_PORT:-8083}:8080"
+    environment:
+      POSTGRES_HOST: postgres-db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASS}
+      POSTGRES_DB: ${POSTGRES_DB:-log-analyzer}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASS}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASS}
+      RABBITMQ_MANAGEMENT_URL: http://rabbitmq:15672
+      DETECTION_METRICS_URL: http://log-analysis:8000/metrics
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - log-analyzer
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
 volumes:
   db-data:

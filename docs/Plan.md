@@ -20,9 +20,9 @@ Hệ thống phát hiện bất thường trên hai tầng dữ liệu mạng: t
 
   - IQR (Interquartile Range): Phương pháp thống kê sử dụng khoảng tứ phân vị để xác định ngoại lệ (outlier), ít bị ảnh hưởng bởi giá trị cực đoan.
 
-  - Seasonal Baseline (Robust Z-Score): Sử dụng dữ liệu lịch sử dài hạn (21 ngày), tổng hợp dữ liệu thành các điểm tóm tắt theo từng giờ (h_median, h_iqr) và phân nhóm theo (giờ trong ngày × cuối tuần) để mô phỏng kỳ vọng lưu lượng theo ngữ cảnh thời gian. Sử dụng Median (cho baseline) và IQR (cho thang đo, có sàn) để đảm bảo tính kháng nhiễu (robustness) và tính ổn định khi gặp giờ có tín hiệu phẳng.
+  - Seasonal Baseline (Robust Z-Score): Sử dụng dữ liệu lịch sử dài hạn (21 ngày) được chia thành 48 bucket (giờ trong ngày × cuối tuần) để mô phỏng kỳ vọng lưu lượng theo ngữ cảnh thời gian. Sử dụng Median và MAD (Median Absolute Deviation) để đảm bảo tính kháng nhiễu (robustness).
 
-  - Ensemble Rule Engine: Kết hợp kết quả từ cả 4 detector theo cơ chế bỏ phiếu có trọng số (weighted-axis voting). Mỗi detector được hiệu chuẩn ngưỡng độc lập dựa trên tỷ lệ báo động giả (False Positive Rate - FPR) cố định trên tập benign. Trọng số bỏ phiếu được phân bổ theo tính độc lập của tín hiệu: EMA và Z-Score gần như tương quan tuyến tính hoàn hảo (Pearson ≈ 1.0 trên dữ liệu NASA benign) nên mỗi detector chỉ đóng góp trọng số 0.5 (tổng trọng số tối đa 1.0 cho cặp này, bằng đúng đóng góp của một trục độc lập); IQR và Seasonal Baseline là hai trục độc lập (Pearson ≈ 0) nên mỗi detector đóng góp trọng số 1.0. Tổng trọng số tối đa của vector bỏ phiếu là 3.0. Ngưỡng kích hoạt cuối cùng (`min_weighted_chosen`) được chọn là ngưỡng có FPR thấp nhất mà vẫn bao phủ toàn bộ các sự kiện thực trong tập đánh giá.
+  - Ensemble Rule Engine: Kết hợp kết quả từ cả 4 detector trên theo cơ chế bỏ phiếu (k-of-N voting) và hiệu chuẩn ngưỡng dựa trên tỷ lệ báo động giả (False Positive Rate - FPR) cố định.
 
 - Dữ liệu: NASA HTTP (1995). Đánh giá dựa trên các sự kiện thực tế (NASA mission events như STS launches/landings). Phương pháp không giám sát, không yêu cầu nhãn huấn luyện.
 
@@ -64,7 +64,7 @@ Hệ thống phát hiện bất thường trên hai tầng dữ liệu mạng: t
 
 - Tầng dữ liệu: Network flow (CICIDS2017 flow records, trích xuất bởi CICFlowMeter).
 
-- Phương pháp: XGBoost phân loại nhị phân (Benign / Brute Force) trên vector đặc trưng flow. Sử dụng cùng bộ đặc trưng đã giảm chiều với UC2 (uc2_feature_cols.json) để đảm bảo feature parity trong Detection microservice — một flow vào, hai dự đoán độc lập ra.
+- Phương pháp: XGBoost phân loại nhị phân (Benign / Brute Force) trên vector đặc trưng flow. Sử dụng cùng bộ đặc trưng đã giảm chiều với UC2 (flow_feature_cols.json) để đảm bảo feature parity trong Detection microservice — một flow vào, hai dự đoán độc lập ra.
 
 - Dữ liệu: CICIDS2017 — Monday (Benign) + Tuesday (FTP-Patator, SSH-Patator) với nhãn được cung cấp sẵn bởi Canadian Institute for Cybersecurity. Tập huấn luyện gồm toàn bộ Monday và 70% đầu của Tuesday (bao gồm cả SSH-Patator và FTP-Patator). Tập kiểm thử gồm 30% cuối của Tuesday (chỉ chứa FTP-Patator). Chia theo ranh giới giây để tránh data leakage.
 
@@ -83,7 +83,12 @@ Hệ thống xử lý hai tầng dữ liệu song song: tầng HTTP access log (
 - **log.raw**: Tiếp nhận dữ liệu thô từ module Simulation gửi tới Processing service.
 - **log.normalized.http** (Processing → Detection): dữ liệu HTTP access log đã chuẩn hóa và tổng hợp theo cửa sổ 60 giây.
 - **log.normalized.flow** (Processing → Detection): dữ liệu network flow đã chuẩn hóa, gửi theo từng flow record (45 đặc trưng).
-- **detection.results** (Detection → Reaction & Dashboard): kết quả phát hiện từ tất cả use case, sử dụng schema alert thống nhất.
+- **detection.results** (Detection → Reaction & Dashboard): kết quả phát hiện từ tất cả use case. Sử dụng cấu hình fanout với hai queue tiêu thụ độc lập — Reaction (durable, đảm bảo tính toàn vẹn của hành động) và Dashboard (non-durable, chỉ phục vụ kênh SSE thời gian thực).
+- **reaction.results** (Reaction → Dashboard): kết quả hành động ứng phó (chặn IP, giới hạn truy cập, mở rộng) sau khi đã được lưu trữ trong PostgreSQL và cập nhật trạng thái trong Redis. Dashboard tiêu thụ để cập nhật UI thời gian thực qua SSE.
+
+## Mô hình persist-then-publish
+
+Cả ba service có trạng thái (Processing, Detection, Reaction) đều tuân theo mô hình **persist-then-publish**: ghi kết quả vào PostgreSQL trước khi publish lên RabbitMQ. Điều này đảm bảo **at-least-once delivery** và không mất dữ liệu khi service crash, đánh đổi bằng việc không có exactly-once semantics (kết quả có thể đã được lưu nhưng chưa được publish nếu service crash giữa hai bước). Dashboard nhận biết SSE channel là best-effort và phục hồi khoảng trống bằng cách đọc lại từ PostgreSQL khi user điều hướng trang hoặc kết nối SSE reconnect.
 
 ## Processing
 
@@ -92,6 +97,8 @@ Hệ thống xử lý hai tầng dữ liệu song song: tầng HTTP access log (
 - HTTP track: Parse log định dạng CLF, tổng hợp theo cửa sổ trượt 60 giây, gửi tới queue log.normalized.http.
 
 - Flow track: Chuẩn hóa flow record từ CICIDS2017 (xử lý NaN/infinity, chọn lọc đặc trưng), gửi từng flow record tới queue log.normalized.flow.
+
+- Tuân theo mô hình persist-then-publish: ghi vào PostgreSQL trước khi publish.
 
 - Xây dựng bằng Spring Boot, sử dụng Redis để cache và tạo queue xử lý log bên trong module.
 
@@ -105,23 +112,29 @@ Hệ thống xử lý hai tầng dữ liệu song song: tầng HTTP access log (
 
 - Tất cả model chạy trong cùng một FastAPI server. Tiếp nhận dữ liệu từ cả hai queue (log.normalized.http và log.normalized.flow), xử lý và gửi kết quả thống nhất tới detection.results.
 
+- Tuân theo mô hình persist-then-publish: ghi kết quả phát hiện vào PostgreSQL trước khi publish tới detection.results.
+
 - Xây dựng bằng FastAPI (Python).
 
 ## Reaction
 
-- Tổng hợp và xử lý kết quả phân tích từ Detection.
+- Tổng hợp và xử lý kết quả phân tích từ Detection (tiêu thụ từ detection.results qua queue durable).
 
 - Dựa trên kết quả tổng hợp, cập nhật trạng thái trong Redis để kích hoạt các cơ chế phản ứng phù hợp như gửi cảnh báo, giới hạn truy cập hay mở rộng (scale).
+
+- Tuân theo mô hình persist-then-publish: ghi hành động đã thực hiện vào PostgreSQL và cập nhật Redis trước khi publish tới reaction.results để Dashboard hiển thị real-time.
 
 - Xây dựng bằng Spring Boot.
 
 ## Dashboard
 
-- Cung cấp UI để giám sát hệ thống, bao gồm lịch sử log (HTTP và flow), lịch sử cảnh báo và xử lý, trạng thái hiện tại của hệ thống.
+- Cung cấp UI để giám sát hệ thống, bao gồm lịch sử log (HTTP và flow), lịch sử phát hiện, lịch sử ứng phó, trạng thái hiện tại của hệ thống (active blocklist, rate limits, queue depths, inference latency).
 
-- Đọc dữ liệu trực tiếp từ PostgreSQL, không phụ thuộc vào các service khác.
+- Đọc dữ liệu lịch sử trực tiếp từ PostgreSQL.
 
-- Xây dựng API bằng Spring Boot, UI bằng Next.js / React.
+- Đồng thời tiêu thụ detection.results và reaction.results qua queue non-durable, auto-delete để cung cấp kênh Server-Sent Events (SSE) cho UI thời gian thực. Dashboard không bao giờ ghi vào bảng kết quả — PostgreSQL luôn là source of truth, SSE chỉ là kênh "nudge" UI và có thể chấp nhận mất event khi crash (khoảng trống được phục hồi khi user điều hướng hoặc SSE reconnect).
+
+- Xây dựng API và SSE bằng Spring Boot (`SseEmitter`), UI bằng Vite / React (`EventSource` cho SSE).
 
 ## Simulation
 
@@ -137,7 +150,7 @@ Hệ thống xử lý hai tầng dữ liệu song song: tầng HTTP access log (
 
 # Hạ tầng chia sẻ (Shared Infrastructure)
 
-- PostgreSQL: Lưu trữ log đã chuẩn hóa (hai bảng: HTTP log và flow record), lịch sử cảnh báo và xử lý, cung cấp dữ liệu cho Dashboard.
+- PostgreSQL: Lưu trữ log đã chuẩn hóa (hai bảng: HTTP log và flow record), lịch sử phát hiện, lịch sử ứng phó, cung cấp dữ liệu lịch sử cho Dashboard.
 
 - Redis: Cache được dùng chung cho Processing (cửa sổ trượt HTTP), Reaction (cập nhật danh sách chặn IP, trạng thái hạn chế truy cập) và Simulation (đọc trạng thái để thực thi các cơ chế phản ứng).
 
@@ -149,11 +162,11 @@ Hệ thống xử lý hai tầng dữ liệu song song: tầng HTTP access log (
 
 - EMA / Z-Score / IQR: xác định baseline và ngưỡng bất thường trên dữ liệu cửa sổ trượt ngắn hạn.
 
-- Seasonal Baseline: xác định baseline dựa trên chu kỳ thời gian (diurnal/weekly) sử dụng thống kê robust (Median, IQR theo giờ).
+- Seasonal Baseline: xác định baseline dựa trên chu kỳ thời gian (diurnal/weekly) sử dụng thống kê robust (Median, MAD).
 
-- Ensemble Rule Engine: hiệu chuẩn ngưỡng độc lập cho từng detector (calibration trên tập benign tới FPR mục tiêu 0.5%), sau đó tổng hợp các flag bằng bỏ phiếu có trọng số (weighted-axis voting) — EMA và Z-Score đóng trọng số 0.5 mỗi detector do tương quan tuyến tính cao (collinearity), IQR và Seasonal đóng trọng số 1.0 mỗi detector do độc lập. Tổng trọng số nằm trong khoảng [0.0, 3.0]. Ngưỡng cảnh báo cuối cùng (`min_weighted_chosen`) được chọn theo nguyên tắc: ngưỡng có FPR thấp nhất trong số các ngưỡng bao phủ toàn bộ sự kiện thực trong tập đánh giá. Mức độ nghiêm trọng (Severity) được phân loại 5 mức (none / low / medium / high / critical) theo các bin của tổng trọng số.
+- Ensemble Rule Engine: hiệu chuẩn ngưỡng (calibration) và tổng hợp kết quả (voting) để giảm báo động giả và phân loại mức độ nghiêm trọng (Severity).
 
-- Output: per-detector score và flag, vote_count (số detector kích hoạt, dùng để chẩn đoán), weighted_votes (tổng trọng số kích hoạt, là driver cho severity và alert), max_norm_score (mức vượt ngưỡng tối đa), severity level và binary alert.
+- Output: anomaly score, vote count, severity level và binary flag (đột biến / bình thường).
 
 ## Phát hiện tấn công DDoS
 
@@ -175,7 +188,7 @@ Hệ thống xử lý hai tầng dữ liệu song song: tầng HTTP access log (
 
 ## Phát hiện tấn công Brute Force
 
-- Input: vector đặc trưng flow (sử dụng chung bộ đặc trưng đã giảm chiều với UC2 - uc2_feature_cols.json).
+- Input: vector đặc trưng flow (sử dụng chung bộ đặc trưng đã giảm chiều với UC2 - flow_feature_cols.json).
 
 - XGBoost: Phân loại nhị phân có giám sát (Benign / Brute Force). Huấn luyện trên Monday (Benign) và Tuesday (Brute Force).
 
@@ -223,19 +236,19 @@ Hệ thống xử lý hai tầng dữ liệu song song: tầng HTTP access log (
 
 ## Kiểm thử tích hợp (Integration)
 
-- Kiểm tra giao tiếp giữa các service qua RabbitMQ (`log.raw`, `log.normalized.http`, `log.normalized.flow`, và `detection.results`).
+- Kiểm tra giao tiếp giữa các service qua RabbitMQ (`log.raw`, `log.normalized.http`, `log.normalized.flow`, `detection.results`, và `reaction.results`).
 
-- Kiểm tra Dashboard hiển thị đúng dữ liệu từ PostgreSQL (cả HTTP log và flow record).
+- Kiểm tra Dashboard hiển thị đúng dữ liệu lịch sử từ PostgreSQL (cả HTTP log và flow record) và cập nhật UI thời gian thực qua SSE.
 
 ## Kiểm thử hệ thống (End-to-End)
 
-- Kịch bản HTTP: Simulation sinh tấn công web → Processing (CLF parser) → Detection (UC1/UC3) → Reaction → thực thi phản ứng.
+- Kịch bản HTTP: Simulation sinh tấn công web → Processing (CLF parser) → Detection (UC1/UC3) → Reaction → thực thi phản ứng → Dashboard hiển thị real-time qua SSE.
 
-- Kịch bản Flow: Simulation replay flow DDoS → Processing (Flow normalizer) → Detection (UC2/UC4) → Reaction → thực thi phản ứng.
+- Kịch bản Flow: Simulation replay flow DDoS → Processing (Flow normalizer) → Detection (UC2/UC4) → Reaction → thực thi phản ứng → Dashboard hiển thị real-time qua SSE.
 
-- Đo lường: thời gian phản ứng đầu cuối (từ khi log/flow được sinh ra đến khi phản ứng được thực thi).
+- Đo lường: thời gian phản ứng đầu cuối (từ khi log/flow được sinh ra đến khi phản ứng được thực thi và hiển thị trên Dashboard).
 
-- Kiểm tra: trạng thái Redis được cập nhật đúng, log/flow và alert được lưu vào PostgreSQL.
+- Kiểm tra: trạng thái Redis được cập nhật đúng, log/flow, kết quả phát hiện và hành động ứng phó được lưu vào PostgreSQL.
 
 ## Kiểm thử tải (Load Testing)
 

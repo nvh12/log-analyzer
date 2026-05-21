@@ -21,7 +21,7 @@ By using **XGBoost**, we can distinguish these patterns from normal traffic by t
 The system uses a supervised **XGBoost** model for binary classification (Benign / Brute Force).
 
 ### Feature Parity with UC2
-To optimize the **Detection microservice**, UC4 uses the same reduced feature set as UC2 (defined in `uc2_feature_cols.json`), consisting of exactly **45 features**. This ensures that a single incoming flow record can be processed by both the DDoS and Brute Force models simultaneously without redundant feature extraction.
+To optimize the **Detection microservice**, UC4 uses the same reduced feature set as UC2 (defined in `flow_feature_cols.json`), consisting of exactly **45 features**. This ensures that a single incoming flow record can be processed by both the DDoS and Brute Force models simultaneously without redundant feature extraction.
 
 Additionally, UC4 follows the same data cleaning protocol as UC2, replacing `NaN` and `Infinity` values with `0` during preprocessing.
 

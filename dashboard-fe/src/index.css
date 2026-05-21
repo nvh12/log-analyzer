@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+@theme {
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-gray-950 text-gray-300 font-sans antialiased;
+}
+
+@utility mono {
+  font-family: var(--font-mono);
+}
+
+@layer components {
+  .card {
+    @apply bg-gray-900 border border-gray-800 rounded-lg;
+  }
+  .card-header {
+    @apply px-4 py-2 border-b border-gray-800 text-xs text-gray-400 uppercase tracking-wide font-medium;
+  }
+  .th {
+    @apply pb-2 pr-4 font-normal;
+  }
+  .td {
+    @apply py-1.5 pr-4;
+  }
+  .field {
+    @apply mono bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-300 text-xs
+           focus:outline-none focus:border-gray-500;
+  }
+  .close-btn {
+    @apply text-gray-600 hover:text-gray-400 cursor-pointer;
+  }
+}
