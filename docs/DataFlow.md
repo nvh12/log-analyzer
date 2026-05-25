@@ -78,7 +78,7 @@ Serialized as JSON with `@JsonNaming(SnakeCaseStrategy.class)`.
 | `timestamp` | `timestamp` | double (unix epoch seconds) | No | Parsed from CLF date string; millisecond precision as `ms / 1000.0` |
 | `ip` | `ip` | string | No | Validated: max 45 chars |
 | `method` | `method` | enum string | No | One of 9 HTTP methods; reject if unrecognized |
-| `url` | `url` | string | No | Path only — query string stripped; max 4096 chars (configurable) |
+| `url` | `url` | string | No | Path only — query string stripped; max 2048 chars (configurable) |
 | `statusCode` | `status_code` | int | No | Validated: 100–599 |
 | `responseSize` | `response_size` | int | No | 0 when CLF field is `-` |
 | `queryString` | `query_string` | string | No | Empty string `""` if no `?` in URL; never null |
@@ -320,7 +320,7 @@ Fields actually read by each reaction service:
 | `detection_type` | Yes | Yes | Yes | Yes |
 | `severity` | Yes | Yes | Yes | Yes |
 | `detected_at` | Yes | Yes | Yes | Yes |
-| `source_ip` | No | Yes (block target) | Yes (block target) | Yes (rate-limit or block target) |
+| `source_ip` | No | Yes (rate-limit or block target) | Yes (block target) | Yes (rate-limit or block target) |
 | `anomaly` | Yes | Yes | Yes | Yes |
 | `confidence` | Yes | Yes | Yes | Yes |
 | `network_layer` | Yes (log) | Yes (log) | Yes (log) | Yes (log) |
@@ -346,7 +346,7 @@ Fields actually read by each reaction service:
 | `detection_type` | VARCHAR(20) | No | |
 | `source_ip` | VARCHAR(45) | Yes | Null for TRAFFIC reactions |
 | `severity` | VARCHAR(10) | No | |
-| `action` | VARCHAR(15) | No | TRAFFIC→`SCALE_UP`; DDOS→`BLOCK`; WEB_ATTACK→`BLOCK`; BRUTE_FORCE→`RATE_LIMIT` (first 1-2 detections) or `BLOCK` (3rd+ within 10-min window) |
+| `action` | VARCHAR(15) | No | TRAFFIC→`SCALE_UP`; DDOS→`RATE_LIMIT` (first 1-2 detections) or `BLOCK` (3rd+ within 10-min window); WEB_ATTACK→`BLOCK`; BRUTE_FORCE→`RATE_LIMIT` (first 1-2 detections) or `BLOCK` (3rd+ within 10-min window) |
 | `network_layer` | VARCHAR(10) | No | |
 | `detected_at` | TIMESTAMPTZ | No | From `ReactionInput.detectedAt` |
 | `window_start` | TIMESTAMPTZ | Yes | Non-null only for TRAFFIC |
@@ -428,13 +428,14 @@ All keys are set by Reaction service; Simulation reads them to enforce access co
 - HIGH: 3 / min
 - CRITICAL: 1 / min
 
-### Brute force escalation counters
+### DDoS and Brute force escalation counters
 
 | Key | Type | Value | TTL | Notes |
 |---|---|---|---|---|
+| `ddos:attempts:{ip}` | String | integer counter | 600 s (10-min window) | Incremented atomically on each DDOS detection for this IP; expires after 10 minutes of inactivity |
 | `brute:attempts:{ip}` | String | integer counter | 600 s (10-min window) | Incremented atomically on each BRUTE_FORCE detection for this IP; expires after 10 minutes of inactivity |
 
-**Escalation logic:** On first write the 600 s TTL is set (Lua atomic INCR+EXPIRE). If counter reaches `ESCALATION_THRESHOLD` (3), Reaction upgrades from `RATE_LIMIT` to `BLOCK` and calls `IpBlockService.block()`. Counter resets naturally when the 10-min TTL expires.
+**Escalation logic (both DDOS and BRUTE_FORCE):** On first write the 600 s TTL is set (Lua atomic INCR+EXPIRE). If counter reaches `ESCALATION_THRESHOLD` (3), Reaction upgrades from `RATE_LIMIT` to `BLOCK` and calls `IpBlockService.block()`. Counter resets naturally when the 10-min TTL expires.
 
 ### Scale signals
 

@@ -9,10 +9,17 @@ import StatusDot from '../components/StatusDot'
 import Empty from '../components/Empty'
 
 const UC_LIST = ['TRAFFIC', 'DDOS', 'WEB_ATTACK', 'BRUTE_FORCE']
-const UC_DOT  = { TRAFFIC: 'orange', DDOS: 'red', WEB_ATTACK: 'gray', BRUTE_FORCE: 'yellow' }
+const UC_DOT  = { TRAFFIC: 'orange', DDOS: 'red', WEB_ATTACK: 'purple', BRUTE_FORCE: 'yellow' }
 
-const RING         = 100
-const CHART_WINDOW = 30
+const RING       = 100
+const MAX_POINTS = 900  // 30 min @ 2s intervals
+
+const WINDOWS = [
+  { label: '1m',  points: 30  },
+  { label: '5m',  points: 150 },
+  { label: '10m', points: 300 },
+  { label: '30m', points: 900 },
+]
 
 function ago(ts) {
   if (!ts) return '—'
@@ -28,6 +35,7 @@ export default function Live() {
   const [events, setEvents]               = useState([])
   const [ucState, setUcState]             = useState({})
   const [throughputPoints, setThroughput] = useState([])
+  const [windowIdx, setWindowIdx]         = useState(1)  // default 5m
   const pausedRef = useRef(false)
 
   const { data: active, reload: reloadActive } = useData(() => api.getActiveReactions())
@@ -40,7 +48,7 @@ export default function Live() {
     })
   }, [])
 
-  useSSE({
+  const { connected } = useSSE({
     detection: (d) => {
       pushEvent({ kind: 'detection', ...d })
       setUcState(prev => ({ ...prev, [d.detection_type]: { severity: d.severity, anomaly: d.anomaly, ts: d.ts } }))
@@ -52,7 +60,7 @@ export default function Live() {
     log_throughput: (t) => {
       setThroughput(prev => {
         const next = [...prev, { time: fmtTs(t.ts), http: t.http_per_sec, flow: t.flow_per_sec }]
-        return next.length > CHART_WINDOW ? next.slice(-CHART_WINDOW) : next
+        return next.length > MAX_POINTS ? next.slice(-MAX_POINTS) : next
       })
     },
   })
@@ -62,7 +70,13 @@ export default function Live() {
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
-      <h1 className="text-white text-lg font-semibold">Live</h1>
+      <div className="flex items-center gap-3">
+        <h1 className="text-white text-lg font-semibold">Live</h1>
+        <div className="flex items-center gap-1.5">
+          <StatusDot color={connected ? 'green' : 'red'} pulse={connected} />
+          <span className="text-xs text-gray-500">{connected ? 'Connected' : 'Reconnecting…'}</span>
+        </div>
+      </div>
 
       {/* UC tiles */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -125,13 +139,31 @@ export default function Live() {
         </Card>
 
         {/* Throughput chart */}
-        <Card title="Queue throughput (req/s)" className="flex flex-col">
+        <Card className="flex flex-col">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800">
+            <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Queue throughput (req/s)</span>
+            <div className="flex gap-1">
+              {WINDOWS.map((w, i) => (
+                <button
+                  key={w.label}
+                  onClick={() => setWindowIdx(i)}
+                  className={`mono text-xs px-2 py-0.5 rounded transition-colors ${
+                    i === windowIdx
+                      ? 'bg-gray-700 text-white'
+                      : 'text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  {w.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex-1 p-3">
             {throughputPoints.length === 0 ? (
               <Empty message="Waiting for data…" />
             ) : (
               <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={throughputPoints} isAnimationActive={false}>
+                <LineChart data={throughputPoints.slice(-WINDOWS[windowIdx].points)} isAnimationActive={false}>
                   <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#6b7280' }} interval="preserveStartEnd" />
                   <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} width={36} />
                   <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', fontSize: 11 }}

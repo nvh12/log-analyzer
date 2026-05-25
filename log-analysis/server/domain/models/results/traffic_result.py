@@ -13,3 +13,4 @@ class TrafficResult(DetectionResult):
     anomaly: bool
     confidence: float
     method_flags: dict[str, bool]  # {"z_score": True, "iqr": False, "ema": True}
+    scored: bool = True  # False when no seasonal history exists yet; Reaction skips alerting

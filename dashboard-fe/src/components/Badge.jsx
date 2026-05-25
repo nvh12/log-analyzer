@@ -6,16 +6,17 @@ const ucColors = {
 }
 
 const severityColors = {
-  HIGH:   'bg-red-900/50 text-red-300 border-red-700',
-  MEDIUM: 'bg-orange-900/50 text-orange-300 border-orange-700',
-  LOW:    'bg-yellow-900/50 text-yellow-300 border-yellow-700',
-  NONE:   'bg-gray-800 text-gray-400 border-gray-700',
+  CRITICAL: 'bg-red-950/80 text-red-200 border-red-600',
+  HIGH:     'bg-red-900/50 text-red-300 border-red-700',
+  MEDIUM:   'bg-orange-900/50 text-orange-300 border-orange-700',
+  LOW:      'bg-yellow-900/50 text-yellow-300 border-yellow-700',
+  NONE:     'bg-gray-800 text-gray-400 border-gray-700',
 }
 
 const actionColors = {
-  BLOCK_IP:    'bg-red-900/50 text-red-300 border-red-700',
-  RATE_LIMIT:  'bg-orange-900/50 text-orange-300 border-orange-700',
-  SCALE:       'bg-blue-900/50 text-blue-300 border-blue-700',
+  BLOCK:      'bg-red-900/50 text-red-300 border-red-700',
+  RATE_LIMIT: 'bg-orange-900/50 text-orange-300 border-orange-700',
+  SCALE_UP:   'bg-blue-900/50 text-blue-300 border-blue-700',
 }
 
 export function UcBadge({ value }) {

@@ -1,8 +1,8 @@
 package com.nvh12.reaction.service.impl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 import com.nvh12.reaction.config.AlertProperties;
 import com.nvh12.reaction.service.AlertChannel;
 import com.nvh12.reaction.service.dto.Severity;
@@ -12,7 +12,8 @@ import com.nvh12.reaction.service.dto.alert.DDoSAlert;
 import com.nvh12.reaction.service.dto.alert.TrafficAlert;
 import com.nvh12.reaction.service.dto.alert.WebAttackAlert;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -24,13 +25,14 @@ import java.time.Duration;
 
 @Slf4j
 @Service
-@ConditionalOnProperty(name = "alert.discord.webhook-url")
+@ConditionalOnExpression("!'${alert.discord.webhook-url:}'.isEmpty()")
 public class DiscordAlertService implements AlertChannel {
 
     private final AlertProperties alertProperties;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
+    @Autowired
     public DiscordAlertService(AlertProperties alertProperties, ObjectMapper objectMapper) {
         this(alertProperties, objectMapper, HttpClient.newHttpClient());
     }

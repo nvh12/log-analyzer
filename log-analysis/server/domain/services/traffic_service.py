@@ -86,13 +86,16 @@ def detect(
     seasonal_summaries: historical (median, iqr) pairs for the same (hour, is_weekend) slot,
     pre-extracted by the caller via HistoryPort.get_seasonal_bucket().
     """
+    scored = bool(seasonal_summaries)
+
     vals = np.array(window.req_counts)
     if len(vals) < thresholds.min_history:
         return TrafficResult(
             anomaly=False,
             confidence=0.0,
             method_flags={"z_score": False, "iqr": False, "ema": False, "seasonal": False},
-            severity=Severity.LOW,
+            severity=Severity.NONE,
+            scored=False,
             log_timestamp=window.window_end,
             window_start=window.window_start,
             window_end=window.window_end,
@@ -130,15 +133,15 @@ def detect(
     )
     confidence = float(weighted_votes / total_weight) if total_weight > 0 else 0.0
 
-    # Severity: bins based on weighted vote magnitude
-    if weighted_votes >= total_weight:
+    # Severity: NONE when no anomaly; bins by weighted-vote magnitude when anomaly declared
+    if not anomaly:
+        severity = Severity.NONE
+    elif weighted_votes >= total_weight:
         severity = Severity.CRITICAL
     elif weighted_votes >= 2.0:
         severity = Severity.HIGH
     elif weighted_votes >= 1.0:
         severity = Severity.MEDIUM
-    elif weighted_votes > 0:
-        severity = Severity.LOW
     else:
         severity = Severity.LOW
 
@@ -147,6 +150,7 @@ def detect(
         confidence=confidence,
         method_flags=method_flags,
         severity=severity,
+        scored=scored,
         log_timestamp=window.window_end,
         window_start=window.window_start,
         window_end=window.window_end,

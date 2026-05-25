@@ -5,7 +5,7 @@ import com.nvh12.dashboard.application.PageView;
 import com.nvh12.dashboard.application.port.FlowLogRepository;
 import com.nvh12.dashboard.infrastructure.persistence.entity.NormalizedFlowEntity;
 import com.nvh12.dashboard.infrastructure.persistence.repository.jpa.JpaFlowLogRepository;
-import com.nvh12.dashboard.infrastructure.persistence.repository.mapper.FlowLogMapper;
+import com.nvh12.dashboard.infrastructure.persistence.mapper.FlowLogMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;

@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jdk-alpine AS build
+FROM gradle:9.4.1-jdk21-alpine AS build
 WORKDIR /app
 COPY gradlew gradlew.bat ./
 COPY gradle/ gradle/

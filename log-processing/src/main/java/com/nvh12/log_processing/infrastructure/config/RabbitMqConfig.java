@@ -7,6 +7,8 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 @Configuration
 public class RabbitMqConfig {
@@ -52,8 +54,8 @@ public class RabbitMqConfig {
     }
 
     @Bean
-    public JacksonJsonMessageConverter messageConverter() {
-        JacksonJsonMessageConverter converter = new JacksonJsonMessageConverter();
+    public JacksonJsonMessageConverter messageConverter(ObjectMapper objectMapper) {
+        JacksonJsonMessageConverter converter = new JacksonJsonMessageConverter((JsonMapper) objectMapper);
         // Required for messages from non-Java senders (e.g. Python Simulation) that
         // don't include a __TypeId__ header — fall back to the @RabbitListener parameter type.
         converter.setAlwaysConvertToInferredType(true);

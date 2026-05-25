@@ -44,7 +44,7 @@ class LogPipelineIT extends AbstractContainerIT {
 
         await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
             Integer dbCount = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM normalized_http WHERE ip = '192.168.1.1'", Integer.class);
+                    "SELECT COUNT(*) FROM log_processing.normalized_http WHERE ip = '192.168.1.1'", Integer.class);
             assertThat(dbCount).isEqualTo(1);
 
             Object received = rabbitTemplate.receiveAndConvert(RabbitMqConfig.QUEUE_NORMALIZED_HTTP);
@@ -61,7 +61,7 @@ class LogPipelineIT extends AbstractContainerIT {
 
         await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
             Integer dbCount = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM normalized_flow WHERE source_ip = '10.0.0.5'", Integer.class);
+                    "SELECT COUNT(*) FROM log_processing.normalized_flow WHERE source_ip = '10.0.0.5'", Integer.class);
             assertThat(dbCount).isEqualTo(1);
         });
     }

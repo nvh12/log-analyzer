@@ -91,3 +91,37 @@ def test_default_rate_per_second_is_10():
 def test_default_target_ip():
     req = _make()
     assert req.target_ip == "192.168.100.100"
+
+
+# ---------------------------------------------------------------------------
+# attack_ratio validation
+# ---------------------------------------------------------------------------
+
+def test_default_attack_ratio_is_none():
+    req = _make()
+    assert req.attack_ratio is None
+
+
+def test_attack_ratio_zero_is_valid():
+    req = _make(attack_ratio=0.0)
+    assert req.attack_ratio == 0.0
+
+
+def test_attack_ratio_one_is_valid():
+    req = _make(attack_ratio=1.0)
+    assert req.attack_ratio == 1.0
+
+
+def test_attack_ratio_midpoint_is_valid():
+    req = _make(attack_ratio=0.7)
+    assert req.attack_ratio == 0.7
+
+
+def test_attack_ratio_below_zero_raises_validation_error():
+    with pytest.raises(ValidationError):
+        _make(attack_ratio=-0.1)
+
+
+def test_attack_ratio_above_one_raises_validation_error():
+    with pytest.raises(ValidationError):
+        _make(attack_ratio=1.1)

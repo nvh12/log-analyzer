@@ -16,7 +16,8 @@ import org.testcontainers.utility.DockerImageName;
     "log-processing.dlq-capacity=2",
     "log-processing.main-queue-capacity=10",
     "spring.flyway.enabled=false",
-    "spring.jpa.hibernate.ddl-auto=create-drop"
+    "spring.jpa.hibernate.ddl-auto=create-drop",
+    "spring.jpa.properties.hibernate.hbm2ddl.create_namespaces=true"
 })
 public abstract class AbstractContainerIT {
 
@@ -66,7 +67,7 @@ public abstract class AbstractContainerIT {
         }
         if (jdbcTemplate != null) {
             try {
-                jdbcTemplate.execute("TRUNCATE normalized_http, normalized_flow, drop_audit RESTART IDENTITY");
+                jdbcTemplate.execute("TRUNCATE log_processing.normalized_http, log_processing.normalized_flow, log_processing.drop_audit RESTART IDENTITY");
             } catch (Exception e) {
                 // Ignore if tables don't exist yet
             }

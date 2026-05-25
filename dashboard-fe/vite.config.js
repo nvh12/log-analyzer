@@ -11,6 +11,10 @@ export default defineConfig({
         target: 'http://localhost:8083',
         changeOrigin: true,
       },
+      '/simulate': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+      },
     },
   },
 })

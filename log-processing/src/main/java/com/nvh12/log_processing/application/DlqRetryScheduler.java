@@ -12,6 +12,7 @@ import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.*;
 
@@ -123,7 +124,7 @@ public class DlqRetryScheduler {
                         FailedLogEntry.builder()
                                 .rawLog(entry.rawLog())
                                 .failureReason(e.getMessage())
-                                .failedAt(entry.failedAt())
+                                .failedAt(Instant.now())
                                 .retryCount(nextRetry)
                                 .build());
                 retryFailedCounter.increment();

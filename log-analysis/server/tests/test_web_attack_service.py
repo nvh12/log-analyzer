@@ -252,39 +252,49 @@ class TestRuleEngineBenign:
 class TestXGBoostLayer:
     def test_above_threshold_returns_anomaly(self):
         repo = _MockRepo(artifact=_web_artifact(0.9))
-        result = web_attack_service.detect(_req(url="/login"), repo)
+        result = web_attack_service.detect(_req(url="/login", query_string="user=test"), repo)
         assert result.anomaly is True
         assert result.layer_triggered == "xgboost"
         assert result.severity == Severity.CRITICAL
 
     def test_below_threshold_returns_benign(self):
         repo = _MockRepo(artifact=_web_artifact(0.1))
-        result = web_attack_service.detect(_req(url="/login"), repo)
+        result = web_attack_service.detect(_req(url="/login", query_string="user=test"), repo)
         assert result.anomaly is False
         assert result.layer_triggered is None
 
     def test_confidence_equals_model_probability(self):
         repo = _MockRepo(artifact=_web_artifact(0.82))
-        result = web_attack_service.detect(_req(url="/admin"), repo)
+        result = web_attack_service.detect(_req(url="/admin", query_string="q=1"), repo)
         if result.anomaly:
             assert pytest.approx(result.confidence, abs=1e-4) == 0.82
 
     def test_custom_threshold_respected(self):
         # threshold=0.95; probability=0.9 → below → benign
         repo = _MockRepo(artifact=_web_artifact(0.9, threshold=0.95))
-        result = web_attack_service.detect(_req(url="/admin"), repo)
+        result = web_attack_service.detect(_req(url="/admin", query_string="q=1"), repo)
         assert result.anomaly is False
 
     def test_result_type_is_web_attack(self):
         repo = _MockRepo(artifact=_web_artifact(0.9))
-        result = web_attack_service.detect(_req(), repo)
+        result = web_attack_service.detect(_req(query_string="id=1"), repo)
         assert result.detection_type == DetectionType.WEB_ATTACK
 
     def test_no_model_returns_benign_without_error(self):
-        result = web_attack_service.detect(_req(url="/safe"), _MockRepo(artifact=None))
+        result = web_attack_service.detect(_req(url="/safe", query_string="x=1"), _MockRepo(artifact=None))
         assert result.anomaly is False
         assert result.layer_triggered is None
-        assert result.severity == Severity.LOW
+        assert result.severity == Severity.NONE
+
+    def test_parameterless_request_skips_xgboost(self):
+        # Requests with no query string and no body must not reach XGBoost regardless
+        # of what the model would return — this prevents false positives on CLF-sourced
+        # logs where headers are absent and request_length is far outside training range.
+        artifact = _web_artifact(0.99)  # would fire if called
+        repo = _MockRepo(artifact=artifact)
+        result = web_attack_service.detect(_req(url="/about"), repo)
+        assert result.anomaly is False
+        artifact["model"].predict_proba.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

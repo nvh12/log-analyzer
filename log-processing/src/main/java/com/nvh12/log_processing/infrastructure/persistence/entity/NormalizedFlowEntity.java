@@ -1,10 +1,10 @@
 package com.nvh12.log_processing.infrastructure.persistence.entity;
 
+import com.nvh12.log_processing.infrastructure.persistence.mapper.JsonDoubleMapConverter;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.ColumnDefault;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
+import org.hibernate.annotations.ColumnTransformer;
 
 import java.time.Instant;
 import java.util.Map;
@@ -37,7 +37,8 @@ public class NormalizedFlowEntity {
     @Column(name = "dest_port")
     private Integer destPort;
 
-    @JdbcTypeCode(SqlTypes.JSON)
+    @Convert(converter = JsonDoubleMapConverter.class)
+    @ColumnTransformer(write = "?::jsonb")
     @Column(name = "features", nullable = false, columnDefinition = "jsonb")
     private Map<String, Double> features;
 

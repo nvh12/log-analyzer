@@ -31,7 +31,7 @@ ARTIFACT_MAP = [
     ("training/ddos/models/ddos_xgboost.pkl",            "flow/ddos/xgboost.pkl"),
     ("training/bruteforce/models/brute_force_xgboost.pkl", "flow/bruteforce/xgboost.pkl"),
     ("training/ddos/data/flow_feature_cols.json",        "flow/feature_cols.json"),
-    
+
     # HTTP Track (UC3)
     ("training/webattack/models/web_attack_xgboost.pkl", "webattack/xgboost.pkl"),
     ("training/webattack/models/web_vocab.json",        "webattack/vocab.json"),
@@ -39,7 +39,7 @@ ARTIFACT_MAP = [
     ("training/webattack/models/web_attack_ocsvm.pkl",  "webattack/one_class_svm.pkl"),
     
     # Traffic Track (UC1)
-    ("training/trafficspike/outputs/ensemble_calibration.json", "trafficspike/thresholds.json"),
+    ("training/trafficspike/outputs/ensemble_calibration.json", "trafficspike/ensemble_calibration.json"),
 ]
 
 def compute_sha256(path: str) -> str:

@@ -45,8 +45,8 @@ class DlqRetrySchedulerIT extends AbstractContainerIT {
     @BeforeEach
     void cleanUp() {
         redisTemplate.delete("failed-log-queue");
-        jdbcTemplate.execute("DELETE FROM normalized_http");
-        jdbcTemplate.execute("DELETE FROM drop_audit");
+        jdbcTemplate.execute("DELETE FROM log_processing.normalized_http");
+        jdbcTemplate.execute("DELETE FROM log_processing.drop_audit");
     }
 
     @Test
@@ -59,7 +59,7 @@ class DlqRetrySchedulerIT extends AbstractContainerIT {
         retryScheduler.retryFailedLogs();
 
         await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
-            Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM normalized_http WHERE ip = '127.0.0.1'", Integer.class);
+            Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM log_processing.normalized_http WHERE ip = '127.0.0.1'", Integer.class);
             assertThat(count).isEqualTo(1);
             
             Object received = rabbitTemplate.receiveAndConvert(RabbitMqConfig.QUEUE_NORMALIZED_HTTP);
@@ -84,7 +84,7 @@ class DlqRetrySchedulerIT extends AbstractContainerIT {
 
         await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
             Integer count = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM drop_audit WHERE log_id = 'id-exhausted' AND drop_reason = 'RETRY_EXHAUSTED'", Integer.class);
+                    "SELECT COUNT(*) FROM log_processing.drop_audit WHERE log_id = 'id-exhausted' AND drop_reason = 'RETRY_EXHAUSTED'", Integer.class);
             assertThat(count).isEqualTo(1);
             
             // Should be removed from DLQ

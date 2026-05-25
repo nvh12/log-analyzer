@@ -6,7 +6,7 @@ import com.nvh12.dashboard.application.port.ReactionRepository;
 import com.nvh12.dashboard.domain.ReactionAction;
 import com.nvh12.dashboard.infrastructure.persistence.entity.ReactionLogEntity;
 import com.nvh12.dashboard.infrastructure.persistence.repository.jpa.JpaReactionLogRepository;
-import com.nvh12.dashboard.infrastructure.persistence.repository.mapper.ReactionMapper;
+import com.nvh12.dashboard.infrastructure.persistence.mapper.ReactionMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;

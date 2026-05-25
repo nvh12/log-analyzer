@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -101,6 +102,22 @@ class DetectionControllerIT extends AbstractContainerIT {
     void getDetection_nonExistentId_returns404() throws Exception {
         mockMvc.perform(get("/api/detections/{id}", 999999L))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getDetection_withMethodFlags_returnsDeserializedFlagsInPayload() throws Exception {
+        DetectionResultEntity saved = jpaDetectionResultRepository.save(
+                DetectionResultEntity.builder()
+                        .detectionType(DetectionType.TRAFFIC)
+                        .severity(Severity.MEDIUM).anomaly(true)
+                        .networkLayer(NetworkLayer.HTTP)
+                        .methodFlags(Map.of("GET", true, "POST", false))
+                        .detectedAt(Instant.now()).build());
+
+        mockMvc.perform(get("/api/detections/{id}", saved.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.payload.method_flags.GET").value(true))
+                .andExpect(jsonPath("$.payload.method_flags.POST").value(false));
     }
 
     @Test

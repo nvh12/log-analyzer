@@ -42,7 +42,7 @@ class PostgresDropAuditRepositoryIT extends AbstractContainerIT {
 
     @BeforeEach
     void truncate() {
-        jdbcTemplate.execute("TRUNCATE drop_audit RESTART IDENTITY");
+        jdbcTemplate.execute("TRUNCATE log_processing.drop_audit RESTART IDENTITY");
     }
 
     @Test
@@ -52,7 +52,7 @@ class PostgresDropAuditRepositoryIT extends AbstractContainerIT {
 
         repository.record(entry, DropReason.RETRY_EXHAUSTED);
 
-        Map<String, Object> row = jdbcTemplate.queryForMap("SELECT * FROM drop_audit WHERE log_id = 'id-1'");
+        Map<String, Object> row = jdbcTemplate.queryForMap("SELECT * FROM log_processing.drop_audit WHERE log_id ='id-1'");
         assertThat(row.get("drop_reason")).isEqualTo("RETRY_EXHAUSTED");
         assertThat(row.get("retry_count")).isEqualTo(3);
         assertThat(row.get("raw_message")).isEqualTo("msg");
@@ -62,7 +62,7 @@ class PostgresDropAuditRepositoryIT extends AbstractContainerIT {
     void recordDeadLetter_persistsCorrectly() {
         repository.recordDeadLetter("raw-body", "id-dlq", "expired");
 
-        Map<String, Object> row = jdbcTemplate.queryForMap("SELECT * FROM drop_audit WHERE log_id = 'id-dlq'");
+        Map<String, Object> row = jdbcTemplate.queryForMap("SELECT * FROM log_processing.drop_audit WHERE log_id ='id-dlq'");
         assertThat(row.get("drop_reason")).isEqualTo("DEAD_LETTERED");
         assertThat(row.get("failure_reason")).isEqualTo("expired");
     }
@@ -75,7 +75,7 @@ class PostgresDropAuditRepositoryIT extends AbstractContainerIT {
         repository.record(entry, DropReason.DLQ_OVERFLOW);
 
         Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM drop_audit WHERE log_id = 'id-null'", Integer.class);
+                "SELECT COUNT(*) FROM log_processing.drop_audit WHERE log_id = 'id-null'", Integer.class);
         assertThat(count).isEqualTo(1);
     }
 }

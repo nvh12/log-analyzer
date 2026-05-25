@@ -14,8 +14,8 @@ function Metric({ label, value, unit = '' }) {
 }
 
 export default function System() {
-  const { data: health, loading: healthLoading } = useData(() => api.getSystemHealth())
-  const { data: config, loading: configLoading } = useData(() => api.getSystemConfig())
+  const { data: health, loading: healthLoading, error: healthError, reload: reloadHealth } = useData(() => api.getSystemHealth())
+  const { data: config, loading: configLoading, error: configError, reload: reloadConfig } = useData(() => api.getSystemConfig())
 
   const queues = health?.queue_depths ?? []
   const redis  = health?.redis        ?? {}
@@ -29,6 +29,19 @@ export default function System() {
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <h1 className="text-white text-lg font-semibold">System</h1>
+
+      {healthError && (
+        <div className="error-banner">
+          <span>Health check failed: {healthError}</span>
+          <button onClick={reloadHealth} className="underline shrink-0">Retry</button>
+        </div>
+      )}
+      {configError && (
+        <div className="error-banner">
+          <span>Config unavailable: {configError}</span>
+          <button onClick={reloadConfig} className="underline shrink-0">Retry</button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">

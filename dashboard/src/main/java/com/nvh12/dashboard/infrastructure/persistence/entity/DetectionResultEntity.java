@@ -3,10 +3,10 @@ package com.nvh12.dashboard.infrastructure.persistence.entity;
 import com.nvh12.dashboard.domain.DetectionType;
 import com.nvh12.dashboard.domain.NetworkLayer;
 import com.nvh12.dashboard.domain.Severity;
+import com.nvh12.dashboard.infrastructure.persistence.mapper.JsonBooleanMapConverter;
 import jakarta.persistence.*;
+import org.hibernate.annotations.ColumnTransformer;
 import lombok.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.Map;
@@ -50,7 +50,8 @@ public class DetectionResultEntity {
     @Column(name = "dest_port")
     private Integer destPort;
 
-    @JdbcTypeCode(SqlTypes.JSON)
+    @Convert(converter = JsonBooleanMapConverter.class)
+    @ColumnTransformer(write = "?::jsonb")
     @Column(name = "method_flags", columnDefinition = "jsonb")
     private Map<String, Boolean> methodFlags;
 

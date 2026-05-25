@@ -1,12 +1,16 @@
 """Entry point for the Simulation Service."""
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from dependencies.container import Container
+from domain.services.log_generator import init_flow_stats
 from infrastructure.config.rabbitmq import connect as rabbitmq_connect, close as rabbitmq_close
 from infrastructure.config.redis import redis_client
+from infrastructure.config.settings import settings
+from infrastructure.flow_stats import FlowStatsLoader
 from infrastructure.middleware.access_control import AccessControlMiddleware
 from presentation.routers import simulation_router, access_control_router, target_router
 
@@ -17,6 +21,16 @@ container = Container()
 async def lifespan(app: FastAPI):
     app.container = container
     await rabbitmq_connect()
+    if settings.MINIO_ACCESS_KEY:
+        loader = FlowStatsLoader(
+            endpoint=settings.MINIO_ENDPOINT,
+            access_key=settings.MINIO_ACCESS_KEY,
+            secret_key=settings.MINIO_SECRET_KEY,
+            bucket=settings.MINIO_BUCKET,
+            secure=settings.MINIO_SECURE,
+        )
+        stats = await asyncio.to_thread(loader.load)
+        init_flow_stats(stats)
     yield
     await rabbitmq_close()
 

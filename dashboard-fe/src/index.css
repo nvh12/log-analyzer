@@ -36,4 +36,15 @@ body {
   .close-btn {
     @apply text-gray-600 hover:text-gray-400 cursor-pointer;
   }
+  .error-banner {
+    @apply flex items-center justify-between gap-3 bg-red-950 border border-red-800
+           text-red-300 text-xs rounded px-4 py-2;
+  }
+  .toast {
+    @apply fixed bottom-6 right-6 z-50 mono text-xs bg-gray-800 border border-gray-700
+           text-gray-200 rounded px-4 py-2 shadow-lg;
+  }
+  .toast-error {
+    @apply bg-red-950 border-red-800 text-red-300;
+  }
 }

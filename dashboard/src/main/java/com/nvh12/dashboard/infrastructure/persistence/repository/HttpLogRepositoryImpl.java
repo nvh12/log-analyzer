@@ -5,7 +5,7 @@ import com.nvh12.dashboard.application.PageView;
 import com.nvh12.dashboard.application.port.HttpLogRepository;
 import com.nvh12.dashboard.infrastructure.persistence.entity.NormalizedHttpEntity;
 import com.nvh12.dashboard.infrastructure.persistence.repository.jpa.JpaHttpLogRepository;
-import com.nvh12.dashboard.infrastructure.persistence.repository.mapper.HttpLogMapper;
+import com.nvh12.dashboard.infrastructure.persistence.mapper.HttpLogMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.Instant;
 import java.util.concurrent.TimeUnit;
@@ -18,6 +19,7 @@ class DetectionResultConsumerIT extends AbstractContainerIT {
 
     @Autowired RabbitTemplate rabbitTemplate;
     @Autowired StringRedisTemplate redisTemplate;
+    @Autowired JdbcTemplate jdbcTemplate;
 
     private static final String IP = "10.0.0.99";
 
@@ -37,15 +39,29 @@ class DetectionResultConsumerIT extends AbstractContainerIT {
     private static final int ESCALATION_THRESHOLD  = 3;
 
     @Test
-    void ddosDetection_blocksSourceIp() {
+    void ddosDetection_firstAttempt_appliesRateLimit() {
         DDoSInput input = ddosInput(IP, Severity.HIGH);
 
         rabbitTemplate.convertAndSend(RabbitMqConfig.QUEUE_DETECTION_RESULTS, input);
 
+        String limitKey = COUNTER_PREFIX + IP + LIMIT_SUFFIX;
         await().atMost(5, TimeUnit.SECONDS).untilAsserted(() ->
+                assertThat(redisTemplate.hasKey(limitKey)).isTrue()
+        );
+        assertThat(redisTemplate.hasKey(BLOCKLIST_IP_PREFIX + IP)).isFalse();
+    }
+
+    @Test
+    void ddosDetection_atEscalationThreshold_escalatesToBlock() {
+        DDoSInput input = ddosInput(IP, Severity.HIGH);
+
+        for (int i = 0; i < ESCALATION_THRESHOLD; i++) {
+            rabbitTemplate.convertAndSend(RabbitMqConfig.QUEUE_DETECTION_RESULTS, input);
+        }
+
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() ->
                 assertThat(redisTemplate.hasKey(BLOCKLIST_IP_PREFIX + IP)).isTrue()
         );
-        assertThat(redisTemplate.opsForSet().isMember(BLOCKLIST_IPS, IP)).isTrue();
     }
 
     @Test
@@ -110,9 +126,13 @@ class DetectionResultConsumerIT extends AbstractContainerIT {
 
         rabbitTemplate.convertAndSend(RabbitMqConfig.QUEUE_DETECTION_RESULTS, ddosInput(IP, Severity.CRITICAL));
 
+        // Wait for the reaction log row — proves the consumer finished processing before checking the negative.
         await().atMost(5, TimeUnit.SECONDS).untilAsserted(() ->
-                assertThat(redisTemplate.opsForSet().isMember(BLOCKLIST_IPS, IP)).isFalse()
+                assertThat(jdbcTemplate.queryForObject(
+                        "SELECT count(*) FROM reaction.reaction_logs", Long.class))
+                        .isGreaterThan(0)
         );
+        assertThat(redisTemplate.opsForSet().isMember(BLOCKLIST_IPS, IP)).isFalse();
         assertThat(redisTemplate.hasKey(BLOCKLIST_IP_PREFIX + IP)).isFalse();
     }
 

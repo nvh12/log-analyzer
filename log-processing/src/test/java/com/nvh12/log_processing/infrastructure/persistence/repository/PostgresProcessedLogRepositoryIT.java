@@ -51,10 +51,10 @@ class PostgresProcessedLogRepositoryIT extends AbstractContainerIT {
         repository.save(result);
 
         Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM normalized_http WHERE ip = '1.2.3.4'", Integer.class);
+                "SELECT COUNT(*) FROM log_processing.normalized_http WHERE ip = '1.2.3.4'", Integer.class);
         assertThat(count).isEqualTo(1);
         
-        Map<String, Object> row = jdbcTemplate.queryForMap("SELECT * FROM normalized_http WHERE ip = '1.2.3.4'");
+        Map<String, Object> row = jdbcTemplate.queryForMap("SELECT * FROM log_processing.normalized_http WHERE ip = '1.2.3.4'");
         assertThat(row.get("processed_at")).isNotNull();
         assertThat(row.get("url")).isEqualTo("/test");
     }
@@ -70,7 +70,7 @@ class PostgresProcessedLogRepositoryIT extends AbstractContainerIT {
         repository.save(result);
 
         Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM normalized_flow WHERE source_ip = '10.0.0.1'", Integer.class);
+                "SELECT COUNT(*) FROM log_processing.normalized_flow WHERE source_ip = '10.0.0.1'", Integer.class);
         assertThat(count).isEqualTo(1);
     }
 
@@ -83,7 +83,7 @@ class PostgresProcessedLogRepositoryIT extends AbstractContainerIT {
         repository.save(new ProcessingResult.Http(log));
 
         Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM normalized_http", Integer.class);
+                "SELECT COUNT(*) FROM log_processing.normalized_http", Integer.class);
         assertThat(count).isEqualTo(1);
     }
 }

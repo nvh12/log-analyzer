@@ -207,6 +207,23 @@ def detect(req: WebAttackInput, repo: ModelRepository, window_start: Optional[da
             severity=Severity.HIGH if sig_name in ["sqli", "rce"] else Severity.MEDIUM,
         )
 
+    # Skip ML layer for requests with no query string and no body — no payload to analyse.
+    # The rule engine above already handles parameterless attacks (path traversal, probes).
+    # The XGBoost model was trained on CSIC 2010 data where benign requests have rich headers
+    # and multiple parameters; parameterless CLF-sourced requests fall far outside that
+    # distribution and would be misclassified as attacks.
+    if not req.query_string and not req.body:
+        return WebAttackResult(
+            anomaly=False,
+            layer_triggered=None,
+            confidence=0.0,
+            source_ip=req.source_ip,
+            log_timestamp=req.timestamp,
+            window_start=window_start,
+            window_end=window_end,
+            severity=Severity.NONE,
+        )
+
     # Layer 2: XGBoost (ML-based classification)
     xgb_art = repo.get(WEB_MODEL)
     if isinstance(xgb_art, dict) and "model" in xgb_art:
@@ -262,5 +279,5 @@ def detect(req: WebAttackInput, repo: ModelRepository, window_start: Optional[da
         log_timestamp=req.timestamp,
         window_start=window_start,
         window_end=window_end,
-        severity=Severity.LOW,
+        severity=Severity.NONE,
     )

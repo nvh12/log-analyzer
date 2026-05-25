@@ -30,7 +30,7 @@ MODEL_OBJECT_KEYS: dict[str, str] = {
     "web_xgb": "webattack/xgboost.pkl",
     "web_vocab": "webattack/vocab.json",
 
-    "traffic_calibration": "trafficspike/thresholds.json",
+    "traffic_calibration": "trafficspike/ensemble_calibration.json",
 }
  
 class MinIOModelStore(ModelRepository):

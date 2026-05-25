@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useData } from '../hooks/useData'
 import { api } from '../api'
 import { UcBadge, SeverityBadge } from '../components/Badge'
-import { FilterSelect } from '../components/Filters'
+import { FilterSelect, FilterDateRange } from '../components/Filters'
 import Table from '../components/Table'
 import DetailDrawer from '../components/DetailDrawer'
 import Pagination from '../components/Pagination'
@@ -14,7 +14,7 @@ function fmtTs(ts) {
 }
 
 function TrafficDetail({ d }) {
-  const flags = d.payload?.method_flags ?? d.methodFlags ?? {}
+  const flags = d.payload?.method_flags ?? {}
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-2 gap-2 text-xs mono text-gray-400">
@@ -97,29 +97,52 @@ const COLUMNS = [
   { label: 'Detected at', render: r => fmtTs(r.detectedAt),                                              cls: 'text-gray-500' },
 ]
 
+const toISO = v => v ? new Date(v).toISOString() : undefined
+
 export default function Detections() {
-  const [uc, setUc]         = useState('')
-  const [severity, setSev]  = useState('')
-  const [page, setPage]     = useState(0)
+  const [uc, setUc]          = useState('')
+  const [severity, setSev]   = useState('')
+  const [from, setFrom]      = useState('')
+  const [to, setTo]          = useState('')
+  const [page, setPage]      = useState(0)
   const [selectedId, setSel] = useState(null)
 
-  const { data, loading } = useData(
-    () => api.getDetections({ uc: uc || undefined, severity: severity || undefined, page, size: 20 }),
-    [uc, severity, page]
+  const { data, loading, error, reload } = useData(
+    () => api.getDetections({
+      detectionType: uc || undefined,
+      severity: severity || undefined,
+      from: toISO(from),
+      to: toISO(to),
+      page,
+      size: 20,
+    }),
+    [uc, severity, from, to, page]
   )
 
-  const rows       = data?.content    ?? []
-  const totalPages = data?.totalPages ?? 0
+  const rows       = data?.content ?? []
+  const totalPages = data ? Math.ceil(data.total / data.size) : 0
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <h1 className="text-white text-lg font-semibold">Detections</h1>
 
-      <div className="flex gap-4 flex-wrap">
+      {error && (
+        <div className="error-banner">
+          <span>{error}</span>
+          <button onClick={reload} className="underline shrink-0">Retry</button>
+        </div>
+      )}
+
+      <div className="flex gap-4 flex-wrap items-end">
         <FilterSelect label="Use case" value={uc} onChange={v => { setUc(v); setPage(0) }}
           options={['TRAFFIC', 'DDOS', 'WEB_ATTACK', 'BRUTE_FORCE']} />
         <FilterSelect label="Severity" value={severity} onChange={v => { setSev(v); setPage(0) }}
-          options={['HIGH', 'MEDIUM', 'LOW', 'NONE']} />
+          options={['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'NONE']} />
+        <FilterDateRange
+          fromValue={from} toValue={to}
+          onFromChange={v => { setFrom(v); setPage(0) }}
+          onToChange={v => { setTo(v); setPage(0) }}
+        />
       </div>
 
       {loading ? <Loading /> : rows.length === 0 ? <Empty /> : (

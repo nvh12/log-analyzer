@@ -20,7 +20,7 @@ def detect(inp: DDoSInput, repo: ModelRepository) -> DDoSResult:
         return DDoSResult(
             anomaly=False,
             confidence=0.0,
-            severity=Severity.LOW,
+            severity=Severity.NONE,
             source_ip=inp.source_ip,
             dest_ip=inp.dest_ip,
             dest_port=inp.dest_port,

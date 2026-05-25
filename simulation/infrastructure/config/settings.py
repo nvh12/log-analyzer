@@ -19,6 +19,12 @@ class Settings(BaseSettings):
 
     ADMIN_API_KEY: str
 
+    MINIO_ENDPOINT: str = "localhost:9000"
+    MINIO_ACCESS_KEY: str = ""
+    MINIO_SECRET_KEY: str = ""
+    MINIO_BUCKET: str = "models"
+    MINIO_SECURE: bool = False
+
     UVICORN_WORKERS: int = 1
 
 

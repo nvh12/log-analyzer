@@ -27,11 +27,9 @@ def run_flow_classifier(
     missing = [col for col in feature_cols if col not in features]
     if missing:
         logger.warning(
-            "%s: %d feature(s) missing from input (defaulting to 0.0): %s%s",
+            "%s: %d feature(s) missing from input — filling with 0.0",
             model_key,
             len(missing),
-            missing[:5],
-            " …" if len(missing) > 5 else "",
         )
 
     vector = [[features.get(col, 0.0) for col in feature_cols]]
@@ -68,6 +66,6 @@ def run_flow_classifier(
         else:
             severity = Severity.MEDIUM
     else:
-        severity = Severity.LOW
+        severity = Severity.NONE
 
     return probability, anomaly, severity

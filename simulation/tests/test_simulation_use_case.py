@@ -56,7 +56,7 @@ async def test_start_acquires_redis_lock(use_case, redis_mock):
     lock_calls = [c for c in set_calls if c.kwargs.get("nx") is True]
     assert len(lock_calls) == 1
     assert lock_calls[0].args[0] == "test:lock"
-    assert lock_calls[0].kwargs["ex"] == 3600
+    assert lock_calls[0].kwargs["ex"] == 300
 
 
 @pytest.mark.asyncio
@@ -111,21 +111,23 @@ async def test_stop_sets_stop_signal(use_case, redis_mock):
 
 @pytest.mark.asyncio
 async def test_status_returns_idle_when_no_state(use_case, redis_mock):
-    redis_mock.mget.return_value = [None, None, None, None, None]
+    redis_mock.mget.return_value = [None, None, None, None, None, None]
     result = await use_case.status()
     assert result["state"] == "idle"
     assert result["sent"] == 0
+    assert result["attack_ratio"] is None
 
 
 @pytest.mark.asyncio
 async def test_status_decodes_running_state(use_case, redis_mock):
-    redis_mock.mget.return_value = ["running", "42", "DDOS", "HTTP", "10.0.0.1"]
+    redis_mock.mget.return_value = ["running", "42", "DDOS", "HTTP", "10.0.0.1", "0.7"]
     result = await use_case.status()
     assert result["state"] == "running"
     assert result["sent"] == 42
     assert result["scenario"] == "DDOS"
     assert result["log_type"] == "HTTP"
     assert result["target_ip"] == "10.0.0.1"
+    assert result["attack_ratio"] == 0.7
 
 
 # ---------------------------------------------------------------------------

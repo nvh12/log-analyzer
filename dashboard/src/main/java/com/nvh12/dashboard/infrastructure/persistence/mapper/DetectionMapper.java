@@ -1,4 +1,4 @@
-package com.nvh12.dashboard.infrastructure.persistence.repository.mapper;
+package com.nvh12.dashboard.infrastructure.persistence.mapper;
 
 import com.nvh12.dashboard.application.DetectionDetailView;
 import com.nvh12.dashboard.application.DetectionSummaryView;
@@ -19,15 +19,8 @@ public class DetectionMapper {
 
     public static DetectionDetailView toDetail(DetectionResultEntity e) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        switch (e.getDetectionType()) {
-            case TRAFFIC -> {
-                if (e.getMethodFlags() != null) payload.put("method_flags", e.getMethodFlags());
-            }
-            case DDOS, BRUTE_FORCE -> {
-                payload.put("dest_ip", e.getDestIp());
-                payload.put("dest_port", e.getDestPort());
-            }
-            default -> {}
+        if (e.getDetectionType() == DetectionType.TRAFFIC && e.getMethodFlags() != null) {
+            payload.put("method_flags", e.getMethodFlags());
         }
         return new DetectionDetailView(e.getId(), e.getDetectionType(), e.getSeverity(),
                 e.getAnomaly(), e.getConfidence(), e.getNetworkLayer(), e.getSourceIp(),

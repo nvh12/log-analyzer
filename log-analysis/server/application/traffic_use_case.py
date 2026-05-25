@@ -15,6 +15,6 @@ class TrafficUseCase:
     async def execute(self, input_data: TrafficInput, seasonal_summaries: list[tuple[float, float]] | None = None) -> None:
         """Runs traffic spike detection and publishes results."""
         result = detect(input_data, self._thresholds, seasonal_summaries=seasonal_summaries or [])
-        if result.anomaly:
+        if result.anomaly and result.scored:
             await self._result_repository.save(result)
             await self._publisher.publish(result)

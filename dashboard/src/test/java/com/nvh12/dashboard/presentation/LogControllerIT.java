@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -142,6 +143,21 @@ class LogControllerIT extends AbstractContainerIT {
                 .andExpect(jsonPath("$.id").value(saved.getId()))
                 .andExpect(jsonPath("$.sourceIp").value("192.168.1.1"))
                 .andExpect(jsonPath("$.destPort").value(22));
+    }
+
+    @Test
+    void getFlowLog_withFeatures_returnsDeserializedFeaturesMap() throws Exception {
+        NormalizedFlowEntity saved = jpaFlowLogRepository.save(
+                NormalizedFlowEntity.builder()
+                        .sourceIp("10.0.0.5").destIp("10.0.0.6")
+                        .sourcePort(12345).destPort(443)
+                        .features(Map.of("Flow Duration", 500.0, "Total Fwd Packets", 3.0))
+                        .processedAt(Instant.now()).build());
+
+        mockMvc.perform(get("/api/logs/flow/{id}", saved.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.features['Flow Duration']").value(500.0))
+                .andExpect(jsonPath("$.features['Total Fwd Packets']").value(3.0));
     }
 
     @Test

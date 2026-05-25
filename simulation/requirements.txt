@@ -5,6 +5,7 @@ pydantic-settings
 dependency-injector
 aio-pika
 redis
+minio
 pytest
 pytest-asyncio
 httpx

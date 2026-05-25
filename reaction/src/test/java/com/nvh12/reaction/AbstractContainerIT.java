@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -65,6 +66,9 @@ public abstract class AbstractContainerIT {
     @Autowired(required = false)
     private RabbitAdmin rabbitAdmin;
 
+    @Autowired(required = false)
+    private JdbcTemplate jdbcTemplate;
+
     @BeforeEach
     void resetState() {
         when(mailSender.createMimeMessage()).thenReturn(new MimeMessage((Session) null));
@@ -74,6 +78,9 @@ public abstract class AbstractContainerIT {
         });
         if (rabbitAdmin != null) {
             rabbitAdmin.purgeQueue(RabbitMqConfig.QUEUE_DETECTION_RESULTS, false);
+        }
+        if (jdbcTemplate != null) {
+            jdbcTemplate.execute("TRUNCATE reaction.reaction_logs RESTART IDENTITY");
         }
     }
 }

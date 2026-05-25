@@ -1,11 +1,11 @@
 package com.nvh12.log_processing.infrastructure.persistence.entity;
 
 import com.nvh12.log_processing.domain.model.HttpMethod;
+import com.nvh12.log_processing.infrastructure.persistence.mapper.JsonStringMapConverter;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.ColumnDefault;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
+import org.hibernate.annotations.ColumnTransformer;
 
 import java.time.Instant;
 import java.util.Map;
@@ -45,7 +45,8 @@ public class NormalizedHttpEntity {
     @Column(name = "query_string", columnDefinition = "text")
     private String queryString;
 
-    @JdbcTypeCode(SqlTypes.JSON)
+    @Convert(converter = JsonStringMapConverter.class)
+    @ColumnTransformer(write = "?::jsonb")
     @Column(name = "headers", columnDefinition = "jsonb")
     private Map<String, String> headers;
 

@@ -1,4 +1,4 @@
-package com.nvh12.dashboard.infrastructure.persistence.repository.mapper;
+package com.nvh12.dashboard.infrastructure.persistence.mapper;
 
 import com.nvh12.dashboard.application.FlowLogView;
 import com.nvh12.dashboard.infrastructure.persistence.entity.NormalizedFlowEntity;

@@ -1,4 +1,5 @@
 """Traffic-spike test: burst of HTTP logs triggers detection and a scale-up reaction."""
+import datetime
 import json
 
 import pytest
@@ -14,9 +15,29 @@ TARGET_IP = "192.168.10.20"
 #   Full key: "history:detection:traffic"
 TRAFFIC_HISTORY_KEY = "history:detection:traffic"
 
+# Seasonal history key: same namespace + "_seasonal" suffix, same key_prefix.
+#   Full key: "history:detection:traffic_seasonal"
+SEASONAL_HISTORY_KEY = "history:detection:traffic_seasonal"
+
 # Seed 10 baseline samples that represent quiet traffic (2–6 req/window).
 # This gives Z-score and IQR a non-zero variance to compare the spike against.
 BASELINE_HISTORY = [3.0, 4.0, 2.0, 5.0, 3.0, 4.0, 3.0, 2.0, 4.0, 3.0]
+
+
+def _make_seasonal_entries() -> list[dict]:
+    """Build 5 past-week summaries at the same (hour, is_weekend) bucket as now.
+
+    Going back in 7-day steps always lands on the same weekday, so the bucket
+    always matches the current is_weekend flag.  Each entry records a quiet
+    baseline (median=3.5 req/window, iqr=2.0) so the spike triggers the
+    seasonal z-score detector and sets result.scored=True.
+    """
+    now = datetime.datetime.now(datetime.timezone.utc)
+    hour_start = now.replace(minute=0, second=0, microsecond=0)
+    return [
+        {"t": (hour_start - datetime.timedelta(weeks=w)).timestamp(), "m": 3.5, "i": 2.0}
+        for w in range(1, 6)
+    ]
 
 
 @pytest.mark.asyncio
@@ -26,10 +47,14 @@ async def test_traffic_spike_triggers_scale_up(simulation_client, pg_conn, redis
 
     Pre-seeds traffic history so the detectors have a non-zero baseline variance
     to compare the spike against (without history the Z-score denominator is 0).
+    Also seeds seasonal history so result.scored=True and the use case publishes.
     """
-    # Seed baseline history directly into Redis before the spike arrives.
-    # TTL = 7 days (matches HISTORY_TTL_SECONDS default).
+    # Seed short-term history for Z-score/IQR baseline.
     await redis_client.set(TRAFFIC_HISTORY_KEY, json.dumps(BASELINE_HISTORY), ex=7 * 24 * 3600)
+
+    # Seed seasonal history so scored=True (traffic_use_case gates on result.scored).
+    seasonal_data = _make_seasonal_entries()
+    await redis_client.set(SEASONAL_HISTORY_KEY, json.dumps(seasonal_data), ex=7 * 24 * 3600)
 
     # Send a large burst: 200 requests at 100/s ≈ 2 seconds.
     resp = await simulation_client.post("/simulate/start", json={

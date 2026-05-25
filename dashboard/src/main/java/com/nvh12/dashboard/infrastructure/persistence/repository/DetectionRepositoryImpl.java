@@ -8,7 +8,7 @@ import com.nvh12.dashboard.domain.DetectionType;
 import com.nvh12.dashboard.domain.Severity;
 import com.nvh12.dashboard.infrastructure.persistence.entity.DetectionResultEntity;
 import com.nvh12.dashboard.infrastructure.persistence.repository.jpa.JpaDetectionResultRepository;
-import com.nvh12.dashboard.infrastructure.persistence.repository.mapper.DetectionMapper;
+import com.nvh12.dashboard.infrastructure.persistence.mapper.DetectionMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;

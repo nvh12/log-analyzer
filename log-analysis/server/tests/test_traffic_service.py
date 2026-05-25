@@ -67,7 +67,8 @@ def test_insufficient_data_returns_all_false_flags(thresholds):
     assert result.anomaly is False
     assert result.confidence == 0.0
     assert result.method_flags == {"z_score": False, "iqr": False, "ema": False, "seasonal": False}
-    assert result.severity == Severity.LOW
+    assert result.severity == Severity.NONE
+    assert result.scored is False
 
 
 # ---------------------------------------------------------------------------
@@ -172,10 +173,10 @@ def test_stable_traffic_does_not_trigger_seasonal_anomaly(thresholds):
 # Severity bins
 # ---------------------------------------------------------------------------
 
-def test_no_votes_severity_is_low(thresholds):
+def test_no_votes_severity_is_none(thresholds):
     result = traffic_service.detect(make_window(STABLE), thresholds)
 
-    assert result.severity == Severity.LOW
+    assert result.severity == Severity.NONE
 
 
 def test_partial_votes_severity_is_medium(thresholds):
@@ -232,3 +233,22 @@ def test_canonical_weights_are_accepted():
         min_weighted_chosen=1.5,
         weight_ema=0.5, weight_zscore=0.5, weight_iqr=1.0, weight_seasonal=1.0,
     )
+
+
+# ---------------------------------------------------------------------------
+# scored field
+# ---------------------------------------------------------------------------
+
+def test_scored_false_when_no_seasonal_summaries(thresholds):
+    result = traffic_service.detect(make_window(SPIKE), thresholds, seasonal_summaries=None)
+    assert result.scored is False
+
+
+def test_scored_false_when_seasonal_summaries_empty(thresholds):
+    result = traffic_service.detect(make_window(SPIKE), thresholds, seasonal_summaries=[])
+    assert result.scored is False
+
+
+def test_scored_true_when_seasonal_summaries_provided(thresholds):
+    result = traffic_service.detect(make_window(SPIKE), thresholds, seasonal_summaries=SEASONAL_BUCKET)
+    assert result.scored is True

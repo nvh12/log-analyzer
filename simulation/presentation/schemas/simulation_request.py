@@ -10,6 +10,12 @@ class StartSimulationRequest(BaseModel):
     count: int = Field(default=100, ge=0, description="Number of logs to send; 0 = unlimited")
     rate_per_second: float = Field(default=10.0, gt=0, le=10000)
     target_ip: str = "192.168.100.100"
+    attack_ratio: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Fraction of logs that are attack traffic (0–1). None = per-scenario default.",
+    )
 
     @field_validator("target_ip")
     @classmethod

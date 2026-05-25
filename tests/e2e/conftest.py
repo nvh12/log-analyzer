@@ -35,6 +35,10 @@ MINIO_MODEL_MAPPING: dict[str, str] = {
         "flow/bruteforce/xgboost.pkl",
     "log-analysis/training/ddos/data/flow_feature_cols.json":
         "flow/feature_cols.json",
+    "log-analysis/training/ddos/data/class_stats.json":
+        "flow/ddos/class_stats.json",
+    "log-analysis/training/bruteforce/data/class_stats.json":
+        "flow/bruteforce/class_stats.json",
     "log-analysis/training/webattack/models/web_attack_if.pkl":
         "webattack/isolation_forest.pkl",
     "log-analysis/training/webattack/models/web_attack_ocsvm.pkl":
@@ -47,7 +51,7 @@ MINIO_MODEL_MAPPING: dict[str, str] = {
 # If absent, an empty dict is uploaded so the health check passes and detection
 # falls back to the threshold defaults in settings.py.
 TRAFFIC_CALIBRATION_LOCAL = "log-analysis/training/trafficspike/outputs/ensemble_calibration.json"
-TRAFFIC_CALIBRATION_KEY   = "trafficspike/thresholds.json"
+TRAFFIC_CALIBRATION_KEY   = "trafficspike/ensemble_calibration.json"
 
 # Health endpoints for each application service.
 APP_HEALTH_URLS = [

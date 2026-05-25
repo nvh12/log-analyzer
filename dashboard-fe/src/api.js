@@ -16,4 +16,9 @@ export const api = {
   liftBlock: (id) => client.post(`/reactions/${id}/lift`),
   getSystemHealth: () => client.get('/system/health').then(r => r.data),
   getSystemConfig: () => client.get('/system/config').then(r => r.data),
+
+  simulationStatus: () => axios.get('/simulate/status').then(r => r.data),
+  simulationStart:  (p) => axios.post('/simulate/start', p).then(r => r.data),
+  simulationStop:   () => axios.post('/simulate/stop').then(r => r.data),
+  simulationReplay: (p) => axios.post('/simulate/replay', p).then(r => r.data),
 }

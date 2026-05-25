@@ -8,7 +8,8 @@ class Severity(str, Enum):
     probability (UC2/UC3/UC4); it is not a simple flag count.
     """
 
-    LOW = "LOW"          # anomaly absent, or only weak / single-axis signal
+    NONE = "NONE"        # no detection layer triggered; result is benign
+    LOW = "LOW"          # weak / single-axis signal; anomaly declared
     MEDIUM = "MEDIUM"    # moderate confidence; worth monitoring
     HIGH = "HIGH"        # strong signal from multiple independent axes
     CRITICAL = "CRITICAL"  # all detectors fired / probability ≥ 0.9

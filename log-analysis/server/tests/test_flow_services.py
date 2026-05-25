@@ -128,7 +128,7 @@ class TestDDoSSeverity:
     def test_probability_below_threshold_is_benign(self):
         result = ddos_service.detect(_ddos_input(), _ddos_repo(_artifact(0.20)))
         assert result.anomaly is False
-        assert result.severity == Severity.LOW
+        assert result.severity == Severity.NONE
 
     def test_custom_threshold_is_respected(self):
         # threshold=0.8; probability=0.75 → below → benign
@@ -169,7 +169,7 @@ class TestDDoSFallback:
         repo = _MockRepo({DDOS_FEATURE_COLS: FEATURE_COLS})  # no model key
         result = ddos_service.detect(_ddos_input(), repo)
         assert result.anomaly is False
-        assert result.severity == Severity.LOW
+        assert result.severity == Severity.NONE
 
     def test_missing_feature_cols_returns_benign(self):
         repo = _MockRepo({DDOS_MODEL: _artifact(0.9)})  # no feature cols
@@ -221,7 +221,7 @@ class TestBruteForceSeverity:
     def test_probability_below_threshold_is_benign(self):
         result = brute_force_service.detect(_bf_input(), _bf_repo(_artifact(0.10)))
         assert result.anomaly is False
-        assert result.severity == Severity.LOW
+        assert result.severity == Severity.NONE
 
     def test_custom_threshold_respected(self):
         result = brute_force_service.detect(_bf_input(), _bf_repo(_artifact(0.7, threshold=0.8)))

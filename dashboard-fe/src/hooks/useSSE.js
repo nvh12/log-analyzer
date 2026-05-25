@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 export function useSSE(handlers) {
   const handlersRef = useRef(handlers)
   handlersRef.current = handlers
+  const [connected, setConnected] = useState(false)
 
   useEffect(() => {
     let es
@@ -11,6 +12,8 @@ export function useSSE(handlers) {
     function connect() {
       if (dead) return
       es = new EventSource('/api/stream')
+
+      es.onopen = () => setConnected(true)
 
       es.addEventListener('detection', (e) => {
         try { handlersRef.current.detection?.(JSON.parse(e.data)) } catch {}
@@ -25,8 +28,10 @@ export function useSSE(handlers) {
         try { handlersRef.current.heartbeat?.(JSON.parse(e.data)) } catch {}
       })
       es.onerror = () => {
+        if (dead) return
+        setConnected(false)
         es.close()
-        if (!dead) setTimeout(connect, 3000)
+        setTimeout(connect, 3000)
       }
     }
 
@@ -36,4 +41,6 @@ export function useSSE(handlers) {
       es?.close()
     }
   }, [])
+
+  return { connected }
 }

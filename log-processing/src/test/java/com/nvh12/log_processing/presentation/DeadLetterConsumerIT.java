@@ -45,7 +45,7 @@ class DeadLetterConsumerIT extends AbstractContainerIT {
 
         await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
             Integer count = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM drop_audit WHERE log_id = 'id-dlq-test'", Integer.class);
+                    "SELECT COUNT(*) FROM log_processing.drop_audit WHERE log_id = 'id-dlq-test'", Integer.class);
             assertThat(count).isEqualTo(1);
         });
     }
@@ -58,7 +58,7 @@ class DeadLetterConsumerIT extends AbstractContainerIT {
 
         await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
             Integer count = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM drop_audit WHERE drop_reason = 'DEAD_LETTERED'", Integer.class);
+                    "SELECT COUNT(*) FROM log_processing.drop_audit WHERE drop_reason = 'DEAD_LETTERED'", Integer.class);
             assertThat(count).isPositive();
         });
     }

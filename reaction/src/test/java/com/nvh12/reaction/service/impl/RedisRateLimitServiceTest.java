@@ -25,9 +25,10 @@ class RedisRateLimitServiceTest {
 
     RedisRateLimitService service;
 
-    private static final String WHITELIST_IPS  = "whitelist:ips";
-    private static final String COUNTER_PREFIX = "ratelimit:ip:";
-    private static final String LIMIT_SUFFIX   = ":limit";
+    private static final String WHITELIST_IPS    = "whitelist:ips";
+    private static final String COUNTER_PREFIX   = "ratelimit:ip:";
+    private static final String LIMIT_SUFFIX     = ":limit";
+    private static final String WINDOW_END_SUFFIX = ":window_end";
 
     @BeforeEach
     void setUp() {
@@ -54,7 +55,7 @@ class RedisRateLimitServiceTest {
         // MEDIUM: 10 rpm, 30 min policy ttl (1800s), 60s window
         verify(redisTemplate).execute(
                 any(RedisScript.class),
-                eq(List.of(COUNTER_PREFIX + "1.2.3.4" + LIMIT_SUFFIX, COUNTER_PREFIX + "1.2.3.4")),
+                eq(List.of(COUNTER_PREFIX + "1.2.3.4" + LIMIT_SUFFIX, COUNTER_PREFIX + "1.2.3.4", COUNTER_PREFIX + "1.2.3.4" + WINDOW_END_SUFFIX)),
                 eq("10"), eq("1800"), eq("60")
         );
     }
@@ -67,9 +68,9 @@ class RedisRateLimitServiceTest {
         service.limit("b", Severity.HIGH);
         service.limit("c", Severity.CRITICAL);
 
-        verify(redisTemplate).execute(any(), eq(List.of(COUNTER_PREFIX + "a" + LIMIT_SUFFIX, COUNTER_PREFIX + "a")), eq("30"), any(), any());
-        verify(redisTemplate).execute(any(), eq(List.of(COUNTER_PREFIX + "b" + LIMIT_SUFFIX, COUNTER_PREFIX + "b")), eq("3"), any(), any());
-        verify(redisTemplate).execute(any(), eq(List.of(COUNTER_PREFIX + "c" + LIMIT_SUFFIX, COUNTER_PREFIX + "c")), eq("1"), any(), any());
+        verify(redisTemplate).execute(any(), eq(List.of(COUNTER_PREFIX + "a" + LIMIT_SUFFIX, COUNTER_PREFIX + "a", COUNTER_PREFIX + "a" + WINDOW_END_SUFFIX)), eq("30"), any(), any());
+        verify(redisTemplate).execute(any(), eq(List.of(COUNTER_PREFIX + "b" + LIMIT_SUFFIX, COUNTER_PREFIX + "b", COUNTER_PREFIX + "b" + WINDOW_END_SUFFIX)), eq("3"), any(), any());
+        verify(redisTemplate).execute(any(), eq(List.of(COUNTER_PREFIX + "c" + LIMIT_SUFFIX, COUNTER_PREFIX + "c", COUNTER_PREFIX + "c" + WINDOW_END_SUFFIX)), eq("1"), any(), any());
     }
 
     @Test

@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 
 const nav = [
-  { to: '/',           label: 'Live' },
-  { to: '/logs',       label: 'Logs' },
-  { to: '/detections', label: 'Detections' },
-  { to: '/reactions',  label: 'Reactions' },
-  { to: '/system',     label: 'System' },
+  { to: '/',            label: 'Live' },
+  { to: '/logs',        label: 'Logs' },
+  { to: '/detections',  label: 'Detections' },
+  { to: '/reactions',   label: 'Reactions' },
+  { to: '/system',      label: 'System' },
+  { to: '/simulation',  label: 'Simulation' },
 ]
 
 function HamburgerIcon() {
