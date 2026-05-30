@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from application.simulation_use_case import SimulationUseCase
 from dependencies.container import Container
+from domain.services.log_generator import SCENARIO_LOG_TYPE
 from infrastructure.config.settings import settings
 from infrastructure.replay_loader import ReplayLoader
 from presentation.schemas.replay_request import ReplayRequest
@@ -14,6 +15,10 @@ router = APIRouter()
 
 def _get_use_case() -> SimulationUseCase:
     return Container.simulation_use_case()
+
+
+def _get_baseline_use_case() -> SimulationUseCase:
+    return Container.baseline_use_case()
 
 
 def _get_replay_loader() -> ReplayLoader | None:
@@ -33,10 +38,17 @@ async def start_simulation(
     request: StartSimulationRequest,
     use_case: SimulationUseCase = Depends(_get_use_case),
 ) -> dict:
+    # Log type is always derived from the scenario — never caller-controlled.
+    log_type = SCENARIO_LOG_TYPE.get(request.scenario)
+    if log_type is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No log type configured for scenario: {request.scenario.value}",
+        )
     try:
         await use_case.start(
             scenario=request.scenario,
-            log_type=request.log_type,
+            log_type=log_type,
             count=request.count,
             rate_per_second=request.rate_per_second,
             target_ip=request.target_ip,
@@ -44,7 +56,7 @@ async def start_simulation(
         )
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))
-    return {"message": "Simulation started"}
+    return {"message": "Simulation started", "log_type": log_type.value}
 
 
 @router.post("/stop", status_code=200)
@@ -88,3 +100,24 @@ async def start_replay(
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))
     return {"message": "Replay started", "rows_loaded": len(rows)}
+
+
+# ---------------------------------------------------------------------------
+# Baseline endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/baseline")
+async def get_baseline_status(
+    baseline_uc: SimulationUseCase = Depends(_get_baseline_use_case),
+) -> dict:
+    """Returns the running state of the auto-started NORMAL baseline traffic."""
+    return await baseline_uc.status()
+
+
+@router.post("/baseline/stop", status_code=200)
+async def stop_baseline(
+    baseline_uc: SimulationUseCase = Depends(_get_baseline_use_case),
+) -> dict:
+    """Sends a stop signal to the NORMAL baseline traffic generator."""
+    await baseline_uc.stop()
+    return {"message": "Baseline stop signal sent"}

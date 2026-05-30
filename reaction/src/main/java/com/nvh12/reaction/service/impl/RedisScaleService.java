@@ -16,7 +16,7 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class RedisScaleService implements ScaleService {
 
-    static final String SCALE_STATE    = "scale:state";
+    static final String SCALE_STATE = "scale:state";
     static final String SCALE_REPLICAS = "scale:replicas";
 
     private final RedisTemplate<String, String> redisTemplate;
@@ -42,18 +42,20 @@ public class RedisScaleService implements ScaleService {
             }
         }
         return switch (severity) {
-            case LOW      -> 2;
-            case MEDIUM   -> 3;
-            case HIGH     -> 5;
+            case NONE -> throw new IllegalStateException("NONE severity should not reach scale service");
+            case LOW -> 2;
+            case MEDIUM -> 3;
+            case HIGH -> 5;
             case CRITICAL -> 8;
         };
     }
 
     private Duration ttl(Severity severity) {
         return switch (severity) {
-            case LOW      -> Duration.ofMinutes(5);
-            case MEDIUM   -> Duration.ofMinutes(30);
-            case HIGH     -> Duration.ofHours(2);
+            case NONE -> throw new IllegalStateException("NONE severity should not reach scale service");
+            case LOW -> Duration.ofMinutes(5);
+            case MEDIUM -> Duration.ofMinutes(30);
+            case HIGH -> Duration.ofHours(2);
             case CRITICAL -> Duration.ofHours(24);
         };
     }

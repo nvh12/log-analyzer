@@ -66,7 +66,7 @@ class BruteForceReactionServiceTest {
 
         verify(rateLimitService).limit(IP, Severity.MEDIUM);
         verify(ipBlockService, never()).block(any(), any());
-        verify(alertService).alert(any(BruteForceAlert.class));
+        verify(alertService).enqueue(any(BruteForceAlert.class));
         verify(reactionLogService).save(input, ReactionAction.RATE_LIMIT);
     }
 
@@ -107,7 +107,7 @@ class BruteForceReactionServiceTest {
 
         verify(ipBlockService).block(IP, Severity.HIGH);
         verify(rateLimitService, never()).limit(any(), any());
-        verify(alertService).alert(any(BruteForceAlert.class));
+        verify(alertService).enqueue(any(BruteForceAlert.class));
         verify(reactionLogService).save(input, ReactionAction.BLOCK);
     }
 

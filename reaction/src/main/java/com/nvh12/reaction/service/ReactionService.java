@@ -25,7 +25,7 @@ public abstract class ReactionService {
     public final void handle(ReactionInput input) {
         ReactionAction action = doHandle(input);
         reactionLogService.save(input, action);
-        alertService.alert(buildAlertDto(input));
+        alertService.enqueue(buildAlertDto(input));
     }
 
     protected abstract Alert buildAlertDto(ReactionInput input);

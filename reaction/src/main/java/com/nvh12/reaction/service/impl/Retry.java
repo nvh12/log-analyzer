@@ -4,7 +4,8 @@ import java.util.function.Consumer;
 
 final class Retry {
 
-    private Retry() {}
+    private Retry() {
+    }
 
     static <E extends RuntimeException> void run(
             int maxAttempts, long initialDelayMs,

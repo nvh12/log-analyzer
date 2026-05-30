@@ -6,6 +6,7 @@ dependency-injector
 aio-pika
 redis
 minio
+faker
 pytest
 pytest-asyncio
 httpx

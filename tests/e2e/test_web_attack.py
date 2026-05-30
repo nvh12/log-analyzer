@@ -19,7 +19,6 @@ async def test_web_attack_triggers_ip_block(simulation_client, pg_conn, redis_cl
     """
     resp = await simulation_client.post("/simulate/start", json={
         "scenario": "WEB_ATTACK",
-        "log_type": "HTTP",
         "count": 20,
         "rate_per_second": 10,
         "target_ip": TARGET_IP,

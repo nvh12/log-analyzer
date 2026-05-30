@@ -25,7 +25,10 @@ function IpList({ items, textCls, emptyMsg }) {
       {items.map((entry, i) => (
         <li key={i} className="flex items-center justify-between px-4 py-2 text-xs mono">
           <span className={textCls}>{entry.ip ?? entry}</span>
-          {entry.ttl_seconds != null && <span className="text-gray-500">{ttlLabel(entry.ttl_seconds)}</span>}
+          <span className="text-gray-500 flex gap-3">
+            {entry.requests_per_minute != null && <span>{entry.requests_per_minute} req/min</span>}
+            {entry.ttl_seconds != null && <span>{ttlLabel(entry.ttl_seconds)}</span>}
+          </span>
         </li>
       ))}
     </ul>

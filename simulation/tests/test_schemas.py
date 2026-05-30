@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from domain.models.scenario import SimulationScenario, LogType
+from domain.models.scenario import SimulationScenario
 from presentation.schemas.simulation_request import StartSimulationRequest
 
 
@@ -10,6 +10,22 @@ def _make(**kwargs) -> StartSimulationRequest:
     base = {"scenario": SimulationScenario.NORMAL}
     base.update(kwargs)
     return StartSimulationRequest(**base)
+
+
+# ---------------------------------------------------------------------------
+# log_type field is gone — the router always derives it from the scenario
+# ---------------------------------------------------------------------------
+
+def test_log_type_field_does_not_exist():
+    """log_type was removed from the schema; callers no longer control it."""
+    req = _make()
+    assert not hasattr(req, "log_type")
+
+
+def test_log_type_kwarg_raises_validation_error():
+    """Passing log_type to the constructor must raise (extra fields forbidden)."""
+    with pytest.raises((ValidationError, TypeError)):
+        StartSimulationRequest(scenario=SimulationScenario.NORMAL, log_type="HTTP")
 
 
 # ---------------------------------------------------------------------------
@@ -72,11 +88,6 @@ def test_count_negative_raises_validation_error():
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
-
-def test_default_log_type_is_http():
-    req = _make()
-    assert req.log_type == LogType.HTTP
-
 
 def test_default_count_is_100():
     req = _make()

@@ -4,6 +4,7 @@ import com.nvh12.reaction.config.RabbitMqConfig;
 import com.nvh12.reaction.service.ReactionService;
 import com.nvh12.reaction.service.dto.DetectionType;
 import com.nvh12.reaction.service.dto.ReactionInput;
+import com.nvh12.reaction.service.dto.Severity;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
@@ -32,6 +33,10 @@ public class DetectionResultConsumer {
                 || (needsSourceIp && (sourceIp == null || sourceIp.isBlank()))) {
             log.warn("Dropping malformed detection event: type={}, sourceIp={}, severity={}, detectedAt={}",
                     type, sourceIp, input.getSeverity(), input.getDetectedAt());
+            return;
+        }
+        if (input.getSeverity() == Severity.NONE) {
+            log.debug("Ignoring benign (NONE-severity) detection: type={} sourceIp={}", type, sourceIp);
             return;
         }
         ReactionService service = services.get(type);

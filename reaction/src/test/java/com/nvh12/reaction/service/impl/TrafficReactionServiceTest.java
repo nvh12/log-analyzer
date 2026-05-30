@@ -41,7 +41,7 @@ class TrafficReactionServiceTest {
         service.handle(input);
 
         verify(scaleService).requestScale(DetectionType.TRAFFIC, Severity.HIGH);
-        verify(alertService).alert(any(TrafficAlert.class));
+        verify(alertService).enqueue(any(TrafficAlert.class));
         verify(reactionLogService).save(input, ReactionAction.SCALE_UP);
     }
 }

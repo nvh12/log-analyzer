@@ -1,6 +1,9 @@
 package com.nvh12.reaction.config;
 
-import org.springframework.amqp.core.*;
+import org.springframework.amqp.core.Binding;
+import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.FanoutExchange;
+import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -12,8 +15,8 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitMqConfig {
 
     public static final String EXCHANGE_DETECTION_RESULTS = "detection.results";
-    public static final String EXCHANGE_REACTION_RESULTS  = "reaction.results";
-    public static final String QUEUE_DETECTION_RESULTS    = "detection.results.reaction";
+    public static final String EXCHANGE_REACTION_RESULTS = "reaction.results";
+    public static final String QUEUE_DETECTION_RESULTS = "detection.results.reaction";
 
     @Bean
     public FanoutExchange detectionResultsExchange() {

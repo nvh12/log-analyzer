@@ -21,11 +21,11 @@ public class ReactionResultPublisher {
     public void publish(Long reactionId, ReactionAction action, String target, Severity severity, Instant ts) {
         try {
             Map<String, Object> message = Map.of(
-                    "reaction_id",  reactionId,
-                    "action",       action.name(),
-                    "target",       target != null ? target : "",
-                    "ttl_seconds",  ttlSeconds(action, severity),
-                    "ts",           ts.toString()
+                    "reaction_id", reactionId,
+                    "action", action.name(),
+                    "target", target != null ? target : "",
+                    "ttl_seconds", ttlSeconds(action, severity),
+                    "ts", ts.toString()
             );
             rabbitTemplate.convertAndSend(RabbitMqConfig.EXCHANGE_REACTION_RESULTS, "", message);
         } catch (Exception e) {
@@ -36,10 +36,11 @@ public class ReactionResultPublisher {
     private long ttlSeconds(ReactionAction action, Severity severity) {
         if (action == ReactionAction.SCALE_UP) return 0L;
         return switch (severity) {
-            case LOW      ->    5 * 60L;
-            case MEDIUM   ->   30 * 60L;
-            case HIGH     ->    2 * 3600L;
-            case CRITICAL ->   24 * 3600L;
+            case NONE -> throw new IllegalStateException("NONE severity should not reach reaction publisher");
+            case LOW -> 5 * 60L;
+            case MEDIUM -> 30 * 60L;
+            case HIGH -> 2 * 3600L;
+            case CRITICAL -> 24 * 3600L;
         };
     }
 }

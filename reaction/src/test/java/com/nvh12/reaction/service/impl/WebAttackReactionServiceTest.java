@@ -41,7 +41,7 @@ class WebAttackReactionServiceTest {
         service.handle(input);
 
         verify(ipBlockService).block("6.6.6.6", Severity.HIGH);
-        verify(alertService).alert(any(WebAttackAlert.class));
+        verify(alertService).enqueue(any(WebAttackAlert.class));
         verify(reactionLogService).save(input, ReactionAction.BLOCK);
     }
 }

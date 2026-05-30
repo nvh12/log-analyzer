@@ -12,9 +12,9 @@ import java.time.Instant;
 @Setter
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "detection_type", include = JsonTypeInfo.As.EXISTING_PROPERTY, visible = true)
 @JsonSubTypes({
-        @JsonSubTypes.Type(value = TrafficInput.class,    name = "TRAFFIC"),
-        @JsonSubTypes.Type(value = DDoSInput.class,       name = "DDOS"),
-        @JsonSubTypes.Type(value = WebAttackInput.class,  name = "WEB_ATTACK"),
+        @JsonSubTypes.Type(value = TrafficInput.class, name = "TRAFFIC"),
+        @JsonSubTypes.Type(value = DDoSInput.class, name = "DDOS"),
+        @JsonSubTypes.Type(value = WebAttackInput.class, name = "WEB_ATTACK"),
         @JsonSubTypes.Type(value = BruteForceInput.class, name = "BRUTE_FORCE")
 })
 public abstract class ReactionInput {

@@ -1,18 +1,23 @@
 """Entry point for the Simulation Service."""
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from dependencies.container import Container
+from domain.models.scenario import SimulationScenario, LogType
 from domain.services.log_generator import init_flow_stats
 from infrastructure.config.rabbitmq import connect as rabbitmq_connect, close as rabbitmq_close
 from infrastructure.config.redis import redis_client
 from infrastructure.config.settings import settings
 from infrastructure.flow_stats import FlowStatsLoader
 from infrastructure.middleware.access_control import AccessControlMiddleware
+from infrastructure.middleware.http_log import HttpLogMiddleware
 from presentation.routers import simulation_router, access_control_router, target_router
+
+logger = logging.getLogger(__name__)
 
 container = Container()
 
@@ -21,6 +26,7 @@ container = Container()
 async def lifespan(app: FastAPI):
     app.container = container
     await rabbitmq_connect()
+
     if settings.MINIO_ACCESS_KEY:
         loader = FlowStatsLoader(
             endpoint=settings.MINIO_ENDPOINT,
@@ -31,6 +37,24 @@ async def lifespan(app: FastAPI):
         )
         stats = await asyncio.to_thread(loader.load)
         init_flow_stats(stats)
+
+    if settings.AUTO_START_NORMAL:
+        baseline_uc = container.baseline_use_case()
+        # Clear any stale lock left by an unclean previous shutdown so the
+        # fresh process always starts a new baseline task.
+        ns = settings.REDIS_BASELINE_NAMESPACE
+        await redis_client.delete(f"{ns}:lock", f"{ns}:stop_signal")
+        await baseline_uc.start(
+            scenario=SimulationScenario.NORMAL,
+            log_type=LogType.MIXED,       # 50 % HTTP + 50 % FLOW each tick
+            count=0,                       # unlimited — runs until service stops
+            rate_per_second=settings.AUTO_START_RATE,
+            target_ip="192.168.100.100",   # unused by NORMAL (always _random_ip)
+        )
+        logger.info(
+            "Baseline NORMAL traffic started at %.1f logs/s", settings.AUTO_START_RATE
+        )
+
     yield
     await rabbitmq_close()
 
@@ -38,6 +62,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Simulation Service", lifespan=lifespan)
 
 app.add_middleware(AccessControlMiddleware, redis=redis_client)
+# HttpLogMiddleware is registered after (i.e. outer layer) so it sees the final response
+# status — including 403/429 responses produced by AccessControlMiddleware.
+app.add_middleware(HttpLogMiddleware, publisher=container.publisher_adapter())
 
 app.include_router(simulation_router.router, prefix="/simulate", tags=["simulation"])
 app.include_router(access_control_router.router, prefix="/admin", tags=["access-control"])

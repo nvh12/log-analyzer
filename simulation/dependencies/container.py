@@ -15,9 +15,21 @@ class Container(containers.DeclarativeContainer):
         RabbitMQPublisherAdapter, queue_name=settings.QUEUE_RAW
     )
 
+    # Main use case — handles manually triggered UC simulations.
     simulation_use_case = providers.Singleton(
         SimulationUseCase,
         publisher=publisher_adapter,
         redis=providers.Object(redis_client),
         namespace=settings.REDIS_NAMESPACE,
+    )
+
+    # Baseline use case — auto-started on service launch; runs NORMAL/MIXED traffic
+    # continuously so the detection pipeline stays warm between manual simulations.
+    # Uses a separate Redis namespace ("baseline") so its lock and state keys do not
+    # conflict with the main simulation use case.
+    baseline_use_case = providers.Singleton(
+        SimulationUseCase,
+        publisher=publisher_adapter,
+        redis=providers.Object(redis_client),
+        namespace=settings.REDIS_BASELINE_NAMESPACE,
     )

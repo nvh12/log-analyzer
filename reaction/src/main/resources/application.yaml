@@ -47,6 +47,7 @@ management:
 
 alert:
   provider: ${ALERT_PROVIDER:smtp}
+  batch-interval-seconds: ${ALERT_BATCH_INTERVAL_SECONDS:180}
   mail:
     from: ${ALERT_MAIL_FROM:}
     to: ${ALERT_MAIL_TO:}

@@ -1,12 +1,12 @@
 from ipaddress import ip_address
 
-from pydantic import BaseModel, Field, field_validator
-from domain.models.scenario import SimulationScenario, LogType
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from domain.models.scenario import SimulationScenario
 
 
 class StartSimulationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     scenario: SimulationScenario
-    log_type: LogType = LogType.HTTP
     count: int = Field(default=100, ge=0, description="Number of logs to send; 0 = unlimited")
     rate_per_second: float = Field(default=10.0, gt=0, le=10000)
     target_ip: str = "192.168.100.100"

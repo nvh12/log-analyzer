@@ -91,9 +91,10 @@ def test_flow_features_has_required_keys(scenario):
 
 
 # ---------------------------------------------------------------------------
-# BRUTE_FORCE scenario: attack logs use target_ip; benign mix uses random IPs.
-# Expected attack ratio = 0.8, so over 100 samples target_ip rate ≈ 80%.
-# Threshold set at 60 (>4σ below expected) to avoid flakiness.
+# BRUTE_FORCE scenario: attack logs use target_ip (70 %) or the preset secondary
+# pool (30 %); benign mix (20 %) falls through to NORMAL (random IPs).
+# Expected target_ip rate: 80 % attack × 70 % target_ip = 56 %; σ ≈ 5.
+# Threshold set at 40 (>3σ below expected) to avoid flakiness.
 # ---------------------------------------------------------------------------
 
 def test_brute_force_http_mostly_uses_target_ip():
@@ -104,8 +105,8 @@ def test_brute_force_http_mostly_uses_target_ip():
             SimulationScenario.BRUTE_FORCE, LogType.HTTP, target_ip=_TARGET_IP
         ).rawMessage.split(" ")[0] == _TARGET_IP
     )
-    assert target_count >= 60, (
-        f"Expected target_ip in ~80% of BRUTE_FORCE HTTP logs, got {target_count}/100"
+    assert target_count >= 40, (
+        f"Expected target_ip in ~56% of BRUTE_FORCE HTTP logs, got {target_count}/100"
     )
 
 
@@ -119,8 +120,38 @@ def test_brute_force_flow_mostly_uses_target_ip():
             ).rawMessage
         )["source_ip"] == _TARGET_IP
     )
-    assert target_count >= 60, (
-        f"Expected target_ip in ~80% of BRUTE_FORCE FLOW logs, got {target_count}/100"
+    assert target_count >= 40, (
+        f"Expected target_ip in ~56% of BRUTE_FORCE FLOW logs, got {target_count}/100"
+    )
+
+
+def test_brute_force_http_uses_multiple_source_ips():
+    """Attack logs should come from more than one source IP (target_ip + preset pool)."""
+    ips = {
+        log_generator.generate(
+            SimulationScenario.BRUTE_FORCE, LogType.HTTP,
+            target_ip=_TARGET_IP, attack_ratio=1.0,
+        ).rawMessage.split(" ")[0]
+        for _ in range(50)
+    }
+    assert len(ips) >= 2, (
+        f"Expected ≥2 distinct source IPs in BRUTE_FORCE HTTP logs, got {sorted(ips)}"
+    )
+
+
+def test_brute_force_flow_uses_multiple_source_ips():
+    """Flow attack logs should carry more than one source_ip value."""
+    ips = {
+        json.loads(
+            log_generator.generate(
+                SimulationScenario.BRUTE_FORCE, LogType.FLOW,
+                target_ip=_TARGET_IP, attack_ratio=1.0,
+            ).rawMessage
+        )["source_ip"]
+        for _ in range(50)
+    }
+    assert len(ips) >= 2, (
+        f"Expected ≥2 distinct source IPs in BRUTE_FORCE FLOW logs, got {sorted(ips)}"
     )
 
 
@@ -200,9 +231,11 @@ def test_attack_ratio_overrides_scenario_default_for_brute_force():
             SimulationScenario.BRUTE_FORCE, LogType.HTTP, target_ip=_TARGET_IP, attack_ratio=0.5
         ).rawMessage.split(" ")[0] == _TARGET_IP
     )
-    # attack_ratio=0.5 → 50% attack (target_ip) vs scenario default of 80%
-    assert 30 <= target_count <= 70, (
-        f"Expected ~50% target_ip with attack_ratio=0.5, got {target_count}/100"
+    # attack_ratio=0.5 → 50% attack; of those 70% use target_ip → E[target_ip rate] = 35%.
+    # 3σ bounds: σ = sqrt(100 * 0.35 * 0.65) ≈ 4.77 → range [21, 49].
+    # Widened to [18, 55] for extra safety against random flakiness.
+    assert 18 <= target_count <= 55, (
+        f"Expected ~35% target_ip with attack_ratio=0.5, got {target_count}/100"
     )
 
 
@@ -218,6 +251,60 @@ def test_raw_log_has_valid_uuid_id():
 def test_raw_log_has_valid_datetime_received_at():
     log = log_generator.generate(SimulationScenario.NORMAL, LogType.HTTP, target_ip=_TARGET_IP)
     assert isinstance(log.receivedAt, datetime)
+
+
+# ---------------------------------------------------------------------------
+# Faker-driven UA and referer tests
+# ---------------------------------------------------------------------------
+
+def test_normal_http_ua_is_non_empty():
+    """Faker generates a non-empty UA for NORMAL logs."""
+    log = log_generator.generate(SimulationScenario.NORMAL, LogType.HTTP, target_ip=_TARGET_IP)
+    parts = re.findall(r'"([^"]*)"', log.rawMessage)
+    ua = parts[-1]  # last quoted field
+    assert len(ua) > 0, "Expected non-empty UA in NORMAL HTTP log"
+
+
+def test_normal_http_referer_is_sometimes_non_dash():
+    """NORMAL scenario generates real referers ~40% of the time.
+    Over 20 samples the probability of zero non-dash referers is (0.6)^20 ≈ 3.7e-5."""
+    non_dash = sum(
+        1
+        for _ in range(20)
+        if re.findall(r'"([^"]*)"', log_generator.generate(
+            SimulationScenario.NORMAL, LogType.HTTP, target_ip=_TARGET_IP
+        ).rawMessage)[1] != "-"
+    )
+    assert non_dash >= 1, (
+        "Expected at least one non-dash referer across 20 NORMAL HTTP logs"
+    )
+
+
+def test_traffic_spike_http_referer_is_sometimes_non_dash():
+    """TRAFFIC_SPIKE generates real referers ~30% of the time."""
+    non_dash = sum(
+        1
+        for _ in range(30)
+        if re.findall(r'"([^"]*)"', log_generator.generate(
+            SimulationScenario.TRAFFIC_SPIKE, LogType.HTTP, target_ip=_TARGET_IP
+        ).rawMessage)[1] != "-"
+    )
+    assert non_dash >= 1, (
+        "Expected at least one non-dash referer across 30 TRAFFIC_SPIKE HTTP logs"
+    )
+
+
+def test_ddos_referer_is_always_dash():
+    """Pure DDOS attack logs (attack_ratio=1.0) always emit referer='-' (bot pattern).
+    Note: with the default benign mix (30%) some logs fall back to NORMAL and can
+    carry a Faker referer — this test pins the pure-attack path only."""
+    for _ in range(10):
+        log = log_generator.generate(
+            SimulationScenario.DDOS, LogType.HTTP,
+            target_ip=_TARGET_IP, attack_ratio=1.0,
+        )
+        parts = re.findall(r'"([^"]*)"', log.rawMessage)
+        assert parts[1] == "-", f"DDOS referer should always be '-', got: {parts[1]!r}"
 
 
 def test_raw_log_ids_are_unique():

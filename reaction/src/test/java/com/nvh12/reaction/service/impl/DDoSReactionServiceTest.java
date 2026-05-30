@@ -48,7 +48,7 @@ class DDoSReactionServiceTest {
         verify(rateLimitService).limit("5.5.5.5", Severity.HIGH);
         verify(ipBlockService, never()).block(any(), any());
         verify(reactionLogService).save(input, ReactionAction.RATE_LIMIT);
-        verify(alertService).alert(any(DDoSAlert.class));
+        verify(alertService).enqueue(any(DDoSAlert.class));
     }
 
     @Test
@@ -61,7 +61,7 @@ class DDoSReactionServiceTest {
         verify(ipBlockService).block("5.5.5.5", Severity.CRITICAL);
         verify(rateLimitService, never()).limit(any(), any());
         verify(reactionLogService).save(input, ReactionAction.BLOCK);
-        verify(alertService).alert(any(DDoSAlert.class));
+        verify(alertService).enqueue(any(DDoSAlert.class));
     }
 
     @Test

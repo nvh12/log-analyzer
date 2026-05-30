@@ -17,9 +17,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RedisRateLimitService implements RateLimitService {
 
-    static final String WHITELIST_IPS   = "whitelist:ips";
-    static final String COUNTER_PREFIX  = "ratelimit:ip:";
-    static final String LIMIT_SUFFIX    = ":limit";
+    static final String WHITELIST_IPS = "whitelist:ips";
+    static final String COUNTER_PREFIX = "ratelimit:ip:";
+    static final String LIMIT_SUFFIX = ":limit";
     static final String WINDOW_END_SUFFIX = ":window_end";
 
     private static final Duration WINDOW = Duration.ofSeconds(60);
@@ -31,10 +31,10 @@ public class RedisRateLimitService implements RateLimitService {
     // the full policy TTL so the middleware can anchor new windows to the same grid.
     private static final DefaultRedisScript<Long> SET_RATE_LIMIT = new DefaultRedisScript<>(
             "redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])\n" +
-            "local win_end = redis.call('TIME')[1] + tonumber(ARGV[3])\n" +
-            "redis.call('SET', KEYS[2], '0', 'EX', ARGV[3])\n" +
-            "redis.call('SET', KEYS[3], tostring(win_end), 'EX', ARGV[2])\n" +
-            "return 1",
+                    "local win_end = redis.call('TIME')[1] + tonumber(ARGV[3])\n" +
+                    "redis.call('SET', KEYS[2], '0', 'EX', ARGV[3])\n" +
+                    "redis.call('SET', KEYS[3], tostring(win_end), 'EX', ARGV[2])\n" +
+                    "return 1",
             Long.class
     );
 
@@ -73,18 +73,20 @@ public class RedisRateLimitService implements RateLimitService {
 
     private int requestsPerMinute(Severity severity) {
         return switch (severity) {
-            case LOW      -> 30;
-            case MEDIUM   -> 10;
-            case HIGH     -> 3;
+            case NONE -> throw new IllegalStateException("NONE severity should not reach rate limiting");
+            case LOW -> 30;
+            case MEDIUM -> 10;
+            case HIGH -> 3;
             case CRITICAL -> 1;
         };
     }
 
     private Duration ttl(Severity severity) {
         return switch (severity) {
-            case LOW      -> Duration.ofMinutes(5);
-            case MEDIUM   -> Duration.ofMinutes(30);
-            case HIGH     -> Duration.ofHours(2);
+            case NONE -> throw new IllegalStateException("NONE severity should not reach rate limiting");
+            case LOW -> Duration.ofMinutes(5);
+            case MEDIUM -> Duration.ofMinutes(30);
+            case HIGH -> Duration.ofHours(2);
             case CRITICAL -> Duration.ofHours(24);
         };
     }

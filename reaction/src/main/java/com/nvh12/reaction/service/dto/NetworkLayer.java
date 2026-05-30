@@ -5,8 +5,8 @@ public enum NetworkLayer {
 
     public static NetworkLayer from(DetectionType type) {
         return switch (type) {
-            case WEB_ATTACK, TRAFFIC   -> HTTP;
-            case DDOS, BRUTE_FORCE     -> FLOW;
+            case WEB_ATTACK, TRAFFIC -> HTTP;
+            case DDOS, BRUTE_FORCE -> FLOW;
         };
     }
 }

@@ -59,7 +59,6 @@ async def test_traffic_spike_triggers_scale_up(simulation_client, pg_conn, redis
     # Send a large burst: 200 requests at 100/s ≈ 2 seconds.
     resp = await simulation_client.post("/simulate/start", json={
         "scenario": "TRAFFIC_SPIKE",
-        "log_type": "HTTP",
         "count": 200,
         "rate_per_second": 100,
         "target_ip": TARGET_IP,

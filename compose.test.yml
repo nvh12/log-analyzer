@@ -182,6 +182,8 @@ services:
       MINIO_SECRET_KEY: testminiopass
       MINIO_BUCKET: models
       MINIO_SECURE: "false"
+      # E2E tests control all traffic manually; disable the baseline to avoid interference.
+      AUTO_START_NORMAL: "false"
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -189,6 +191,8 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+      log-processing:
+        condition: service_healthy
     networks:
       - log-analyzer-test
     healthcheck:

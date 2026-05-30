@@ -1,10 +1,6 @@
 package com.nvh12.reaction.service.impl;
 
-import com.nvh12.reaction.service.AlertService;
-import com.nvh12.reaction.service.IpBlockService;
-import com.nvh12.reaction.service.RateLimitService;
-import com.nvh12.reaction.service.ReactionLogService;
-import com.nvh12.reaction.service.ReactionService;
+import com.nvh12.reaction.service.*;
 import com.nvh12.reaction.service.dto.BruteForceInput;
 import com.nvh12.reaction.service.dto.DetectionType;
 import com.nvh12.reaction.service.dto.ReactionAction;
@@ -23,15 +19,15 @@ import java.util.List;
 @Service
 public class BruteForceReactionService extends ReactionService {
 
-    private static final String ATTEMPTS_PREFIX   = "brute:attempts:";
-    private static final Duration ATTEMPT_WINDOW  = Duration.ofMinutes(10);
+    private static final String ATTEMPTS_PREFIX = "brute:attempts:";
+    private static final Duration ATTEMPT_WINDOW = Duration.ofMinutes(10);
     private static final int ESCALATION_THRESHOLD = 3;
 
     // Atomically increments the counter and sets TTL only on the first write.
     private static final DefaultRedisScript<Long> INCR_WITH_EXPIRE = new DefaultRedisScript<>(
             "local c = redis.call('INCR', KEYS[1])\n" +
-            "if c == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end\n" +
-            "return c",
+                    "if c == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end\n" +
+                    "return c",
             Long.class
     );
 

@@ -24,11 +24,26 @@ public class ResendAlertService implements AlertChannel {
 
     @Override
     public void alert(Alert alert) {
+        send(AlertHtmlTemplate.buildSubject(alert),
+                AlertHtmlTemplate.buildHtmlBody(alert),
+                "type=%s ip=%s severity=%s".formatted(
+                        alert.getDetectionType(), alert.getSourceIp(), alert.getSeverity()));
+    }
+
+    @Override
+    public void alertBatch(List<Alert> alerts) {
+        if (alerts.isEmpty()) return;
+        send(AlertHtmlTemplate.buildBatchSubject(alerts),
+                AlertHtmlTemplate.buildBatchHtmlBody(alerts),
+                "type=%s count=%d".formatted(alerts.get(0).getDetectionType(), alerts.size()));
+    }
+
+    private void send(String subject, String htmlBody, String context) {
         CreateEmailOptions options = CreateEmailOptions.builder()
                 .from(alertProperties.getMail().getFrom())
                 .to(List.of(alertProperties.getMail().getTo()))
-                .subject(AlertHtmlTemplate.buildSubject(alert))
-                .html(AlertHtmlTemplate.buildHtmlBody(alert))
+                .subject(subject)
+                .html(htmlBody)
                 .build();
         Retry.run(3, 1000, RuntimeException.class,
                 () -> {
@@ -38,8 +53,7 @@ public class ResendAlertService implements AlertChannel {
                         throw new RuntimeException(e);
                     }
                 },
-                e -> log.error("Alert email failed after retries [type={} ip={} severity={}]: {}",
-                        alert.getDetectionType(), alert.getSourceIp(), alert.getSeverity(),
+                e -> log.error("Alert email failed after retries [{}]: {}", context,
                         e.getCause() != null ? e.getCause().getMessage() : e.getMessage()));
     }
 }

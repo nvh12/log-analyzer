@@ -47,14 +47,14 @@ const HTTP_COLS = [
 ]
 
 const FLOW_COLS = [
-  { label: 'Timestamp', render: r => fmtLogTs(r),                                                                             cls: 'text-gray-500' },
-  { label: 'Src IP',    render: r => r.sourceIp ?? '—',                                                                       cls: 'text-gray-300' },
-  { label: 'Src port',  render: r => r.sourcePort ?? '—',                                                                     cls: 'text-gray-400' },
-  { label: 'Dst IP',    render: r => r.destIp ?? '—',                                                                         cls: 'text-gray-400' },
-  { label: 'Dst port',  render: r => r.destPort ?? '—',                                                                       cls: 'text-gray-400' },
-  { label: 'Duration',  render: r => r.features?.['flow_duration'] != null ? r.features['flow_duration'].toFixed(0) : '—',    cls: 'text-gray-500' },
-  { label: 'Packets',   render: r => r.features?.['pkt_count'] ?? '—',                                                        cls: 'text-gray-500' },
-  { label: 'Bytes',     render: r => r.features?.['byte_count'] != null ? r.features['byte_count'].toFixed(0) : '—',          cls: 'text-gray-500' },
+  { label: 'Timestamp', render: r => fmtLogTs(r),                                                                                              cls: 'text-gray-500' },
+  { label: 'Src IP',    render: r => r.sourceIp ?? '—',                                                                                        cls: 'text-gray-300' },
+  { label: 'Src port',  render: r => r.sourcePort ?? '—',                                                                                      cls: 'text-gray-400' },
+  { label: 'Dst IP',    render: r => r.destIp ?? '—',                                                                                          cls: 'text-gray-400' },
+  { label: 'Dst port',  render: r => r.destPort ?? '—',                                                                                        cls: 'text-gray-400' },
+  { label: 'Pkt/s',     render: r => r.features?.['Flow Packets/s'] != null ? r.features['Flow Packets/s'].toFixed(1) : '—',                   cls: 'text-gray-500' },
+  { label: 'Bytes/s',   render: r => r.features?.['Flow Bytes/s'] != null ? r.features['Flow Bytes/s'].toFixed(0) : '—',                       cls: 'text-gray-500' },
+  { label: 'Fwd bytes', render: r => r.features?.['Total Length of Fwd Packets'] != null ? r.features['Total Length of Fwd Packets'].toFixed(0) : '—', cls: 'text-gray-500' },
 ]
 
 const toISO = v => v ? new Date(v).toISOString() : undefined

@@ -4,17 +4,24 @@ import random
 from datetime import datetime, timezone
 from urllib.parse import quote
 
+from faker import Faker
+
 from domain.models.raw_log import RawLog, LogSource
 from domain.models.scenario import SimulationScenario, LogType
 
+# Canonical log type for each scenario.
+# Enforced by the router — callers cannot override this.
+SCENARIO_LOG_TYPE: dict[SimulationScenario, LogType] = {
+    SimulationScenario.NORMAL:         LogType.MIXED,   # warms both HTTP + FLOW consumers
+    SimulationScenario.TRAFFIC_SPIKE:  LogType.HTTP,
+    SimulationScenario.DDOS:           LogType.FLOW,
+    SimulationScenario.BRUTE_FORCE:    LogType.FLOW,
+    SimulationScenario.WEB_ATTACK:     LogType.HTTP,
+}
+
 logger = logging.getLogger(__name__)
 
-_COMMON_UAS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15",
-    "Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0",
-    "curl/8.5.0",
-]
+_FAKER = Faker()
 
 # Paths must mirror the routes defined in presentation/routers/target_router.py
 _COMMON_PATHS = [
@@ -40,6 +47,21 @@ _LOGIN_PATHS = ["/login", "/signin", "/api/v1/login", "/api/auth/token"]
 
 _DEST_IPS = ["10.0.0.1", "10.0.0.2", "192.168.1.1", "172.16.0.1"]
 
+# Preset pool of attacker IPs for DDOS scenarios.
+# A small fixed set ensures the reaction service's per-IP escalation counter
+# (ddos:attempts:{ip}) reaches the BLOCK threshold (3) within a short run.
+# Pure random IPs would mean each IP appears only once, so only RATE_LIMIT
+# reactions fire and the BLOCK escalation never triggers.
+_DDOS_ATTACK_IPS: list[str] = [
+    "10.0.2.10", "10.0.2.11", "10.0.2.12",
+    "10.0.2.13", "10.0.2.14", "10.0.2.15",
+]
+
+# Preset pool of secondary attacker IPs for BRUTE_FORCE scenarios.
+# A small fixed set simulates a coordinated attack from a few controlled hosts,
+# ensuring the pipeline always sees >1 source IP even after target_ip is blocked.
+_BRUTE_ATTACK_IPS: list[str] = ["10.0.1.50", "10.0.1.51", "10.0.1.52"]
+
 _CLF_DT_FMT = "%d/%b/%Y:%H:%M:%S +0000"
 
 
@@ -57,13 +79,17 @@ def _clf(ip: str, method: str, path: str, status: int, size: int, ua: str, refer
 
 
 def _generate_http(scenario: SimulationScenario, target_ip: str) -> RawLog:
+    # Default: no referer (overridden for NORMAL and TRAFFIC_SPIKE)
+    referer = "-"
+
     if scenario == SimulationScenario.NORMAL:
         ip = _random_ip()
         method = random.choices(["GET", "POST", "GET", "GET"], k=1)[0]
         path = random.choice(_COMMON_PATHS)
         status = random.choices([200, 301, 404, 500], weights=[80, 5, 10, 5], k=1)[0]
         size = random.randint(100, 50000)
-        ua = random.choice(_COMMON_UAS)
+        ua = _FAKER.user_agent()
+        referer = _FAKER.uri() if random.random() < 0.4 else "-"
 
     elif scenario == SimulationScenario.TRAFFIC_SPIKE:
         ip = _random_ip()
@@ -71,23 +97,28 @@ def _generate_http(scenario: SimulationScenario, target_ip: str) -> RawLog:
         path = random.choice(_COMMON_PATHS)
         status = 200
         size = random.randint(500, 20000)
-        ua = random.choice(_COMMON_UAS)
+        ua = _FAKER.user_agent()
+        referer = _FAKER.uri() if random.random() < 0.3 else "-"
 
     elif scenario == SimulationScenario.DDOS:
-        ip = _random_ip()
+        ip = random.choice(_DDOS_ATTACK_IPS)
         method = "GET"
         path = random.choice(["/", "/api/v1/users", "/products"])
         status = random.choices([200, 503], weights=[3, 7], k=1)[0]
         size = random.randint(0, 1000)
-        ua = "python-requests/2.31.0"
+        ua = "python-requests/2.31.0"  # intentional bot signature
 
     elif scenario == SimulationScenario.BRUTE_FORCE:
-        ip = target_ip
+        # 70 % from the primary attacker (target_ip), 30 % from the preset pool.
+        # Prevents a single-IP block from killing the entire simulation.
+        # Exclude target_ip from the pool so the split stays meaningful if they overlap.
+        _pool = [ip for ip in _BRUTE_ATTACK_IPS if ip != target_ip] or _BRUTE_ATTACK_IPS
+        ip = target_ip if random.random() < 0.7 else random.choice(_pool)
         method = "POST"
         path = random.choice(_LOGIN_PATHS)
         status = random.choices([401, 403, 200], weights=[70, 20, 10], k=1)[0]
         size = random.randint(50, 500)
-        ua = random.choice(_COMMON_UAS)
+        ua = _FAKER.user_agent()
 
     else:  # WEB_ATTACK
         ip = target_ip if random.random() < 0.7 else _random_ip()
@@ -95,9 +126,9 @@ def _generate_http(scenario: SimulationScenario, target_ip: str) -> RawLog:
         path = random.choice(_ATTACK_PATHS)
         status = random.choices([400, 403, 200, 500], weights=[40, 30, 20, 10], k=1)[0]
         size = random.randint(50, 2000)
-        ua = random.choice(_COMMON_UAS)
+        ua = _FAKER.user_agent()
 
-    return RawLog(rawMessage=_clf(ip, method, path, status, size, ua), source=LogSource.HTTP)
+    return RawLog(rawMessage=_clf(ip, method, path, status, size, ua, referer), source=LogSource.HTTP)
 
 
 # ── Flow generation ──────────────────────────────────────────────────────────
@@ -171,8 +202,6 @@ def _flow_features_from_stats(
     def s(feat: str) -> float:
         return _sample_feat(cls, feat)
 
-    pkt_std = s("Packet Length Std")
-
     features: dict[str, float] = {}
     for feat in _FLOW_FEATURE_COLS:
         val = s(feat)
@@ -184,7 +213,7 @@ def _flow_features_from_stats(
     features["Source Port"] = float(source_port)
     features["Destination Port"] = float(dest_port)
     # Keep Variance = Std^2 so both features agree on scale
-    features["Packet Length Variance"] = round(pkt_std ** 2, 4)
+    features["Packet Length Variance"] = round(features["Packet Length Std"] ** 2, 4)
 
     return features
 
@@ -441,10 +470,13 @@ def _generate_flow(scenario: SimulationScenario, target_ip: str) -> RawLog:
         source_ip = _random_ip()
         dest_port = random.choice([80, 443, 8080])
     elif scenario == SimulationScenario.DDOS:
-        source_ip = target_ip
+        source_ip = random.choice(_DDOS_ATTACK_IPS)
         dest_port = 80
     elif scenario == SimulationScenario.BRUTE_FORCE:
-        source_ip = target_ip
+        # Mirror the HTTP split: 70 % target_ip, 30 % preset secondary pool.
+        # Exclude target_ip from the pool so the split stays meaningful if they overlap.
+        _pool = [ip for ip in _BRUTE_ATTACK_IPS if ip != target_ip] or _BRUTE_ATTACK_IPS
+        source_ip = target_ip if random.random() < 0.7 else random.choice(_pool)
         dest_port = random.choice([22, 3306, 5432, 21, 23])
     else:  # WEB_ATTACK
         source_ip = target_ip if random.random() < 0.7 else _random_ip()

@@ -13,6 +13,8 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -26,25 +28,47 @@ public class SmtpAlertService implements AlertChannel {
     public void alert(Alert alert) {
         MimeMessage message;
         try {
-            message = buildMessage(alert);
+            message = buildMessage(
+                    AlertHtmlTemplate.buildSubject(alert),
+                    AlertHtmlTemplate.buildHtmlBody(alert));
         } catch (MessagingException e) {
             log.error("Failed to build alert email [type={} ip={} severity={}]: {}",
                     alert.getDetectionType(), alert.getSourceIp(), alert.getSeverity(), e.getMessage());
             return;
         }
-        Retry.run(3, 1000, MailException.class,
-                () -> mailSender.send(message),
-                e -> log.error("Alert email failed after retries [type={} ip={} severity={}]: {}",
-                        alert.getDetectionType(), alert.getSourceIp(), alert.getSeverity(), e.getMessage()));
+        send(message, "type=%s ip=%s severity=%s".formatted(
+                alert.getDetectionType(), alert.getSourceIp(), alert.getSeverity()));
     }
 
-    private MimeMessage buildMessage(Alert alert) throws MessagingException {
+    @Override
+    public void alertBatch(List<Alert> alerts) {
+        if (alerts.isEmpty()) return;
+        MimeMessage message;
+        try {
+            message = buildMessage(
+                    AlertHtmlTemplate.buildBatchSubject(alerts),
+                    AlertHtmlTemplate.buildBatchHtmlBody(alerts));
+        } catch (MessagingException e) {
+            log.error("Failed to build batch alert email [type={} count={}]: {}",
+                    alerts.get(0).getDetectionType(), alerts.size(), e.getMessage());
+            return;
+        }
+        send(message, "type=%s count=%d".formatted(alerts.get(0).getDetectionType(), alerts.size()));
+    }
+
+    private MimeMessage buildMessage(String subject, String htmlBody) throws MessagingException {
         MimeMessage message = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
         helper.setFrom(alertProperties.getMail().getFrom());
         helper.setTo(alertProperties.getMail().getTo());
-        helper.setSubject(AlertHtmlTemplate.buildSubject(alert));
-        helper.setText(AlertHtmlTemplate.buildHtmlBody(alert), true);
+        helper.setSubject(subject);
+        helper.setText(htmlBody, true);
         return message;
+    }
+
+    private void send(MimeMessage message, String context) {
+        Retry.run(3, 1000, MailException.class,
+                () -> mailSender.send(message),
+                e -> log.error("Alert email failed after retries [{}]: {}", context, e.getMessage()));
     }
 }

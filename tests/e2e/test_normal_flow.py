@@ -8,11 +8,10 @@ from helpers import poll_until
 TARGET_IP = "192.168.10.10"
 
 
-async def _sim_send_and_wait(simulation_client, scenario, log_type, count, rate):
+async def _sim_send_and_wait(simulation_client, scenario, count, rate):
     """Starts a simulation and blocks until all messages are sent."""
     resp = await simulation_client.post("/simulate/start", json={
         "scenario": scenario,
-        "log_type": log_type,
         "count": count,
         "rate_per_second": rate,
         "target_ip": TARGET_IP,
@@ -29,13 +28,17 @@ async def _sim_send_and_wait(simulation_client, scenario, log_type, count, rate)
 
 @pytest.mark.asyncio
 async def test_http_logs_normalized(simulation_client, pg_conn):
-    """Normal HTTP logs published by simulation arrive in normalized_http table."""
-    count = 5
-    await _sim_send_and_wait(simulation_client, "NORMAL", "HTTP", count, 10)
+    """Normal HTTP logs published by simulation arrive in normalized_http table.
+
+    NORMAL scenario generates MIXED (HTTP + FLOW) logs, so we send 20 logs and
+    check that at least one HTTP row arrived — probability of zero HTTP out of 20
+    MIXED logs is (0.5^20) < 10^-6.
+    """
+    await _sim_send_and_wait(simulation_client, "NORMAL", 20, 10)
 
     async def rows_present():
         n = await pg_conn.fetchval("SELECT COUNT(*) FROM normalized_http")
-        return n >= count
+        return n >= 1
 
     await poll_until(rows_present, timeout=20)
 
@@ -45,13 +48,17 @@ async def test_http_logs_normalized(simulation_client, pg_conn):
 
 @pytest.mark.asyncio
 async def test_flow_logs_normalized(simulation_client, pg_conn):
-    """Normal FLOW logs published by simulation arrive in normalized_flow table."""
-    count = 5
-    await _sim_send_and_wait(simulation_client, "NORMAL", "FLOW", count, 10)
+    """Normal FLOW logs published by simulation arrive in normalized_flow table.
+
+    NORMAL scenario generates MIXED (HTTP + FLOW) logs, so we send 20 logs and
+    check that at least one FLOW row arrived — probability of zero FLOW out of 20
+    MIXED logs is (0.5^20) < 10^-6.
+    """
+    await _sim_send_and_wait(simulation_client, "NORMAL", 20, 10)
 
     async def rows_present():
         n = await pg_conn.fetchval("SELECT COUNT(*) FROM normalized_flow")
-        return n >= count
+        return n >= 1
 
     await poll_until(rows_present, timeout=20)
 

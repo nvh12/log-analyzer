@@ -63,7 +63,7 @@ Referer and user-agent fields are optional (basic CLF vs. combined CLF). When ab
 ```
 Any `NaN` or `Infinity` in `features` values is sanitized to `0.0` during parsing.
 
-**Simulation-generated features note:** Simulation generates only 9 simplified feature keys (`pkt_count`, `byte_count`, `pkt_rate`, `byte_rate`, `flow_duration`, `iat_mean`, `iat_std`, `fwd_pkt_count`, `bwd_pkt_count`). Real CICIDS2017 replay data uses 45 features matching `flow_feature_cols.json`. Simulation flow records are not usable for real ML inference.
+**Simulation-generated features note:** Simulation generates all 45 CICIDS2017 feature keys matching `flow_feature_cols.json`. When MinIO class stats (`flow/ddos/class_stats.json`, `flow/bruteforce/class_stats.json`) are available at startup, each feature is sampled from its per-class `[p25, p75]` interquartile range (`_flow_features_from_stats`). When MinIO is unreachable, a hardcoded fallback (`_flow_features_hardcoded`) generates plausible per-scenario ranges. Both paths produce vectors that are directly usable for ML inference. The `/simulate/replay` endpoint sends real CICIDS2017 CSV rows from MinIO verbatim for highest fidelity.
 
 ---
 
@@ -457,7 +457,6 @@ All keys are set by Reaction service; Simulation reads them to enforce access co
 | `body` always `None` | `LogMessage` / `Log` in log-analysis | `WebAttackInput.body` is always null; body-based attack patterns can never be detected |
 | `headers` always `{}` | HTTP log path | log-processing copies `RawLog.headers` (which is `{}` from Simulation); actual HTTP headers are never captured |
 | `layer_triggered` not persisted | `WebAttackResult` | Exists only in the MQ message body while the Dashboard listener processes it; not forwarded to SSE, not stored in DB, not in the REST detail payload — completely dropped |
-| Simulation flow features (9) vs. model features (45) | Simulation / log-analysis | Simulation-generated FLOW logs cannot produce meaningful ML results; only CICIDS2017 replay data is usable for real DDoS/Brute Force detection |
 | Non-anomalies completely dropped | All use cases | Neither DB row nor MQ event is produced for benign traffic — the `detection_results` table contains only confirmed attacks |
 | `source_ip` null for TRAFFIC | `DetectionResult` / `reaction_logs` | TRAFFIC detections have no per-request IP; blocklist/rate-limit actions are not applicable; Reaction applies `SCALE_UP` instead |
 | Dashboard drops `headers` column | `NormalizedHttpEntity` in Dashboard | The `headers` JSONB column in `log_processing.normalized_http` is invisible to Dashboard |

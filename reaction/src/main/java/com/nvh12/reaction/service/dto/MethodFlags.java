@@ -18,9 +18,9 @@ public class MethodFlags {
 
     public String toDisplayString() {
         StringBuilder sb = new StringBuilder();
-        if (zScore)   sb.append("Z-Score ");
-        if (iqr)      sb.append("IQR ");
-        if (ema)      sb.append("EMA ");
+        if (zScore) sb.append("Z-Score ");
+        if (iqr) sb.append("IQR ");
+        if (ema) sb.append("EMA ");
         if (seasonal) sb.append("Seasonal");
         return sb.toString().trim();
     }

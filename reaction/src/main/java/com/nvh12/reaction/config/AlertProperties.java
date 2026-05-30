@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 public class AlertProperties {
 
     private String provider = "smtp";
+    private int batchIntervalSeconds = 180;
     private Mail mail = new Mail();
     private Resend resend = new Resend();
     private Discord discord = new Discord();

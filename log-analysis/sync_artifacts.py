@@ -28,9 +28,11 @@ MINIO_CONFIG = {
 # Format: (Source Local Path, Target MinIO Object Key)
 ARTIFACT_MAP = [
     # Flow Track (UC2 & UC4)
-    ("training/ddos/models/ddos_xgboost.pkl",            "flow/ddos/xgboost.pkl"),
+    ("training/ddos/models/ddos_xgboost.pkl",              "flow/ddos/xgboost.pkl"),
+    ("training/ddos/data/class_stats.json",                "flow/ddos/class_stats.json"),
     ("training/bruteforce/models/brute_force_xgboost.pkl", "flow/bruteforce/xgboost.pkl"),
-    ("training/ddos/data/flow_feature_cols.json",        "flow/feature_cols.json"),
+    ("training/bruteforce/data/class_stats.json",          "flow/bruteforce/class_stats.json"),
+    ("training/ddos/data/flow_feature_cols.json",          "flow/feature_cols.json"),
 
     # HTTP Track (UC3)
     ("training/webattack/models/web_attack_xgboost.pkl", "webattack/xgboost.pkl"),

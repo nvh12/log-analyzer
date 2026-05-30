@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,6 +27,12 @@ class Settings(BaseSettings):
     MINIO_SECURE: bool = False
 
     UVICORN_WORKERS: int = 1
+
+    # Baseline auto-start — continuously generate NORMAL/MIXED traffic from startup.
+    # Disabled in compose.test.yml so E2E tests control all traffic themselves.
+    AUTO_START_NORMAL:        bool  = True
+    AUTO_START_RATE:          float = Field(default=2.0, gt=0)
+    REDIS_BASELINE_NAMESPACE: str   = "baseline"
 
 
 settings = Settings()

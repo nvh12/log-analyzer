@@ -57,8 +57,11 @@ public class SystemController {
                     .retrieve()
                     .body(List.class);
             if (queues == null) return List.of();
-            List<String> tracked = List.of("log.raw", "log.normalized.http", "log.normalized.flow",
-                    "detection.results.reaction", "detection.results", "reaction.results");
+            // "detection.results" and "reaction.results" are exchange names, not queues — omitted.
+            // Dashboard's consumer queues are anonymous (UUID names) and not trackable by name.
+            List<String> tracked = List.of("log.raw", "log.raw.dlq",
+                    "log.normalized.http", "log.normalized.flow",
+                    "detection.results.reaction");
             return queues.stream()
                     .filter(q -> tracked.contains(q.get("name")))
                     .map(q -> Map.<String, Object>of(

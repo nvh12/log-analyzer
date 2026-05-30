@@ -16,9 +16,9 @@ import java.time.Instant;
 @RequiredArgsConstructor
 public class RedisIpBlockService implements IpBlockService {
 
-    static final String WHITELIST_IPS        = "whitelist:ips";
-    static final String BLOCKLIST_IPS        = "blocklist:ips";
-    static final String BLOCKLIST_IP_PREFIX  = "blocklist:ip:";
+    static final String WHITELIST_IPS = "whitelist:ips";
+    static final String BLOCKLIST_IPS = "blocklist:ips";
+    static final String BLOCKLIST_IP_PREFIX = "blocklist:ip:";
 
     private final RedisTemplate<String, String> redisTemplate;
 
@@ -53,9 +53,10 @@ public class RedisIpBlockService implements IpBlockService {
 
     private Duration ttl(Severity severity) {
         return switch (severity) {
-            case LOW      -> Duration.ofMinutes(5);
-            case MEDIUM   -> Duration.ofMinutes(30);
-            case HIGH     -> Duration.ofHours(2);
+            case NONE -> throw new IllegalStateException("NONE severity should not reach IP blocking");
+            case LOW -> Duration.ofMinutes(5);
+            case MEDIUM -> Duration.ofMinutes(30);
+            case HIGH -> Duration.ofHours(2);
             case CRITICAL -> Duration.ofHours(24);
         };
     }
