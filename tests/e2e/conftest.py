@@ -71,7 +71,7 @@ ALL_TABLES = (
 QUEUES_TO_PURGE = (
     "log.raw", "log.raw.dlq",
     "log.normalized.http", "log.normalized.flow",
-    "detection.results",
+    "detection.results.reaction",
 )
 
 

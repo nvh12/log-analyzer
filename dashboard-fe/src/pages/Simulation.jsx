@@ -265,9 +265,11 @@ export default function Simulation() {
       {/* ── Controls ─────────────────────────────────────────────────────── */}
       <Card title="Controls">
         <div className="p-4 space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 items-end">
             <label className="flex flex-col gap-1 text-xs text-gray-500">
               Scenario
+              {/* Log type is derived server-side — shown as read-only context */}
+              <span className="mono text-gray-600">→ {derivedLogType}</span>
               <select
                 className="field"
                 value={form.scenario}
@@ -281,8 +283,6 @@ export default function Simulation() {
               >
                 {SCENARIOS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
-              {/* Log type is derived server-side — shown as read-only context */}
-              <span className="mono text-gray-600 -mt-0.5">→ {derivedLogType}</span>
             </label>
 
             <label className="flex flex-col gap-1 text-xs text-gray-500">
@@ -358,7 +358,7 @@ export default function Simulation() {
             ignored. Use <span className="mono text-gray-400">count=0</span> to send all rows once, or set a
             count to cycle through rows repeatedly.
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 items-end">
             <label className="flex flex-col gap-1 text-xs text-gray-500 sm:col-span-2">
               Source key
               <span className="text-gray-600 -mt-0.5">MinIO object key, e.g. flow/ddos/train.csv</span>

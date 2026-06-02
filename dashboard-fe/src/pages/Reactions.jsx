@@ -116,7 +116,7 @@ export default function Reactions() {
             <button onClick={reload} className="underline shrink-0">Retry</button>
           </div>
         )}
-        {loading ? <Loading padded /> : rows.length === 0 ? <Empty /> : (
+        {loading ? <Loading padded /> : error ? null : rows.length === 0 ? <Empty /> : (
           <div className="p-4 space-y-2">
             <Table columns={columns} rows={rows} />
             <Pagination page={page} totalPages={totalPages} onChange={setPage} />

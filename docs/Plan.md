@@ -52,9 +52,11 @@ Hệ thống phát hiện bất thường trên hai tầng dữ liệu mạng: t
 
 - Rule Engine: Sử dụng Regex để so khớp các mẫu tấn công đã biết (Signatures).
 
+- Lưu ý (kết quả phủ định): OC-SVM và Isolation Forest đã được đánh giá như các lớp không giám sát bổ sung nhưng bị loại bỏ do không cải thiện F1 của cascade. Pipeline cuối cùng chỉ dùng Regex → XGBoost.
+
 - XGBoost: Phân loại nhị phân (Benign / Attack) dựa trên 12 đặc trưng cấu trúc và từ vựng (độ dài request, số ký tự đặc biệt, entropy, độ sâu đường dẫn, và các đặc trưng thống kê tham số). Model được huấn luyện trên cả dữ liệu benign và malicious để đạt độ chính xác cao.
 
-- Dữ liệu: CSIC 2010 HTTP dataset với nhãn benign/attack được cung cấp sẵn. Chia tập huấn luyện/kiểm thử theo ranh giới file (file-boundary split). Mỗi lớp sử dụng scaler độc lập để tránh cross-layer scaling contamination.
+- Dữ liệu: CSIC 2010 HTTP dataset với nhãn benign/attack được cung cấp sẵn. Chia tập huấn luyện/kiểm thử để đảm bảo không có mẫu tấn công nào xuất hiện ở cả train lẫn test.
 
 - Cách ứng phó: Gửi cảnh báo, kích hoạt giới hạn truy cập, chặn địa chỉ IP.
 
@@ -64,7 +66,7 @@ Hệ thống phát hiện bất thường trên hai tầng dữ liệu mạng: t
 
 - Tầng dữ liệu: Network flow (CICIDS2017 flow records, trích xuất bởi CICFlowMeter).
 
-- Phương pháp: XGBoost phân loại nhị phân (Benign / Brute Force) trên vector đặc trưng flow. Sử dụng cùng bộ đặc trưng đã giảm chiều với UC2 (flow_feature_cols.json) để đảm bảo feature parity trong Detection microservice — một flow vào, hai dự đoán độc lập ra.
+- Phương pháp: XGBoost phân loại nhị phân (Benign / Brute Force) trên vector đặc trưng flow. Sử dụng cùng bộ đặc trưng đã giảm chiều với UC2 (uc2_feature_cols.json) để đảm bảo feature parity trong Detection microservice — một flow vào, hai dự đoán độc lập ra.
 
 - Dữ liệu: CICIDS2017 — Monday (Benign) + Tuesday (FTP-Patator, SSH-Patator) với nhãn được cung cấp sẵn bởi Canadian Institute for Cybersecurity. Tập huấn luyện gồm toàn bộ Monday và 70% đầu của Tuesday (bao gồm cả SSH-Patator và FTP-Patator). Tập kiểm thử gồm 30% cuối của Tuesday (chỉ chứa FTP-Patator). Chia theo ranh giới giây để tránh data leakage.
 
@@ -83,12 +85,7 @@ Hệ thống xử lý hai tầng dữ liệu song song: tầng HTTP access log (
 - **log.raw**: Tiếp nhận dữ liệu thô từ module Simulation gửi tới Processing service.
 - **log.normalized.http** (Processing → Detection): dữ liệu HTTP access log đã chuẩn hóa và tổng hợp theo cửa sổ 60 giây.
 - **log.normalized.flow** (Processing → Detection): dữ liệu network flow đã chuẩn hóa, gửi theo từng flow record (45 đặc trưng).
-- **detection.results** (Detection → Reaction & Dashboard): kết quả phát hiện từ tất cả use case. Sử dụng cấu hình fanout với hai queue tiêu thụ độc lập — Reaction (durable, đảm bảo tính toàn vẹn của hành động) và Dashboard (non-durable, chỉ phục vụ kênh SSE thời gian thực).
-- **reaction.results** (Reaction → Dashboard): kết quả hành động ứng phó (chặn IP, giới hạn truy cập, mở rộng) sau khi đã được lưu trữ trong PostgreSQL và cập nhật trạng thái trong Redis. Dashboard tiêu thụ để cập nhật UI thời gian thực qua SSE.
-
-## Mô hình persist-then-publish
-
-Cả ba service có trạng thái (Processing, Detection, Reaction) đều tuân theo mô hình **persist-then-publish**: ghi kết quả vào PostgreSQL trước khi publish lên RabbitMQ. Điều này đảm bảo **at-least-once delivery** và không mất dữ liệu khi service crash, đánh đổi bằng việc không có exactly-once semantics (kết quả có thể đã được lưu nhưng chưa được publish nếu service crash giữa hai bước). Dashboard nhận biết SSE channel là best-effort và phục hồi khoảng trống bằng cách đọc lại từ PostgreSQL khi user điều hướng trang hoặc kết nối SSE reconnect.
+- **detection.results** (Detection → Reaction & Dashboard): kết quả phát hiện từ tất cả use case, sử dụng schema alert thống nhất.
 
 ## Processing
 
@@ -97,8 +94,6 @@ Cả ba service có trạng thái (Processing, Detection, Reaction) đều tuân
 - HTTP track: Parse log định dạng CLF, tổng hợp theo cửa sổ trượt 60 giây, gửi tới queue log.normalized.http.
 
 - Flow track: Chuẩn hóa flow record từ CICIDS2017 (xử lý NaN/infinity, chọn lọc đặc trưng), gửi từng flow record tới queue log.normalized.flow.
-
-- Tuân theo mô hình persist-then-publish: ghi vào PostgreSQL trước khi publish.
 
 - Xây dựng bằng Spring Boot, sử dụng Redis để cache và tạo queue xử lý log bên trong module.
 
@@ -112,29 +107,23 @@ Cả ba service có trạng thái (Processing, Detection, Reaction) đều tuân
 
 - Tất cả model chạy trong cùng một FastAPI server. Tiếp nhận dữ liệu từ cả hai queue (log.normalized.http và log.normalized.flow), xử lý và gửi kết quả thống nhất tới detection.results.
 
-- Tuân theo mô hình persist-then-publish: ghi kết quả phát hiện vào PostgreSQL trước khi publish tới detection.results.
-
 - Xây dựng bằng FastAPI (Python).
 
 ## Reaction
 
-- Tổng hợp và xử lý kết quả phân tích từ Detection (tiêu thụ từ detection.results qua queue durable).
+- Tổng hợp và xử lý kết quả phân tích từ Detection.
 
 - Dựa trên kết quả tổng hợp, cập nhật trạng thái trong Redis để kích hoạt các cơ chế phản ứng phù hợp như gửi cảnh báo, giới hạn truy cập hay mở rộng (scale).
-
-- Tuân theo mô hình persist-then-publish: ghi hành động đã thực hiện vào PostgreSQL và cập nhật Redis trước khi publish tới reaction.results để Dashboard hiển thị real-time.
 
 - Xây dựng bằng Spring Boot.
 
 ## Dashboard
 
-- Cung cấp UI để giám sát hệ thống, bao gồm lịch sử log (HTTP và flow), lịch sử phát hiện, lịch sử ứng phó, trạng thái hiện tại của hệ thống (active blocklist, rate limits, queue depths, inference latency).
+- Cung cấp UI để giám sát hệ thống, bao gồm lịch sử log (HTTP và flow), lịch sử cảnh báo và xử lý, trạng thái hiện tại của hệ thống.
 
-- Đọc dữ liệu lịch sử trực tiếp từ PostgreSQL.
+- Đọc dữ liệu trực tiếp từ PostgreSQL, không phụ thuộc vào các service khác.
 
-- Đồng thời tiêu thụ detection.results và reaction.results qua queue non-durable, auto-delete để cung cấp kênh Server-Sent Events (SSE) cho UI thời gian thực. Dashboard không bao giờ ghi vào bảng kết quả — PostgreSQL luôn là source of truth, SSE chỉ là kênh "nudge" UI và có thể chấp nhận mất event khi crash (khoảng trống được phục hồi khi user điều hướng hoặc SSE reconnect).
-
-- Xây dựng API và SSE bằng Spring Boot (`SseEmitter`), UI bằng Vite / React (`EventSource` cho SSE).
+- Xây dựng API bằng Spring Boot, UI bằng Next.js / React.
 
 ## Simulation
 
@@ -150,7 +139,7 @@ Cả ba service có trạng thái (Processing, Detection, Reaction) đều tuân
 
 # Hạ tầng chia sẻ (Shared Infrastructure)
 
-- PostgreSQL: Lưu trữ log đã chuẩn hóa (hai bảng: HTTP log và flow record), lịch sử phát hiện, lịch sử ứng phó, cung cấp dữ liệu lịch sử cho Dashboard.
+- PostgreSQL: Lưu trữ log đã chuẩn hóa (hai bảng: HTTP log và flow record), lịch sử cảnh báo và xử lý, cung cấp dữ liệu cho Dashboard.
 
 - Redis: Cache được dùng chung cho Processing (cửa sổ trượt HTTP), Reaction (cập nhật danh sách chặn IP, trạng thái hạn chế truy cập) và Simulation (đọc trạng thái để thực thi các cơ chế phản ứng).
 
@@ -188,7 +177,7 @@ Cả ba service có trạng thái (Processing, Detection, Reaction) đều tuân
 
 ## Phát hiện tấn công Brute Force
 
-- Input: vector đặc trưng flow (sử dụng chung bộ đặc trưng đã giảm chiều với UC2 - flow_feature_cols.json).
+- Input: vector đặc trưng flow (sử dụng chung bộ đặc trưng đã giảm chiều với UC2 - uc2_feature_cols.json).
 
 - XGBoost: Phân loại nhị phân có giám sát (Benign / Brute Force). Huấn luyện trên Monday (Benign) và Tuesday (Brute Force).
 
@@ -236,19 +225,19 @@ Cả ba service có trạng thái (Processing, Detection, Reaction) đều tuân
 
 ## Kiểm thử tích hợp (Integration)
 
-- Kiểm tra giao tiếp giữa các service qua RabbitMQ (`log.raw`, `log.normalized.http`, `log.normalized.flow`, `detection.results`, và `reaction.results`).
+- Kiểm tra giao tiếp giữa các service qua RabbitMQ (`log.raw`, `log.normalized.http`, `log.normalized.flow`, và `detection.results`).
 
-- Kiểm tra Dashboard hiển thị đúng dữ liệu lịch sử từ PostgreSQL (cả HTTP log và flow record) và cập nhật UI thời gian thực qua SSE.
+- Kiểm tra Dashboard hiển thị đúng dữ liệu từ PostgreSQL (cả HTTP log và flow record).
 
 ## Kiểm thử hệ thống (End-to-End)
 
-- Kịch bản HTTP: Simulation sinh tấn công web → Processing (CLF parser) → Detection (UC1/UC3) → Reaction → thực thi phản ứng → Dashboard hiển thị real-time qua SSE.
+- Kịch bản HTTP: Simulation sinh tấn công web → Processing (CLF parser) → Detection (UC1/UC3) → Reaction → thực thi phản ứng.
 
-- Kịch bản Flow: Simulation replay flow DDoS → Processing (Flow normalizer) → Detection (UC2/UC4) → Reaction → thực thi phản ứng → Dashboard hiển thị real-time qua SSE.
+- Kịch bản Flow: Simulation replay flow DDoS → Processing (Flow normalizer) → Detection (UC2/UC4) → Reaction → thực thi phản ứng.
 
-- Đo lường: thời gian phản ứng đầu cuối (từ khi log/flow được sinh ra đến khi phản ứng được thực thi và hiển thị trên Dashboard).
+- Đo lường: thời gian phản ứng đầu cuối (từ khi log/flow được sinh ra đến khi phản ứng được thực thi).
 
-- Kiểm tra: trạng thái Redis được cập nhật đúng, log/flow, kết quả phát hiện và hành động ứng phó được lưu vào PostgreSQL.
+- Kiểm tra: trạng thái Redis được cập nhật đúng, log/flow và alert được lưu vào PostgreSQL.
 
 ## Kiểm thử tải (Load Testing)
 

@@ -107,7 +107,7 @@ function LogTab({ columns, fetcher, drawerTitle }) {
         />
       </div>
 
-      {loading ? <Loading /> : rows.length === 0 ? <Empty /> : (
+      {loading ? <Loading /> : error ? null : rows.length === 0 ? <Empty /> : (
         <>
           <Table
             columns={columns}

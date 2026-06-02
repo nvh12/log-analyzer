@@ -16,6 +16,9 @@ The first line of defense uses **regular expressions (Regex)** and signature mat
 ### Limitations
 Rule engines are brittle against **evasion techniques**. Obfuscated payloads (e.g., URL encoding `%27%20OR%201%3D1`) can easily bypass naive regex. This necessitates a more robust, feature-based analysis.
 
+### Rejected Approaches (Negative Result)
+OC-SVM and Isolation Forest were evaluated as additional unsupervised layers and empirically rejected — adding them did not improve cascade F1 (they caught the same attacks XGBoost already covered, at far lower precision). The production pipeline uses **Regex → XGBoost** only.
+
 ---
 
 # 2. Layer 2 — Deep Classification (XGBoost)

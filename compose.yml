@@ -14,8 +14,6 @@ services:
       RABBITMQ_DEFAULT_VHOST: /
     labels:
       org.springframework.boot.service-connection: rabbitmq
-    volumes:
-      - rabbit-data:/var/lib/rabbitmq
     networks:
       - log-analyzer
     healthcheck:
@@ -142,6 +140,12 @@ services:
         condition: service_healthy
     networks:
       - log-analyzer
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 10s
+      retries: 18
+      start_period: 60s
 
   simulation:
     build:
@@ -170,6 +174,12 @@ services:
         condition: service_healthy
     networks:
       - log-analyzer
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   reaction:
     build:
@@ -208,6 +218,12 @@ services:
         condition: service_healthy
     networks:
       - log-analyzer
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
   dashboard-fe:
     build:
@@ -263,7 +279,6 @@ services:
 volumes:
   db-data:
   redis-data:
-  rabbit-data:
   minio-data:
 
 networks:

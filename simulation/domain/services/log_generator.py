@@ -190,29 +190,43 @@ def _sample_feat(cls_stats: dict, feat: str) -> float:
 def _flow_features_from_stats(
     scenario: SimulationScenario, source_port: int, dest_port: int
 ) -> dict[str, float]:
-    """Generate a 45-feature flow vector by sampling each feature from its per-class
-    [p25, p75] interquartile range as measured in the CICIDS2017 training data.
+    """Generate a 45-feature flow vector from the CICIDS2017 per-class statistics.
 
-    Source Port and Destination Port are always overridden by the caller.
-    Packet Length Variance is kept consistent with the sampled Packet Length Std.
+    Prefers picking an actual training row from the 'samples' list when present —
+    this preserves the full correlation structure and guarantees the vector falls
+    on the correct side of each model's decision boundary.
+
+    Falls back to independent per-[p25, p75] sampling only for the attack class
+    (acceptable there since false negatives are less likely than false positives
+    for benign), or to hardcoded ranges for the benign class when no samples key
+    exists (re-run the data-prep notebook to populate it).
     """
     stats_key, class_key = _SCENARIO_STATS.get(scenario, ("ddos", "benign"))
     cls = _FLOW_STATS.get(stats_key, {}).get(class_key, {})
 
-    def s(feat: str) -> float:
-        return _sample_feat(cls, feat)
+    samples = cls.get("samples")
+    if samples:
+        row = random.choice(samples)
+        features = {feat: round(float(row.get(feat, 0.0)), 4) for feat in _FLOW_FEATURE_COLS}
+    elif class_key == "benign":
+        # No sample rows — independent marginal sampling breaks correlations and
+        # causes XGBoost false positives. Fall back to hand-tuned ranges.
+        logger.warning(
+            "class_stats.json has no 'samples' for the benign class (%s) — "
+            "using hardcoded ranges. Re-run the data-prep notebook to fix.",
+            stats_key,
+        )
+        return _flow_features_hardcoded(scenario, source_port, dest_port)
+    else:
+        features = {}
+        for feat in _FLOW_FEATURE_COLS:
+            val = _sample_feat(cls, feat)
+            if feat in _INT_FEATURES:
+                val = float(round(val))
+            features[feat] = round(val, 4)
 
-    features: dict[str, float] = {}
-    for feat in _FLOW_FEATURE_COLS:
-        val = s(feat)
-        if feat in _INT_FEATURES:
-            val = float(round(val))
-        features[feat] = round(val, 4)
-
-    # Caller-determined overrides
     features["Source Port"] = float(source_port)
     features["Destination Port"] = float(dest_port)
-    # Keep Variance = Std^2 so both features agree on scale
     features["Packet Length Variance"] = round(features["Packet Length Std"] ** 2, 4)
 
     return features

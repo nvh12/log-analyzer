@@ -102,10 +102,7 @@ export default function Live() {
         <Card className="flex flex-col">
           <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800">
             <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Event stream</span>
-            <button className="text-xs text-gray-500 hover:text-gray-300"
-              onClick={() => { pausedRef.current = !pausedRef.current }}>
-              pause on hover
-            </button>
+            <span className="text-xs text-gray-600 italic">pauses on hover</span>
           </div>
           <div
             className="overflow-y-auto flex-1 min-h-0 max-h-96"
@@ -113,7 +110,7 @@ export default function Live() {
             onMouseLeave={() => { pausedRef.current = false }}
           >
             {events.length === 0 ? (
-              <Empty message="No detections in the last 5 minutes — system healthy" />
+              <Empty message={connected ? 'No events yet — system healthy' : 'Waiting for SSE connection…'} />
             ) : (
               <ul className="divide-y divide-gray-800">
                 {events.map((e, i) => (
