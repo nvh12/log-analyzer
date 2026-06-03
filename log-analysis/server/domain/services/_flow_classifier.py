@@ -39,11 +39,12 @@ def run_flow_classifier(
         scaler = model_artifact.get("scaler")
         threshold = model_artifact.get("threshold", 0.5)
         xgb_model = model_artifact.get("model")
-        if scaler is not None and xgb_model is not None:
+        if xgb_model is None:
+            logger.warning("%s artifact dict is missing 'model'", model_key)
+            return 0.0, False, Severity.NONE
+        if scaler is not None:
             vector = scaler.transform(vector)
-            model_artifact = xgb_model
-        else:
-            logger.warning("%s artifact dict is missing 'model' or 'scaler'", model_key)
+        model_artifact = xgb_model
 
     # Validate that feature count matches what the model was trained on.
     if hasattr(model_artifact, "n_features_in_"):

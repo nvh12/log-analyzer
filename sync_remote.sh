@@ -133,6 +133,13 @@ step "Syncing to ${REMOTE}:${DEST_DIR}"
 SSH_CMD="ssh -o StrictHostKeyChecking=no -o BatchMode=yes"
 [[ -n "$SSH_KEY" ]] && SSH_CMD="$SSH_CMD -i $(printf '%q' "$SSH_KEY")"
 
+if [[ "$DRY_RUN" != "true" ]]; then
+    step "Removing old artifacts on remote"
+    $SSH_CMD "$REMOTE" "cd $(printf '%q' "$DEST_DIR") && xargs -r rm -f" < "$FILES_LIST" \
+        || warn "Could not remove remote artifacts (directory may not exist yet)"
+    ok "Remote artifacts cleared"
+fi
+
 RSYNC_ARGS=(
     --archive
     --compress
