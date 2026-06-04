@@ -79,7 +79,9 @@ final class AlertHtmlTemplate {
                 row("Source IP", escapeHtml(alert.getSourceIp())),
                 row("Detection Type", alert.getDetectionType().toString()),
                 row("Detected At", alert.getDetectedAt().toString()),
-                row("Window", alert.getWindowStart() + " &mdash; " + alert.getWindowEnd()),
+                row("Window", (alert.getWindowStart() != null ? alert.getWindowStart() : "")
+                        + " &mdash; "
+                        + (alert.getWindowEnd() != null ? alert.getWindowEnd() : "")),
                 extra
         );
     }

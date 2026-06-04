@@ -50,6 +50,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Detection Service", lifespan=lifespan)
 
 
+
 @app.get("/health")
 async def health() -> JSONResponse:
     """Returns liveness and dependency status."""

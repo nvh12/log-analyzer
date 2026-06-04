@@ -47,11 +47,11 @@ services:
     ports:
       - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     environment:
-      REDIS_PASS: ${REDIS_PASS}
+      REDIS_PASS: ${REDIS_PASS:?REDIS_PASS must be set — an empty value disables Redis auth}
     command:
       - sh
       - -c
-      - redis-server --requirepass "$REDIS_PASS"
+      - redis-server --appendonly yes --requirepass "$REDIS_PASS"
     volumes:
       - redis-data:/data
     networks:

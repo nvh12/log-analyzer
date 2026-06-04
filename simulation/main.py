@@ -1,5 +1,6 @@
 """Entry point for the Simulation Service."""
 import asyncio
+import contextlib
 import logging
 from contextlib import asynccontextmanager
 
@@ -13,6 +14,7 @@ from infrastructure.config.rabbitmq import connect as rabbitmq_connect, close as
 from infrastructure.config.redis import redis_client
 from infrastructure.config.settings import settings
 from infrastructure.flow_stats import FlowStatsLoader
+from infrastructure import scaler
 from infrastructure.middleware.access_control import AccessControlMiddleware
 from infrastructure.middleware.http_log import HttpLogMiddleware
 from presentation.routers import simulation_router, access_control_router, target_router
@@ -55,7 +57,23 @@ async def lifespan(app: FastAPI):
             "Baseline NORMAL traffic started at %.1f logs/s", settings.AUTO_START_RATE
         )
 
+    # Reset tracked worker count so a stale Redis value from a previous run
+    # doesn't cause the scaler to miscalculate deltas on startup.
+    await scaler.init(redis_client, settings.UVICORN_WORKERS)
+    scaler_task = asyncio.create_task(scaler.run(
+        redis=redis_client,
+        pid_file=settings.GUNICORN_PID_FILE,
+        default_workers=settings.UVICORN_WORKERS,
+        min_workers=settings.SCALE_MIN_WORKERS,
+        max_workers=settings.SCALE_MAX_WORKERS,
+        poll_interval=settings.SCALE_POLL_INTERVAL_SECONDS,
+    ))
+
     yield
+
+    scaler_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await scaler_task
     await rabbitmq_close()
 
 
@@ -69,6 +87,34 @@ app.add_middleware(HttpLogMiddleware, publisher=container.publisher_adapter())
 app.include_router(simulation_router.router, prefix="/simulate", tags=["simulation"])
 app.include_router(access_control_router.router, prefix="/admin", tags=["access-control"])
 app.include_router(target_router.router, tags=["target"])
+
+
+@app.get("/config")
+async def config() -> JSONResponse:
+    """Returns non-sensitive operational settings for display in the dashboard."""
+    return JSONResponse({
+        "queue": {
+            "raw": settings.QUEUE_RAW,
+        },
+        "workers": {
+            "default":       settings.UVICORN_WORKERS,
+            "min":           settings.SCALE_MIN_WORKERS,
+            "max":           settings.SCALE_MAX_WORKERS,
+            "poll_interval": settings.SCALE_POLL_INTERVAL_SECONDS,
+        },
+        "auto_start": {
+            "enabled": settings.AUTO_START_NORMAL,
+            "rate":    settings.AUTO_START_RATE,
+        },
+        "minio": {
+            "endpoint": settings.MINIO_ENDPOINT,
+            "bucket":   settings.MINIO_BUCKET,
+        },
+        "namespaces": {
+            "simulation": settings.REDIS_NAMESPACE,
+            "baseline":   settings.REDIS_BASELINE_NAMESPACE,
+        },
+    })
 
 
 @app.get("/health")

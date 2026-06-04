@@ -48,6 +48,7 @@ services:
     container_name: redis-log-analyzer
     ports:
       - "6379:6379"
+    command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
     networks:

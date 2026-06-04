@@ -28,6 +28,12 @@ class Settings(BaseSettings):
 
     UVICORN_WORKERS: int = 1
 
+    # Dynamic scaling via gunicorn signals
+    GUNICORN_PID_FILE: str = "/tmp/gunicorn.pid"
+    SCALE_POLL_INTERVAL_SECONDS: int = 30
+    SCALE_MIN_WORKERS: int = 1
+    SCALE_MAX_WORKERS: int = 8
+
     # Baseline auto-start — continuously generate NORMAL/MIXED traffic from startup.
     # Disabled in compose.test.yml so E2E tests control all traffic themselves.
     AUTO_START_NORMAL:        bool  = True

@@ -4,6 +4,7 @@ import com.nvh12.reaction.config.AlertProperties;
 import com.nvh12.reaction.service.dto.DetectionType;
 import com.nvh12.reaction.service.dto.MethodFlags;
 import com.nvh12.reaction.service.dto.Severity;
+import com.nvh12.reaction.service.dto.alert.Alert;
 import com.nvh12.reaction.service.dto.alert.BruteForceAlert;
 import com.nvh12.reaction.service.dto.alert.DDoSAlert;
 import com.nvh12.reaction.service.dto.alert.TrafficAlert;
@@ -20,6 +21,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -133,6 +135,46 @@ class ResendAlertServiceTest {
         service.alert(alert);
 
         assertThat(captureOptions().getHtml()).contains("192.168.1.1:22");
+    }
+
+    @Test
+    void alertBatch_sendsOneEmailWithBatchSubjectAndBody() throws ResendException {
+        List<Alert> alerts = List.of(
+                DDoSAlert.builder()
+                        .detectionType(DetectionType.DDOS).sourceIp("1.1.1.1")
+                        .severity(Severity.HIGH).detectedAt(Instant.now()).build(),
+                DDoSAlert.builder()
+                        .detectionType(DetectionType.DDOS).sourceIp("2.2.2.2")
+                        .severity(Severity.CRITICAL).detectedAt(Instant.now()).build()
+        );
+
+        service.alertBatch(alerts);
+
+        CreateEmailOptions options = captureOptions();
+        assertThat(options.getFrom()).isEqualTo("alerts@example.com");
+        assertThat(options.getTo()).containsExactly("admin@example.com");
+        assertThat(options.getSubject()).isEqualTo("[CRITICAL] 2 DDOS alerts detected");
+        assertThat(options.getHtml()).contains("1.1.1.1").contains("2.2.2.2");
+    }
+
+    @Test
+    void alertBatch_emptyList_sendsNothing() throws ResendException {
+        service.alertBatch(List.of());
+        verify(emails, never()).send(any());
+    }
+
+    @Test
+    void alertBatch_whenResendThrows_retriesAndDoesNotRethrow() throws ResendException {
+        when(emails.send(any())).thenThrow(new ResendException("network error"));
+
+        List<Alert> alerts = List.of(
+                DDoSAlert.builder()
+                        .detectionType(DetectionType.DDOS).sourceIp("1.1.1.1")
+                        .severity(Severity.LOW).detectedAt(Instant.now()).build()
+        );
+
+        assertDoesNotThrow(() -> service.alertBatch(alerts));
+        verify(emails, times(3)).send(any());
     }
 
     @Test
