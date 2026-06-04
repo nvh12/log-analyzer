@@ -125,7 +125,7 @@ $ComposeArgs = @('-f', $ComposeFile)
 
 $MinioPort     = Get-EnvVal $E 'MINIO_PORT'          '9000'
 $MinioConsole  = Get-EnvVal $E 'MINIO_CONSOLE_PORT'  '9001'
-$FrontendPort  = Get-EnvVal $E 'FRONTEND_PORT'       '3000'
+$FrontendPort  = Get-EnvVal $E 'FRONTEND_PORT'       '443'
 $DashboardPort = Get-EnvVal $E 'DASHBOARD_PORT'      '8083'
 $AppPort       = Get-EnvVal $E 'APP_PORT'            '8080'
 $DetectionPort = Get-EnvVal $E 'DETECTION_PORT'      '8000'
@@ -247,7 +247,8 @@ Write-Host ""
 Write-Host "  +--------------------------------------------------+" -ForegroundColor Cyan
 Write-Host "  |  log-analyzer  -  $Mode mode" -ForegroundColor Cyan
 Write-Host "  +--------------------------------------------------+" -ForegroundColor Cyan
-Write-Host "  |  Dashboard UI      http://localhost:$FrontendPort" -ForegroundColor White
+$scheme = if ($Mode -eq 'deploy') { 'https' } else { 'http' }
+Write-Host "  |  Dashboard UI      ${scheme}://localhost:$FrontendPort" -ForegroundColor White
 Write-Host "  |  Dashboard API     http://localhost:$DashboardPort" -ForegroundColor White
 Write-Host "  |  log-processing    http://localhost:$AppPort/actuator/health" -ForegroundColor White
 Write-Host "  |  log-analysis      http://localhost:$DetectionPort/health" -ForegroundColor White

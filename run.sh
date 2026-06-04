@@ -115,7 +115,7 @@ COMPOSE_FILE="compose.yml"
 
 MINIO_PORT="$(get_env MINIO_PORT      9000)"
 MINIO_CONSOLE="$(get_env MINIO_CONSOLE_PORT 9001)"
-FRONTEND_PORT="$(get_env FRONTEND_PORT    3000)"
+FRONTEND_PORT="$(get_env FRONTEND_PORT    443)"
 DASHBOARD_PORT="$(get_env DASHBOARD_PORT   8083)"
 APP_PORT="$(get_env APP_PORT          8080)"
 DETECTION_PORT="$(get_env DETECTION_PORT   8000)"
@@ -230,7 +230,11 @@ printf "\n"
 printf "${CY}  ╔══════════════════════════════════════════════════╗${NC}\n"
 printf "${CY}  ║   log-analyzer  ·  %-6s mode                  ║${NC}\n" "$MODE"
 printf "${CY}  ╠══════════════════════════════════════════════════╣${NC}\n"
-printf "  ║  Dashboard UI      http://localhost:%s\n" "$FRONTEND_PORT"
+if [[ "$MODE" == "deploy" ]]; then
+    printf "  ║  Dashboard UI      https://localhost:%s\n" "$FRONTEND_PORT"
+else
+    printf "  ║  Dashboard UI      http://localhost:%s\n" "$FRONTEND_PORT"
+fi
 printf "  ║  Dashboard API     http://localhost:%s\n" "$DASHBOARD_PORT"
 printf "  ║  log-processing    http://localhost:%s/actuator/health\n" "$APP_PORT"
 printf "  ║  log-analysis      http://localhost:%s/health\n" "$DETECTION_PORT"
