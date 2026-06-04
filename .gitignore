@@ -33,12 +33,12 @@ Thumbs.db
 
 # --- log-analysis specific ---
 
-log-analysis/**/data/*
-!log-analysis/**/data/.gitkeep
-log-analysis/**/models/*
-!log-analysis/**/models/.gitkeep
-log-analysis/**/outputs/*
-!log-analysis/**/outputs/.gitkeep
+log-analysis/training/**/data/*
+!log-analysis/training/**/data/.gitkeep
+log-analysis/training/**/models/*
+!log-analysis/training/**/models/.gitkeep
+log-analysis/training/**/outputs/*
+!log-analysis/training/**/outputs/.gitkeep
 log-analysis/.devcontainer/
 
 

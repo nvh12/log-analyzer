@@ -1,0 +1,34 @@
+from pydantic import BaseModel, Field, model_validator
+
+
+class TrafficThresholds(BaseModel):
+    """Configurable thresholds for traffic spike detection.
+    Constructed either from hardcoded Settings (fallback) or from calibrated MinIO artifacts.
+    """
+
+    z_score_extreme: float = Field(gt=0)
+    z_score_high: float = Field(gt=0)
+    z_score_flag: float = Field(gt=0)
+    iqr_multiplier: float = Field(gt=0)
+    ema_alpha: float = Field(gt=0, le=1)
+    ema_dev_threshold: float = Field(gt=0)
+    min_history: int = Field(ge=1)
+    ema_warmup: int = Field(ge=1)
+    seasonal_z_threshold: float = Field(gt=0)
+    seasonal_min_bucket_size: int = Field(ge=1)
+    min_weighted_chosen: float = Field(gt=0)
+    weight_ema: float = Field(ge=0)
+    weight_zscore: float = Field(ge=0)
+    weight_iqr: float = Field(ge=0)
+    weight_seasonal: float = Field(ge=0)
+
+    @model_validator(mode="after")
+    def _check_weight_sum(self) -> "TrafficThresholds":
+        total = self.weight_ema + self.weight_zscore + self.weight_iqr + self.weight_seasonal
+        if abs(total - 3.0) > 1e-6:
+            raise ValueError(
+                f"Detector weights must sum to 3.0 (got {total:.6f}). "
+                "Canonical split: weight_ema=0.5, weight_zscore=0.5, "
+                "weight_iqr=1.0, weight_seasonal=1.0"
+            )
+        return self
