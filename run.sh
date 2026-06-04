@@ -98,6 +98,16 @@ done
 [[ ${#missing[@]} -gt 0 ]] && fail ".env is missing or empty: ${missing[*]}"
 ok ".env validated"
 
+# ── 1b. Deploy-mode pre-flight ────────────────────────────────────────────────
+
+if [[ "$MODE" == "deploy" ]]; then
+    CORS_VAL="$(get_env CORS_ORIGINS)"
+    if [[ -z "$CORS_VAL" || "$CORS_VAL" == *"localhost"* ]]; then
+        warn "CORS_ORIGINS is '${CORS_VAL:-<empty>}' — set it to your public URL or the dashboard API will reject browser requests from your domain."
+    fi
+    ok "All non-public ports are bound to 127.0.0.1 in compose-deploy.yml — not reachable from outside the host."
+fi
+
 # ── 2. Compose file selection ─────────────────────────────────────────────────
 
 COMPOSE_FILE="compose.yml"

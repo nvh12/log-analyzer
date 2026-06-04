@@ -105,6 +105,18 @@ if ($missing.Count -gt 0) {
 Write-OK ".env validated"
 
 # ---------------------------------------------------------------------------
+# 1b. Deploy-mode pre-flight
+# ---------------------------------------------------------------------------
+
+if ($Mode -eq 'deploy') {
+    $CorsVal = Get-EnvVal $E 'CORS_ORIGINS' ''
+    if ($CorsVal -eq '' -or $CorsVal -like '*localhost*') {
+        Write-Warn "CORS_ORIGINS is '$CorsVal' — set it to your public URL or the dashboard API will reject browser requests from your domain."
+    }
+    Write-OK "All non-public ports are bound to 127.0.0.1 in compose-deploy.yml — not reachable from outside the host."
+}
+
+# ---------------------------------------------------------------------------
 # 2. Compose file selection
 # ---------------------------------------------------------------------------
 

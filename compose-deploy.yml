@@ -6,8 +6,8 @@ services:
     container_name: rabbitmq-log-analyzer
     hostname: rabbit-server
     ports:
-      - "${RABBITMQ_PORT:-5672}:5672"
-      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
+      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
+      - "127.0.0.1:${RABBITMQ_MGMT_PORT:-15672}:15672"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
@@ -26,7 +26,7 @@ services:
     image: postgres:17.5
     container_name: postgres-log-analyzer
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASS}
@@ -45,7 +45,7 @@ services:
     image: redis:7.4
     container_name: redis-log-analyzer
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     environment:
       REDIS_PASS: ${REDIS_PASS}
     command:
@@ -66,8 +66,8 @@ services:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     container_name: minio-log-analyzer
     ports:
-      - "${MINIO_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_PASS}
@@ -88,7 +88,7 @@ services:
       dockerfile: Dockerfile
     container_name: log-processing
     ports:
-      - "${APP_PORT:-8080}:8080"
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
     environment:
       POSTGRES_HOST: postgres-db
       POSTGRES_PORT: 5432
@@ -124,7 +124,7 @@ services:
       dockerfile: server/Dockerfile
     container_name: log-analysis
     ports:
-      - "${DETECTION_PORT:-8000}:8000"
+      - "127.0.0.1:${DETECTION_PORT:-8000}:8000"
     environment:
       REDIS_URL: redis://:${REDIS_PASS}@redis:6379/0
       RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq/
@@ -158,7 +158,7 @@ services:
       dockerfile: Dockerfile
     container_name: simulation
     ports:
-      - "${SIMULATION_PORT:-8001}:8001"
+      - "127.0.0.1:${SIMULATION_PORT:-8001}:8001"
     environment:
       REDIS_URL: redis://:${REDIS_PASS}@redis:6379/0
       RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq/
@@ -192,7 +192,7 @@ services:
       dockerfile: Dockerfile
     container_name: reaction
     ports:
-      - "${REACTION_PORT:-8082}:8080"
+      - "127.0.0.1:${REACTION_PORT:-8082}:8080"
     environment:
       POSTGRES_HOST: postgres-db
       POSTGRES_PORT: 5432
@@ -250,7 +250,7 @@ services:
       dockerfile: Dockerfile
     container_name: dashboard
     ports:
-      - "${DASHBOARD_PORT:-8083}:8080"
+      - "127.0.0.1:${DASHBOARD_PORT:-8083}:8080"
     environment:
       POSTGRES_HOST: postgres-db
       POSTGRES_PORT: 5432

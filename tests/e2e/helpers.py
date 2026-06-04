@@ -64,23 +64,32 @@ DDOS_FEATURES.update({
     "min_seg_size_forward": 20.0,
 })
 
-# Brute-Force-characteristic feature values: repeated short TCP flows to auth ports.
+# Brute-Force-characteristic feature values drawn from a real CIC-IDS-2017 SSH
+# brute-force sample that the trained XGBoost model classifies with probability 1.0.
 BRUTE_FORCE_FEATURES: dict[str, float] = {col: 0.0 for col in UC2_FEATURE_COLS}
 BRUTE_FORCE_FEATURES.update({
-    "Destination Port": 22.0,      # SSH
-    "Protocol": 6.0,               # TCP
-    "Flow Packets/s": 5.0,
-    "Flow Bytes/s": 250.0,
-    "Total Backward Packets": 4.0,
-    "Bwd Packet Length Min": 32.0,
-    "Bwd Packet Length Std": 12.0,
-    "Flow IAT Mean": 0.4,
-    "Flow IAT Std": 0.15,
-    "Flow IAT Min": 0.1,
-    "FIN Flag Count": 1.0,
+    "Protocol": 6.0,
+    "Total Backward Packets": 1.0,
+    "Total Length of Fwd Packets": 14.0,
+    "Fwd Packet Length Max": 14.0,
+    "Fwd Packet Length Mean": 7.0,
+    "Flow Bytes/s": 50359.71223,
+    "Flow Packets/s": 10791.36691,
+    "Flow IAT Mean": 139.0,
+    "Flow IAT Std": 124.4507935,
+    "Flow IAT Min": 51.0,
+    "Fwd IAT Total": 278.0,
+    "Fwd IAT Mean": 278.0,
+    "Fwd IAT Min": 278.0,
+    "Fwd PSH Flags": 1.0,
+    "Fwd Header Length": 64.0,
+    "Bwd Header Length": 20.0,
+    "Bwd Packets/s": 3597.122302,
+    "Packet Length Std": 8.082903769,
+    "Packet Length Variance": 65.33333333,
     "ACK Flag Count": 1.0,
-    "Init_Win_bytes_forward": 65535.0,
-    "Init_Win_bytes_backward": 65535.0,
+    "Init_Win_bytes_forward": 229.0,
+    "min_seg_size_forward": 32.0,
 })
 
 
