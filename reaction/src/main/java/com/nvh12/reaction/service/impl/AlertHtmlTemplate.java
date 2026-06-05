@@ -4,13 +4,24 @@ import com.nvh12.reaction.service.dto.Severity;
 import com.nvh12.reaction.service.dto.alert.*;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
 final class AlertHtmlTemplate {
 
+    private static final ZoneId DISPLAY_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final DateTimeFormatter DISPLAY_FMT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss z").withZone(DISPLAY_ZONE);
+
     private AlertHtmlTemplate() {
+    }
+
+    static String fmtInstant(Instant instant) {
+        if (instant == null) return "";
+        return DISPLAY_FMT.format(instant);
     }
 
     static String buildSubject(Alert alert) {
@@ -78,10 +89,10 @@ final class AlertHtmlTemplate {
                 alert.getSeverity(),
                 row("Source IP", escapeHtml(alert.getSourceIp())),
                 row("Detection Type", alert.getDetectionType().toString()),
-                row("Detected At", alert.getDetectedAt().toString()),
-                row("Window", (alert.getWindowStart() != null ? alert.getWindowStart() : "")
+                row("Detected At", fmtInstant(alert.getDetectedAt())),
+                row("Window", fmtInstant(alert.getWindowStart())
                         + " &mdash; "
-                        + (alert.getWindowEnd() != null ? alert.getWindowEnd() : "")),
+                        + fmtInstant(alert.getWindowEnd())),
                 extra
         );
     }
@@ -117,12 +128,12 @@ final class AlertHtmlTemplate {
                       <td style="padding:8px 6px;font-size:12px;color:#6b7280;white-space:nowrap;">%s &mdash; %s</td>
                     </tr>
                     """.formatted(
-                    a.getDetectedAt() != null ? a.getDetectedAt() : "",
+                    fmtInstant(a.getDetectedAt()),
                     escapeHtml(a.getSourceIp()),
                     severityColor(a.getSeverity()),
                     a.getSeverity(),
-                    a.getWindowStart() != null ? a.getWindowStart() : "",
-                    a.getWindowEnd() != null ? a.getWindowEnd() : ""
+                    fmtInstant(a.getWindowStart()),
+                    fmtInstant(a.getWindowEnd())
             ));
         }
 
@@ -162,7 +173,7 @@ final class AlertHtmlTemplate {
                 </html>
                 """.formatted(
                 color, n, alerts.get(0).getDetectionType(), n != 1 ? "s" : "", maxSeverity,
-                earliest, latest, tableRows
+                fmtInstant(earliest), fmtInstant(latest), tableRows
         );
     }
 

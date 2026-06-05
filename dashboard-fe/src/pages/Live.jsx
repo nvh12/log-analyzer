@@ -27,8 +27,10 @@ function ago(ts) {
   return s < 60 ? `${s}s ago` : `${Math.floor(s / 60)}m ago`
 }
 
+const TZ = { timeZone: 'Asia/Ho_Chi_Minh' }
+
 function fmtTs(ts) {
-  return ts ? new Date(ts).toLocaleTimeString() : '—'
+  return ts ? new Date(ts).toLocaleTimeString(undefined, TZ) : '—'
 }
 
 export default function Live() {

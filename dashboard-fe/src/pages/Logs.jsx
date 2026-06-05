@@ -8,8 +8,10 @@ import Pagination from '../components/Pagination'
 import Loading from '../components/Loading'
 import Empty from '../components/Empty'
 
+const TZ = { timeZone: 'Asia/Ho_Chi_Minh' }
+
 function fmtTs(ts) {
-  return ts ? new Date(ts).toLocaleString() : '—'
+  return ts ? new Date(ts).toLocaleString(undefined, TZ) : '—'
 }
 
 function statusColor(code) {
@@ -32,8 +34,8 @@ function RecordDetail({ record }) {
 }
 
 function fmtLogTs(r) {
-  if (r.timestamp) return new Date(r.timestamp * 1000).toLocaleString()
-  if (r.processedAt) return new Date(r.processedAt).toLocaleString()
+  if (r.timestamp) return new Date(r.timestamp * 1000).toLocaleString(undefined, TZ)
+  if (r.processedAt) return new Date(r.processedAt).toLocaleString(undefined, TZ)
   return '—'
 }
 

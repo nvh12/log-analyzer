@@ -9,8 +9,10 @@ import Pagination from '../components/Pagination'
 import Loading from '../components/Loading'
 import Empty from '../components/Empty'
 
+const TZ = { timeZone: 'Asia/Ho_Chi_Minh' }
+
 function fmtTs(ts) {
-  return ts ? new Date(ts).toLocaleString() : '—'
+  return ts ? new Date(ts).toLocaleString(undefined, TZ) : '—'
 }
 
 function ttlLabel(seconds) {

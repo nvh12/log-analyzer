@@ -24,6 +24,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static com.nvh12.reaction.service.impl.AlertHtmlTemplate.fmtInstant;
+
 @Slf4j
 @Service
 @ConditionalOnExpression("!'${alert.discord.webhook-url:}'.isEmpty()")
@@ -104,8 +106,8 @@ public class DiscordAlertService implements AlertChannel {
         addField(fields, "Source IP", alert.getSourceIp(), true);
         addField(fields, "Severity", alert.getSeverity().toString(), true);
         addField(fields, "Detection Type", alert.getDetectionType().toString(), true);
-        addField(fields, "Detected At", alert.getDetectedAt().toString(), false);
-        addField(fields, "Window", alert.getWindowStart() + " → " + alert.getWindowEnd(), false);
+        addField(fields, "Detected At", fmtInstant(alert.getDetectedAt()), false);
+        addField(fields, "Window", fmtInstant(alert.getWindowStart()) + " → " + fmtInstant(alert.getWindowEnd()), false);
 
         if (alert instanceof TrafficAlert traffic && traffic.getMethodFlags() != null) {
             addField(fields, "Methods", traffic.getMethodFlags().toDisplayString(), true);
@@ -169,7 +171,7 @@ public class DiscordAlertService implements AlertChannel {
         addField(fields, "Max Severity", maxSeverity.toString(), true);
         addField(fields, "Severity Breakdown", severityBreakdown, false);
         addField(fields, "Source IPs", sourceIps.isBlank() ? "N/A" : sourceIps, false);
-        addField(fields, "Time Range", earliest + " → " + latest, false);
+        addField(fields, "Time Range", fmtInstant(earliest) + " → " + fmtInstant(latest), false);
 
         ObjectNode footer = objectMapper.createObjectNode();
         footer.put("text", "Log Analyzer — automated security alert");
