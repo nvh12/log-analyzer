@@ -7,7 +7,6 @@ import com.nvh12.log_processing.domain.model.NormalizedLog;
 import com.nvh12.log_processing.domain.model.ProcessingResult;
 import com.nvh12.log_processing.domain.model.RawLog;
 import com.nvh12.log_processing.domain.service.*;
-import com.nvh12.log_processing.infrastructure.config.LogProcessingProperties;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,14 +43,11 @@ class DlqRetrySchedulerTest {
 
     @BeforeEach
     void setUp() {
-        LogProcessingProperties properties = new LogProcessingProperties(
-                10, 1, 10000, 5, 10000, 2000, 3, 50, 30000L, 5000L,
-                new LogProcessingProperties.ThreadPool(2, 4, 10, 5),
-                new LogProcessingProperties.Validation(45, 2048, 512));
-        maxRetries = properties.maxRetries();
+        DlqRetryScheduler.Config config = new DlqRetryScheduler.Config(3, 50, 30000L, 5000L);
+        maxRetries = config.maxRetries();
         scheduler = new DlqRetryScheduler(
                 failedLogRepository, logProcessingService, eventService, processedLogRepository,
-                dropAuditRepository, properties, new SimpleMeterRegistry());
+                dropAuditRepository, config, new SimpleMeterRegistry());
     }
 
     private RawLog makeRawLog(String id) {

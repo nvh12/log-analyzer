@@ -4,7 +4,6 @@ import com.nvh12.log_processing.domain.model.DropReason;
 import com.nvh12.log_processing.domain.model.FailedLogEntry;
 import com.nvh12.log_processing.domain.model.ProcessingResult;
 import com.nvh12.log_processing.domain.service.*;
-import com.nvh12.log_processing.infrastructure.config.LogProcessingProperties;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
@@ -19,6 +18,8 @@ import java.util.concurrent.*;
 @Component
 @Slf4j
 public class DlqRetryScheduler {
+
+    public record Config(int maxRetries, int retryBatchSize, long retryDelayMs, long retryJitterMs) {}
 
     private final FailedLogRepository failedLogRepository;
     private final LogProcessingService logProcessingService;
@@ -45,17 +46,17 @@ public class DlqRetryScheduler {
                              EventService eventService,
                              ProcessedLogRepository processedLogRepository,
                              DropAuditRepository dropAuditRepository,
-                             LogProcessingProperties properties,
+                             Config config,
                              MeterRegistry meterRegistry) {
         this.failedLogRepository = failedLogRepository;
         this.logProcessingService = logProcessingService;
         this.eventService = eventService;
         this.processedLogRepository = processedLogRepository;
         this.dropAuditRepository = dropAuditRepository;
-        this.maxRetries = properties.maxRetries();
-        this.retryBatchSize = properties.retryBatchSize();
-        this.retryDelayMs = properties.retryDelayMs();
-        this.retryJitterMs = properties.retryJitterMs();
+        this.maxRetries = config.maxRetries();
+        this.retryBatchSize = config.retryBatchSize();
+        this.retryDelayMs = config.retryDelayMs();
+        this.retryJitterMs = config.retryJitterMs();
         this.retrySuccessCounter = meterRegistry.counter("logs.retry", "result", "success");
         this.retryFailedCounter = meterRegistry.counter("logs.retry", "result", "failed");
         this.retryExhaustedCounter = meterRegistry.counter("logs.retry", "result", "exhausted");

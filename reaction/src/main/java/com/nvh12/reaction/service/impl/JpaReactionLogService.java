@@ -1,8 +1,8 @@
 package com.nvh12.reaction.service.impl;
 
-import com.nvh12.reaction.infrastructure.mq.ReactionResultPublisher;
 import com.nvh12.reaction.infrastructure.persistence.entity.ReactionLogEntity;
 import com.nvh12.reaction.infrastructure.persistence.repository.ReactionLogRepository;
+import com.nvh12.reaction.service.ReactionEventPort;
 import com.nvh12.reaction.service.ReactionLogService;
 import com.nvh12.reaction.service.dto.NetworkLayer;
 import com.nvh12.reaction.service.dto.ReactionAction;
@@ -19,7 +19,7 @@ import java.time.Instant;
 public class JpaReactionLogService implements ReactionLogService {
 
     private final ReactionLogRepository repository;
-    private final ReactionResultPublisher publisher;
+    private final ReactionEventPort publisher;
 
     @Override
     public void save(ReactionInput input, ReactionAction action) {

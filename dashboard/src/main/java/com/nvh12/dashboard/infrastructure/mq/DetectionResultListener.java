@@ -1,7 +1,7 @@
 package com.nvh12.dashboard.infrastructure.mq;
 
+import com.nvh12.dashboard.application.port.BroadcastPort;
 import com.nvh12.dashboard.infrastructure.mq.dto.DetectionMessage;
-import com.nvh12.dashboard.infrastructure.sse.SseEmitterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -15,7 +15,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DetectionResultListener {
 
-    private final SseEmitterRegistry registry;
+    private final BroadcastPort broadcastPort;
 
     @RabbitListener(queues = "#{@detectionDashboardQueue.name}")
     public void onDetection(DetectionMessage msg) {
@@ -31,6 +31,6 @@ public class DetectionResultListener {
         summary.put("confidence", msg.confidence());
         summary.put("source_ip", msg.sourceIp());
         summary.put("ts", msg.detectedAt() != null ? msg.detectedAt().toString() : null);
-        registry.broadcast("detection", summary);
+        broadcastPort.broadcast("detection", summary);
     }
 }
