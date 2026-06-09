@@ -41,8 +41,6 @@ class Settings(BaseSettings):
     REDIS_NAMESPACE: str = "detection"
 
     # Traffic detection thresholds
-    TRAFFIC_Z_SCORE_EXTREME: float = 3.5
-    TRAFFIC_Z_SCORE_HIGH: float = 3.0
     TRAFFIC_Z_SCORE_FLAG: float = 3.328
     TRAFFIC_IQR_MULTIPLIER: float = 2.288
     TRAFFIC_EMA_ALPHA: float = 0.1

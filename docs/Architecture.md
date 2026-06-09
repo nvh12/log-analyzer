@@ -1,66 +1,273 @@
 # System Architecture
 
-The log-analyzer system is built on a distributed, event-driven architecture consisting of **5 core components**. All components communicate asynchronously through **RabbitMQ** to ensure high throughput, fault tolerance, and loose coupling.
+The log-analyzer system is built on a distributed, event-driven architecture consisting of **5 core components**. All components communicate asynchronously through **RabbitMQ** to ensure high throughput, fault tolerance, and loose coupling, utilizing **PostgreSQL** for persistence and **Redis** for state caching.
 
 ---
 
-## 1. Architectural Components
+## 1. Microservice Architecture Detail
 
-1.  **Simulation & Log Generation (Python)**:
-    *   **Role**: Dedicated module for event generation and trace replay.
-    *   **Logic**: Generates synthetic web traffic for UC1/UC3 and replays flow records from CICIDS2017 for UC2/UC4. It publishes logs to the `log.raw` exchange.
+The system is structured as five decoupled microservices. Below is a detailed breakdown of their architectural layout, internal models, concurrency models, and scaling behaviors.
 
-2.  **Processing Service (Spring Boot)**:
-    *   **Role**: Entry point for log ingestion.
-    *   **Logic**: Normalizes diverse log formats into a standard JSON schema. For network flows (UC2/UC4), it ensures a strict set of **45 features** and implements data cleaning by replacing `NaN` and `Infinity` values with `0`. Follows the **persist-then-publish** pattern: writes to PostgreSQL before publishing to downstream queues.
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                          SIMULATION SERVICE                            │
+│                                                                        │
+│  ┌─────────────────────────┐               ┌────────────────────────┐  │
+│  │   Poisson HTTP Gen      │               │   Flow Trace Replay    │  │
+│  └────────────┬────────────┘               └───────────┬────────────┘  │
+│               │                                        │               │
+│               └───────────────────┬────────────────────┘               │
+│                                   ▼                                    │
+│                     [ Publisher (asyncio / aio-pika) ]                 │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    │ (RabbitMQ Raw Stream: log.raw)
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                          PROCESSING SERVICE                            │
+│                                                                        │
+│                    [ Subscriber (Spring AMQP / Hikari) ]               │
+│                                   │                                    │
+│                                   ▼                                    │
+│                    ┌───────────────────────────────┐                   │
+│                    │   CLF & Flow Normalization    │                   │
+│                    └──────────────┬────────────────┘                   │
+│                                   ├────────────────────────┐           │
+│                                   ▼ (PostgreSQL Write)     ▼           │
+│                            ┌─────────────┐          ┌─────────────┐    │
+│                            │  Database   │          │  Publisher  │    │
+│                            └─────────────┘          └──────┬──────┘    │
+└────────────────────────────────────────────────────────────┼───────────┘
+                                                             │
+                                   ┌─────────────────────────┴─────────────────────────┐
+                                   │ (HTTP Track: log.normalized.http)                 │ (Flow Track: log.normalized.flow)
+                                   ▼                                                   ▼
+┌────────────────────────────────────────────────────────┐   ┌────────────────────────────────────────────────────────┐
+│                   DETECTION SERVICE                    │   │                   DETECTION SERVICE                    │
+│                     (HTTP Track)                       │   │                      (Flow Track)                      │
+│                                                        │   │                                                        │
+│   ┌────────────────────────────────────────────────┐   │   │   ┌────────────────────────────────────────────────┐   │
+│   │         FastAPI Scheduler & Jobs               │   │   │   │         FastAPI Consumer / Model Store         │   │
+│   ├────────────────────────────────────────────────┤   │   │   ├────────────────────────────────────────────────┤   │
+│   │ • Statistical Ensemble (EMA, Z-Score, IQR, SB) │   │   │   │ • ML Classifiers (XGBoost DDoS / Brute Force)  │   │
+│   │ • Web Attack Layer (Regex Signature + XGBoost) │   │   │   │ • 45-Feature Parity Alignment                  │   │
+│   └───────────────────────┬────────────────────────┘   │   │   └───────────────────────┬────────────────────────┘   │
+│                           ▼ (PostgreSQL Write)         │   │                           ▼ (PostgreSQL Write)         │
+│                     [ Publisher (aio-pika) ]           │   │                     [ Publisher (aio-pika) ]           │
+└───────────────────────────┬────────────────────────────┘   └───────────────────────────┬────────────────────────────┘
+                            │                                                            │
+                            └───────────────────────────┬────────────────────────────────┘
+                                                        │ (detection.results Exchange)
+                                                        ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                           REACTION SERVICE                             │
+│                                                                        │
+│                  [ Subscriber (Spring AMQP / JPA / Redis) ]            │
+│                                   │                                    │
+│                                   ▼                                    │
+│                  ┌─────────────────────────────────┐                   │
+│                  │   Escalating Attempt Counter    │                   │
+│                  │  (Lua sliding rate-limit/block) │                   │
+│                  └────────────────┬────────────────┘                   │
+│                                   ├────────────────────────┐           │
+│                                   ▼ (Redis Block updates)  ▼           │
+│                            ┌─────────────┐          ┌─────────────┐    │
+│                            │ Alerts/Logs │          │  Publisher  │    │
+│                            └─────────────┘          └──────┬──────┘    │
+└────────────────────────────────────────────────────────────┼───────────┘
+                                                             │
+                                                             │ (reaction.results Exchange)
+                                                             ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                           DASHBOARD SERVICE                            │
+│                                                                        │
+│   ┌────────────────────────────────────────────────────────────────┐   │
+│   │                       Dashboard Backend                        │   │
+│   │                (Spring Boot REST API + SseEmitter)             │   │
+│   └───────────────────────────────┬────────────────────────────────┘   │
+│                                   ▼ (SSE Multiplexed Stream /api/stream)│
+│   ┌────────────────────────────────────────────────────────────────┐   │
+│   │                       Dashboard Frontend                       │   │
+│   │                       (Vite & React 19 UI)                     │   │
+│   └────────────────────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────────────────────┘
+```
 
-3.  **Detection Service (FastAPI)**:
-    *   **Role**: Behavioral and statistical analysis.
-    *   **Logic**: Operates two parallel analysis tracks:
-        *   **HTTP Track (UC1, UC3)**: Consumes windowed HTTP metadata and request contexts from `log.normalized.http`. Employs statistical methods (UC1) and a 2-layer Regex + XGBoost strategy (UC3).
-        *   **Flow Track (UC2, UC4)**: Consumes individual flow records from `log.normalized.flow`. Runs parallel XGBoost classifiers on a shared 45-feature vector.
-    *   Follows the **persist-then-publish** pattern: writes detection results to PostgreSQL before publishing to `detection.results`.
+```mermaid
+graph TD
+    Sim[Simulation Service] -->|log.raw RabbitMQ| Proc[Processing Service]
+    Proc -->|log.normalized.http RabbitMQ| Det[Detection Service]
+    Proc -->|log.normalized.flow RabbitMQ| Det
+    Proc -->|Write Logs| DB[(PostgreSQL)]
+    Det -->|detection.results Exchange| React[Reaction Service]
+    Det -->|detection.results Exchange| Dash[Dashboard Service]
+    Det -->|Write Verdicts| DB
+    React -->|reaction.results Exchange| Dash
+    React -->|Apply Blocks & Limits| Redis[(Redis Cache)]
+    React -->|Write Actions| DB
+    Sim -->|Validate Blocklist| Redis
+    Dash -->|SSE / REST| FE[React UI]
+    DB -->|Query History| Dash
+```
 
-4.  **Reaction Service (Spring Boot)**:
-    *   **Role**: Intelligence aggregation and orchestration.
-    *   **Logic**: Aggregates signals from multiple detectors. If a consensus is reached or a threshold is breached, it triggers automated responses (blocking an IP, rate-limiting, or triggering a scale-up signal). Follows the **persist-then-publish** pattern: writes the action taken to PostgreSQL and updates Redis state before publishing to `reaction.results`.
-    *   **Alert channels**: Configurable via `ALERT_PROVIDER` — `smtp` (JavaMail/STARTTLS), `resend` (Resend email API), or `discord` (Discord webhook). Multiple channels compose transparently; if no channel is configured the service logs a warning and continues.
+### 1.1 Ingestion / Simulation Service
+*   **Role**: Dedicated script and mock generator running on FastAPI/Uvicorn.
+*   **Architecture**: Follows an asynchronous task loop pattern powered by `asyncio`. It publishes raw log lines (CLF formatted logs and JSON flow arrays) using `aio-pika` to prevent blocking the generator thread.
+*   **Concurrency**: Implements a non-blocking asynchronous event loop, running baseline Poisson-based normal traffic generators and flow replayers concurrently.
+*   **Auto-Scaling Mechanism**: Exposes a scaling mechanism (`infrastructure/scaler.py`) that polls dynamic load requirements from Redis and orchestrates Gunicorn/Uvicorn child worker counts on the fly using signal traps (`SIGUSR1` to scale up, `SIGUSR2` to scale down).
 
-5.  **Dashboard Service (Spring Boot + Vite/React)**:
-    *   **Role**: Human-in-the-loop monitoring.
-    *   **Logic**: Provides a real-time UI for visualizing traffic trends, anomaly scores, and reactive status. Reads historical data directly from PostgreSQL. Subscribes to `detection.results` and `reaction.results` purely to drive a Server-Sent Events (SSE) channel for the live UI — never writes to result tables. PostgreSQL remains the source of truth; the SSE channel is best-effort and recovers from gaps on page navigation or reconnect.
+### 1.2 Processing Service
+*   **Role**: Normalization and ingestion entrypoint.
+*   **Architecture**: Built using Spring Boot 3.x following a Clean Architecture Controller-Service-Repository layout. Uses Flyway for database migrations.
+*   **Concurrency**: Employs a multi-threaded Spring AMQP listener container (`SimpleMessageListenerContainer`) configured with a concurrent consumer count (default: 5, max: 20). 
+*   **Feature Alignment**: Standardizes various incoming logs. For HTTP, it parses headers, methods, and routes. For Flows, it maps properties into exactly **45 standard columns** and replaces any `NaN` or `Infinity` properties with `0.0`.
+*   **Hikari Pool Configuration**: Configured with a dedicated `maximum-pool-size: 10` (minimum-idle: 2) to maintain database connection stability under high-rate inserts.
+
+### 1.3 Detection Service
+*   **Role**: Algorithmic & ML anomaly classifiers.
+*   **Architecture**: Written in Python / FastAPI. It houses the `model_store` which dynamically downloads model binaries (`.pkl` files) from MinIO on startup.
+*   **Concurrency & Pipelines**:
+    *   **HTTP Analysis Track**: Consumes windowed data from `log.normalized.http` and executes batch statistics (EMA, Z-score, IQR, and Robust Seasonal Baseline V2) scheduled at 60-second bounds. Web attacks (UC3) run through a Regex Signature matching layer followed by a supervised XGBoost classification layer.
+    *   **Flow Analysis Track**: Consumes individual flow records in real time from `log.normalized.flow`, running parallel async XGBoost inference processes for DDoS (UC2) and Brute Force (UC4) using a shared 45-feature vector.
+*   **Inference Loop**: FastAPI runs under Uvicorn utilizing an `asyncio`-driven client pool for PostgreSQL (`asyncpg`) and Redis (`redis-py`).
+
+### 1.4 Reaction Service
+*   **Role**: Defense logic and automated incident response.
+*   **Architecture**: Built with Spring Boot 3.x using JPA and Spring AMQP.
+*   **Concurrency**: Utilizes a single listener thread per queue to guarantee execution order of reactions for any given IP address.
+*   **Sliding Window Rate Limiter**: Inherits from `EscalatingIpReactionService`. Uses Redis-backed Lua scripts (`INCR_WITH_EXPIRE`) to track IP violations over a 10-minute sliding window:
+    *   `< 3 violations`: Emits a `RATE_LIMIT` action.
+    *   `>= 3 violations`: Escalates the reaction to a complete IP `BLOCK` (temporarily blacklisted in Redis).
+*   **Notification Dispatch**: Employs an asynchronous thread pool to dispatch alerts via configured providers (SMTP mail, Resend API, or Discord Webhooks) without slowing down the core event consumption.
+
+### 1.5 Dashboard Backend & Frontend
+*   **Role**: Monitoring and manual operator override interface.
+*   **Backend Architecture**: Spring Boot backend that consumes RabbitMQ fanout exchanges and maintains a thread-safe registry of `SseEmitter` clients.
+*   **SSE Heartbeat**: Broadcasts 15-second heartbeats (`heartbeat` event type) to prevent browser proxy disconnects. Runs database counts on PostgreSQL every 2 seconds to broadcast log throughput metrics (`log_throughput` event type).
+*   **Frontend Architecture**: Single Page Application built on Vite 8, React 19, Recharts, and Tailwind CSS. Connects to the SSE endpoint `/api/stream` using native browser `EventSource` to drive real-time graphs and live anomaly tickers.
 
 ---
 
-## 2. Communication & Data Flow
+## 2. Queue & Broker Architecture Detail
 
-The system utilizes an asynchronous messaging pattern with **RabbitMQ** at the center. Both `detection.results` and `reaction.results` use a **fanout topology** with multiple consumer queues bound to the same exchange.
+The asynchronous backbone of the system utilizes **RabbitMQ** to connect all processing, analysis, and response stages.
 
-The following list describes the data flow between services:
+```
+                  ┌───────────────────────┐
+                  │  SIMULATION SERVICE   │
+                  └───────────┬───────────┘
+                              │
+                              │ (Publish: log.raw routing key)
+                              ▼
+                       [ Exchange: amq.direct ]
+                              │
+                              ├──────────────────────────┐
+                              │ (Binding: log.raw)       │ (Binding: log.raw.failed)
+                              ▼                          ▼
+               ┌───────────────────────┐          ┌───────────────────────┐
+               │    Queue: log.raw     │          │ Queue: log.raw.failed │
+               └───────────┬───────────┘          └───────────────────────┘
+                           │
+                           │ (Spring AMQP Consume)
+                           ▼
+                  ┌───────────────────────┐
+                  │  PROCESSING SERVICE   │
+                  └─────┬───────────┬─────┘
+                        │           │
+      (Publish: log.normalized.http)│ (Publish: log.normalized.flow)
+                        ▼           ▼
+        [ Exchange: amq.direct ]     [ Exchange: amq.direct ]
+                        │                    │
+                        ▼                    ▼
+     ┌───────────────────────┐    ┌───────────────────────┐
+     │Queue: log.normal.http │    │Queue: log.normal.flow │
+     └──────────┬────────────┘    └──────────┬────────────┘
+                │                            │
+                │ (FastAPI Consume)          │ (FastAPI Consume)
+                ▼                            ▼
+                  ┌──────────────────────────┐
+                  │    DETECTION SERVICE     │
+                  └─────────────┬────────────┘
+                                │
+                                │ (Publish: fanout)
+                                ▼
+                   [ Exchange: detection.results ]
+                                │
+                 ┌──────────────┴──────────────┐
+                 │                             │
+                 ▼                             ▼
+   ┌──────────────────────────┐  ┌──────────────────────────┐
+   │ Queue: detection.results │  │ Queue: anonymous.dash.dt │
+   │ (Durable, Reaction Serv.)│  │ (Non-durable, Dash Serv.)│
+   └─────────────┬────────────┘  └─────────────┬────────────┘
+                 │                             │
+                 ▼                             ▼
+         ┌──────────────┐              ┌──────────────┐
+         │ REACTION SRV │              │  DASHBOARD   │
+         └──────┬───────┘              └──────┬───────┘
+                │                             ▲
+                │ (Publish: fanout)           │
+                ▼                             │
+     [ Exchange: reaction.results ]           │
+                │                             │
+                └─────────────────────────────┘
+                  (Binding to: anonymous.dash.rx)
+```
 
-1.  **Ingestion Track**:
-    *   `Simulation & Log Gen` -- `log.raw` --> `Processing Service`
-2.  **Normalization & Distribution**:
-    *   `Processing Service` -- `log.normalized.http` --> `Detection Service` & `Infrastructure (PostgreSQL)`
-    *   `Processing Service` -- `log.normalized.flow` --> `Detection Service` & `Infrastructure (PostgreSQL)`
-3.  **Detection & Alerting** (fanout):
-    *   `Detection Service` -- `detection.results` --> `Reaction Service` (durable queue) & `Dashboard Service` (non-durable queue)
-4.  **Reaction & Monitoring** (fanout):
-    *   `Reaction Service` -- `reaction.results` --> `Dashboard Service` (non-durable queue)
-    *   `Reaction Service` --> `Infrastructure (Redis / WAF / Cloud)`
-    *   `Dashboard Service` --> `React UI` (via REST + SSE)
+### 2.1 Topologies, Exchanges & Routing Keys
+All RabbitMQ exchanges are configured as durable to withstand broker restarts.
 
-### 2.1 Queue Durability
+1.  **Raw Log Ingestion Channel**:
+    *   **Exchange**: `amq.direct` (Default direct exchange)
+    *   **Queue Name**: `log.raw` (Durable)
+    *   **Routing Key**: `log.raw`
+    *   **Purpose**: Simulation service publishes raw line events directly to this entrypoint.
+2.  **HTTP Normalized Channel**:
+    *   **Exchange**: `amq.direct`
+    *   **Queue Name**: `log.normalized.http` (Durable)
+    *   **Routing Key**: `log.normalized.http`
+    *   **Purpose**: Processing service routes parsed HTTP logs to the Detection service.
+3.  **Flow Normalized Channel**:
+    *   **Exchange**: `amq.direct`
+    *   **Queue Name**: `log.normalized.flow` (Durable)
+    *   **Routing Key**: `log.normalized.flow`
+    *   **Purpose**: Processing service routes sanitized network flows to the Detection service.
+4.  **Detection Verdict Channel**:
+    *   **Exchange**: `detection.results` (Type: `fanout`)
+    *   **Subscribers**:
+        *   **Reaction Queue**: `detection.results` (Durable queue bound to exchange, manual acknowledgement). Action integrity is critical.
+        *   **Dashboard Queue**: Temporary anonymous auto-delete queue (e.g. `amq.gen-xxxx`) generated by Spring AMQP per dashboard replica. Discardable on consumer disconnect.
+5.  **Reaction Action Channel**:
+    *   **Exchange**: `reaction.results` (Type: `fanout`)
+    *   **Subscribers**:
+        *   **Dashboard Queue**: Temporary anonymous auto-delete queue. Receives IP block or rate-limiting events to refresh live dashboard states.
 
-| Exchange | Consumer | Queue Type | Rationale |
-| :--- | :--- | :--- | :--- |
-| `detection.results` | Reaction | Durable, manual ack | Action integrity — no detection should be lost. |
-| `detection.results` | Dashboard | Non-durable, auto-delete, auto-ack | Live UI only; PostgreSQL is authoritative on reconnect. |
-| `reaction.results` | Dashboard | Non-durable, auto-delete, auto-ack | Same rationale — UI nudge only. |
+### 2.2 Serialization & Message Payload Schemas
+All messages are serialized and transmitted in **JSON UTF-8** format:
+-   `log.raw`: `{ "id": "uuid", "source": "HTTP|FLOW", "raw_message": "...", "timestamp": 12345.67 }`
+-   `log.normalized.http`: `{ "timestamp": 12345.67, "ip": "1.2.3.4", "method": "GET", "url": "/index", "status": 200, "bytes": 512, "query_string": "", "user_agent": "..." }`
+-   `log.normalized.flow`: `{ "timestamp": 12345.67, "source_ip": "1.2.3.4", "dest_ip": "5.6.7.8", "source_port": 443, "dest_port": 8080, "features": { "Flow Bytes/s": 120.0, "Total Fwd Packets": 4.0, ... } }`
+-   `detection.results`: `{ "detection_id": "uuid", "uc": "UC2", "ts": "ISO-8601", "verdict": "DDoS", "severity": "HIGH", "source_ip": "1.2.3.4", "dest_ip": "5.6.7.8", "confidence": 0.95 }`
+-   `reaction.results`: `{ "reaction_id": "uuid", "action": "BLOCK|RATE_LIMIT", "target": "1.2.3.4", "ttl_seconds": 600, "source_detection_id": "uuid", "ts": "ISO-8601" }`
 
-### 2.2 Persist-then-Publish
+### 2.3 Ack Modes & Concurrency Configuration
+-   **Manual Acknowledgment**:
+    -   Used by `log-processing` (for `log.raw`) and `reaction` (for `detection.results`). Messages are acknowledged (`basicAck`) only after the respective service has **successfully written the record to PostgreSQL**.
+    -   If PostgreSQL goes down, the transaction fails, the message is not acknowledged, and RabbitMQ redelivers the message when the channel recovers.
+-   **Auto-Ack**:
+    -   Used by the `dashboard` SSE queues. Because dashboard updates are purely temporary live visual indicators, dropping a message during a dashboard crash is acceptable (re-connection triggers a fresh bulk REST load from PostgreSQL).
 
-All three stateful services (Processing, Detection, Reaction) write to PostgreSQL before publishing to RabbitMQ. This provides **at-least-once delivery with no result loss on crash**, at the cost of exactly-once semantics (a service that crashes between persist and publish leaves the record in the database but never reaches downstream consumers). Dashboard's SSE channel is explicitly best-effort and recovers from such gaps via PostgreSQL reads on page navigation or SSE reconnect.
+### 2.4 Error Handling & Dual-Path Failure Routing
+The `log-processing` service implements two distinct error paths depending on the nature of the failure:
+
+1.  **Transient Processing/Database Failures (DB-backed Retry - `DlqRetryScheduler`)**:
+    -   If parsing or persistence fails due to transient database connection issues or transaction rollbacks, the exception is caught.
+    -   Instead of losing the message, the raw payload is saved in the `failed_log_entry` table in PostgreSQL with `retry_count = 0`.
+    -   A dedicated background scheduler (`DlqRetryScheduler`) polls failed entries, re-processes, and republishes them with a configurable backoff (default: 5000ms) and randomized jitter. Exceeding `max_retries` (default: 3) marks the log as exhausted and pushes it to a `drop_audit` table.
+2.  **Fatal Serialization/Validation Failures (RabbitMQ DLX - `DeadLetterConsumer`)**:
+    -   Fatal payload conversion issues or JSON formatting errors in the Spring listener container trigger rejection without requeueing.
+    -   These messages are routed through the Dead Letter Exchange (`log.dlx`) to the `log.raw.dlq` queue.
+    -   A dedicated `DeadLetterConsumer` consumes the queue using a raw non-converting listener factory (`dlqContainerFactory`) to prevent conversion error loops, parsing the message body and logging it alongside its `x-death` metadata directly to the `drop_audit` table.
 
 ---
 
@@ -83,3 +290,4 @@ The following components provide shared state and data persistence for the core 
 | **Message Broker** | RabbitMQ | Reliable message delivery and flexible routing (fanout exchanges for multi-consumer event streams). |
 | **Dashboard Backend** | Java / Spring Boot | REST + SSE (`SseEmitter`) for live UI, JdbcTemplate for PostgreSQL reads. |
 | **Frontend** | Vite / React | Dynamic, real-time data visualization with native `EventSource` for SSE. |
+

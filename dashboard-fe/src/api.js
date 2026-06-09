@@ -14,6 +14,9 @@ export const api = {
   getReactions: (p) => client.get('/reactions', params(p)).then(r => r.data),
   getActiveReactions: () => client.get('/reactions/active').then(r => r.data),
   liftBlock: (id) => client.post(`/reactions/${id}/lift`),
+  getWhitelist: () => client.get('/reactions/whitelist').then(r => r.data),
+  replaceWhitelist: (ips) => client.put('/reactions/whitelist', ips),
+  liftBlocks: (ips) => client.post('/reactions/blocks/lift', ips),
   getSystemHealth: () => client.get('/system/health').then(r => r.data),
   getSystemConfig: () => client.get('/system/config').then(r => r.data),
 

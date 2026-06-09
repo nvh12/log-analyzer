@@ -1,5 +1,6 @@
 import asyncio
 import itertools
+import random
 import time
 import uuid
 
@@ -105,7 +106,6 @@ class SimulationUseCase:
         attack_ratio: float | None = None,
     ) -> None:
         try:
-            interval = 1.0 / rate_per_second
             sent = 0
             last_refresh = time.monotonic()
             while count == 0 or sent < count:
@@ -122,7 +122,7 @@ class SimulationUseCase:
                         last_refresh = now
                     except Exception:
                         pass
-                await asyncio.sleep(interval)
+                await asyncio.sleep(random.expovariate(rate_per_second))
         except asyncio.CancelledError:
             pass
         finally:
@@ -138,7 +138,6 @@ class SimulationUseCase:
         dest_ip: str | None,
     ) -> None:
         try:
-            interval = 1.0 / rate_per_second
             total = count if count > 0 else len(rows)
             last_refresh = time.monotonic()
             for features in itertools.islice(itertools.cycle(rows), total):
@@ -154,7 +153,7 @@ class SimulationUseCase:
                         last_refresh = now
                     except Exception:
                         pass
-                await asyncio.sleep(interval)
+                await asyncio.sleep(random.expovariate(rate_per_second))
         except asyncio.CancelledError:
             pass
         finally:

@@ -6,8 +6,6 @@ class TrafficThresholds(BaseModel):
     Constructed either from hardcoded Settings (fallback) or from calibrated MinIO artifacts.
     """
 
-    z_score_extreme: float = Field(gt=0)
-    z_score_high: float = Field(gt=0)
     z_score_flag: float = Field(gt=0)
     iqr_multiplier: float = Field(gt=0)
     ema_alpha: float = Field(gt=0, le=1)

@@ -134,8 +134,6 @@ class TestDetectionPipelines(unittest.TestCase):
         
         thresholds = TrafficThresholds(
             min_history=5,
-            z_score_extreme=10.0,
-            z_score_high=5.0,
             z_score_flag=2.0,
             iqr_multiplier=1.5,
             ema_alpha=0.3,
@@ -144,22 +142,24 @@ class TestDetectionPipelines(unittest.TestCase):
             seasonal_z_threshold=2.5,
             seasonal_min_bucket_size=3,
             min_weighted_chosen=1.5, # Need at least 1.5 weights to fire
-            weight_zscore=1.0,
+            weight_zscore=0.5,
             weight_iqr=1.0,
             weight_ema=0.5,
             weight_seasonal=1.0
         )
-        
-        # Seasonal bucket: median=10, IQR=2
-        # (100 - 10) / (0.7413 * 2) = 60.7 (very high robust z)
-        seasonal_bucket = [8.0, 10.0, 10.0, 12.0]
-        
+
+        # Seasonal bucket: (median, iqr) summaries for the same hour-of-week slot.
+        # median-of-medians=10, median-of-iqrs=2 -> robust_z = (100-10) / (0.7413*2) = 60.7
+        seasonal_bucket = [(10.0, 2.0), (10.0, 2.0), (10.0, 2.0)]
+
         result = detect_traffic(inp, thresholds, seasonal_bucket)
-        
+
         self.assertTrue(result.anomaly)
         self.assertIn("z_score", result.method_flags)
         self.assertTrue(result.method_flags["seasonal"])
-        self.assertGreaterEqual(result.severity, Severity.HIGH)
+        # Severity is a str Enum, so ">=" would compare names lexically — assert
+        # membership in the high-end tiers instead.
+        self.assertIn(result.severity, (Severity.HIGH, Severity.CRITICAL))
 
 if __name__ == "__main__":
     unittest.main()

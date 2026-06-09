@@ -34,8 +34,6 @@ SEASONAL_BUCKET = [(95.0, 0.0), (100.0, 0.0), (98.0, 0.0), (102.0, 0.0), (99.0, 
 @pytest.fixture
 def thresholds():
     return TrafficThresholds(
-        z_score_extreme=5.0,
-        z_score_high=3.0,
         z_score_flag=2.0,
         iqr_multiplier=1.5,
         ema_alpha=0.3,
@@ -211,7 +209,7 @@ def test_full_votes_severity_is_critical(thresholds):
 def test_weight_sum_must_equal_three():
     with pytest.raises(ValueError, match="sum to 3.0"):
         TrafficThresholds(
-            z_score_extreme=5.0, z_score_high=3.0, z_score_flag=2.0,
+            z_score_flag=2.0,
             iqr_multiplier=1.5, ema_alpha=0.3, ema_dev_threshold=2.0,
             min_history=5, ema_warmup=3,
             seasonal_z_threshold=2.0, seasonal_min_bucket_size=3,
@@ -226,7 +224,7 @@ def test_weight_sum_must_equal_three():
 def test_canonical_weights_are_accepted():
     # Must not raise
     TrafficThresholds(
-        z_score_extreme=5.0, z_score_high=3.0, z_score_flag=2.0,
+        z_score_flag=2.0,
         iqr_multiplier=1.5, ema_alpha=0.3, ema_dev_threshold=2.0,
         min_history=5, ema_warmup=3,
         seasonal_z_threshold=2.0, seasonal_min_bucket_size=3,

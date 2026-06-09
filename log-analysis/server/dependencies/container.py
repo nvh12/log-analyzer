@@ -26,8 +26,6 @@ def create_traffic_thresholds(data: dict, settings) -> TrafficThresholds:
     w = data.get("detector_weights", {})
 
     return TrafficThresholds(
-        z_score_extreme=settings.TRAFFIC_Z_SCORE_EXTREME,
-        z_score_high=settings.TRAFFIC_Z_SCORE_HIGH,
         z_score_flag=t.get("zscore", settings.TRAFFIC_Z_SCORE_FLAG),
         iqr_multiplier=t.get("iqr", settings.TRAFFIC_IQR_MULTIPLIER),
         ema_alpha=settings.TRAFFIC_EMA_ALPHA,

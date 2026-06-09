@@ -86,6 +86,7 @@ Hệ thống xử lý hai tầng dữ liệu song song: tầng HTTP access log (
 - **log.normalized.http** (Processing → Detection): dữ liệu HTTP access log đã chuẩn hóa và tổng hợp theo cửa sổ 60 giây.
 - **log.normalized.flow** (Processing → Detection): dữ liệu network flow đã chuẩn hóa, gửi theo từng flow record (45 đặc trưng).
 - **detection.results** (Detection → Reaction & Dashboard): kết quả phát hiện từ tất cả use case, sử dụng schema alert thống nhất.
+- **reaction.results** (Reaction → Dashboard): kết quả và hành động phản ứng tự động (như chặn IP, giới hạn tốc độ), dùng để hiển thị thời gian thực trên Dashboard.
 
 ## Processing
 
@@ -121,7 +122,7 @@ Hệ thống xử lý hai tầng dữ liệu song song: tầng HTTP access log (
 
 - Cung cấp UI để giám sát hệ thống, bao gồm lịch sử log (HTTP và flow), lịch sử cảnh báo và xử lý, trạng thái hiện tại của hệ thống.
 
-- Đọc dữ liệu trực tiếp từ PostgreSQL, không phụ thuộc vào các service khác.
+- Đọc dữ liệu lịch sử trực tiếp từ PostgreSQL, đồng thời đăng ký (subscribe) các kênh nhận kết quả phát hiện (`detection.results`) và phản ứng (`reaction.results`) qua RabbitMQ để phục vụ truyền dữ liệu thời gian thực (SSE) cho Live UI. PostgreSQL vẫn đóng vai trò là nguồn dữ liệu chính xác (source of truth) để đồng bộ lại dữ liệu khi người dùng chuyển trang hoặc kết nối lại.
 
 - Xây dựng API bằng Spring Boot, UI bằng Next.js / React.
 

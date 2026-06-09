@@ -4,6 +4,7 @@ import com.nvh12.dashboard.application.PageView;
 import com.nvh12.dashboard.application.ReactionSummaryView;
 import com.nvh12.dashboard.application.port.IpBlockPort;
 import com.nvh12.dashboard.application.port.ReactionRepository;
+import com.nvh12.dashboard.application.port.WhitelistPort;
 import com.nvh12.dashboard.domain.ReactionAction;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -21,6 +22,7 @@ public class ReactionController {
 
     private final ReactionRepository reactionRepository;
     private final IpBlockPort ipBlockPort;
+    private final WhitelistPort whitelistPort;
 
     @GetMapping
     public PageView<ReactionSummaryView> listReactions(
@@ -50,5 +52,22 @@ public class ReactionController {
                     return ResponseEntity.<Void>ok().build();
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/whitelist")
+    public List<String> listWhitelist() {
+        return whitelistPort.listWhitelistedIps();
+    }
+
+    @PutMapping("/whitelist")
+    public ResponseEntity<?> replaceWhitelist(@RequestBody List<String> ips) {
+        whitelistPort.replaceWhitelist(ips);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/blocks/lift")
+    public ResponseEntity<?> liftBlocks(@RequestBody List<String> ips) {
+        ips.forEach(ipBlockPort::liftBlock);
+        return ResponseEntity.ok().build();
     }
 }
