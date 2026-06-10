@@ -13,6 +13,8 @@ import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -51,5 +53,28 @@ class RawLogConsumerTest {
 
         assertThatThrownBy(() -> rawLogConsumer.onMessage(rawLog))
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class);
+    }
+
+    @Test
+    void deadLettersMessageWhenEnqueueThrows() {
+        RawLog rawLog = makeRawLog("test-id");
+        when(queueService.enqueue(rawLog)).thenThrow(new RuntimeException("redis down"));
+
+        assertThatThrownBy(() -> rawLogConsumer.onMessage(rawLog))
+                .isInstanceOf(AmqpRejectAndDontRequeueException.class)
+                .hasCauseInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    void silentlyDropsMessageWithNullReceivedAt() {
+        RawLog rawLog = RawLog.builder()
+                .id("no-received-at")
+                .rawMessage("x")
+                .source(LogSource.HTTP)
+                .build();
+
+        rawLogConsumer.onMessage(rawLog);
+
+        verify(queueService, never()).enqueue(any());
     }
 }

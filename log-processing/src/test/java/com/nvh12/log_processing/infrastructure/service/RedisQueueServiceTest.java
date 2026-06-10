@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -82,6 +83,28 @@ class RedisQueueServiceTest {
         boolean result = service.enqueue(makeRawLog("id-overflow"));
 
         assertThat(result).isFalse();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void enqueueReturnsFalseWhenScriptReturnsNull() {
+        when(redisTemplate.execute(any(RedisScript.class), anyList(), any(), any(), any()))
+                .thenReturn(null);
+
+        boolean result = service.enqueue(makeRawLog("id-null-result"));
+
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void enqueueWrapsRedisFailureInRuntimeException() {
+        when(redisTemplate.execute(any(RedisScript.class), anyList(), any(), any(), any()))
+                .thenThrow(new RuntimeException("redis down"));
+
+        assertThatThrownBy(() -> service.enqueue(makeRawLog("id-err")))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Failed to enqueue log id=id-err");
     }
 
     @Test

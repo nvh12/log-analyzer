@@ -15,6 +15,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -89,6 +90,31 @@ class LogProcessingPollerTest {
         poller.start();
 
         verify(worker, timeout(2000).times(2)).processSingleLog(any());
+    }
+
+    @Test
+    void skipsDequeueWhenExecutorQueueExceedsBackpressureThreshold() throws InterruptedException {
+        CountDownLatch release = new CountDownLatch(1);
+        Runnable blocker = () -> {
+            try {
+                release.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        };
+        // corePoolSize=2, backpressureThreshold=5: fill 2 worker threads + 6 queue slots (>5)
+        for (int i = 0; i < 8; i++) {
+            executor.execute(blocker);
+        }
+
+        try {
+            poller = new LogProcessingPoller(queueService, worker, executor, PROPERTIES);
+            poller.start();
+
+            verify(queueService, after(200).never()).dequeueBatch(anyInt());
+        } finally {
+            release.countDown();
+        }
     }
 
     @Test

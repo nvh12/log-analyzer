@@ -1,5 +1,6 @@
 package com.nvh12.log_processing.application;
 
+import com.nvh12.log_processing.domain.model.DropReason;
 import com.nvh12.log_processing.domain.model.FailedLogEntry;
 import com.nvh12.log_processing.domain.model.HttpMethod;
 import com.nvh12.log_processing.domain.model.LogSource;
@@ -20,8 +21,10 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -119,6 +122,20 @@ class DlqRetrySchedulerTest {
         verify(logProcessingService, never()).process(any());
         verify(eventService, never()).publish(any());
         verify(failedLogRepository, never()).saveEntry(any());
+    }
+
+    @Test
+    void exhaustedRetryAuditFailureDoesNotPropagate() {
+        RawLog rawLog = makeRawLog("id-maxed-audit-fail");
+
+        when(failedLogRepository.getFailedLogEntries(anyInt()))
+                .thenReturn(List.of(failedEntry(rawLog, maxRetries)));
+        doThrow(new RuntimeException("audit store down"))
+                .when(dropAuditRepository).record(any(FailedLogEntry.class), eq(DropReason.RETRY_EXHAUSTED));
+
+        assertThatNoException().isThrownBy(() -> scheduler.retryFailedLogs());
+
+        verify(logProcessingService, never()).process(any());
     }
 
     @Test

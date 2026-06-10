@@ -48,8 +48,18 @@ def _cancel_after(n: int):
 @pytest.mark.asyncio
 async def test_init_sets_current_workers():
     redis = AsyncMock()
+    redis.exists.return_value = False
     await scaler.init(redis, default_workers=3)
     redis.set.assert_called_once_with(scaler._CURRENT_KEY, "3")
+
+
+@pytest.mark.asyncio
+async def test_init_skips_reset_when_lock_held():
+    """A respawned worker must not overwrite current_workers while another worker holds the lock."""
+    redis = AsyncMock()
+    redis.exists.return_value = True
+    await scaler.init(redis, default_workers=3)
+    redis.set.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +136,8 @@ async def test_run_scales_up():
          patch("infrastructure.scaler._SIGTTOU", _FAKE_SIGTTOU), \
          patch("infrastructure.scaler._read_pid", return_value=9999), \
          patch("os.kill") as mock_kill:
-        mock_sleep.side_effect = _cancel_after(2)
+        # 1 outer poll sleep + 2 inter-signal sleeps (one per kill), then cancel
+        mock_sleep.side_effect = _cancel_after(4)
         with pytest.raises(asyncio.CancelledError):
             await scaler.run(redis, pid_file="/tmp/x.pid", default_workers=1,
                              min_workers=1, max_workers=8, poll_interval=30)
@@ -147,7 +158,8 @@ async def test_run_scales_down():
          patch("infrastructure.scaler._SIGTTOU", _FAKE_SIGTTOU), \
          patch("infrastructure.scaler._read_pid", return_value=9999), \
          patch("os.kill") as mock_kill:
-        mock_sleep.side_effect = _cancel_after(2)
+        # 1 outer poll sleep + 2 inter-signal sleeps (one per kill), then cancel
+        mock_sleep.side_effect = _cancel_after(4)
         with pytest.raises(asyncio.CancelledError):
             await scaler.run(redis, pid_file="/tmp/x.pid", default_workers=1,
                              min_workers=1, max_workers=8, poll_interval=30)
@@ -212,7 +224,8 @@ async def test_run_clamps_target_to_max():
          patch("infrastructure.scaler._SIGTTOU", _FAKE_SIGTTOU), \
          patch("infrastructure.scaler._read_pid", return_value=9999), \
          patch("os.kill") as mock_kill:
-        mock_sleep.side_effect = _cancel_after(2)
+        # 1 outer poll sleep + 7 inter-signal sleeps (one per kill), then cancel
+        mock_sleep.side_effect = _cancel_after(9)
         with pytest.raises(asyncio.CancelledError):
             await scaler.run(redis, pid_file="/tmp/x.pid", default_workers=1,
                              min_workers=1, max_workers=8, poll_interval=30)
@@ -233,7 +246,8 @@ async def test_run_clamps_target_to_min():
          patch("infrastructure.scaler._SIGTTOU", _FAKE_SIGTTOU), \
          patch("infrastructure.scaler._read_pid", return_value=9999), \
          patch("os.kill") as mock_kill:
-        mock_sleep.side_effect = _cancel_after(2)
+        # 1 outer poll sleep + 2 inter-signal sleeps (one per kill), then cancel
+        mock_sleep.side_effect = _cancel_after(4)
         with pytest.raises(asyncio.CancelledError):
             await scaler.run(redis, pid_file="/tmp/x.pid", default_workers=1,
                              min_workers=1, max_workers=8, poll_interval=30)
@@ -254,7 +268,8 @@ async def test_run_falls_back_to_default_when_replicas_key_absent():
          patch("infrastructure.scaler._SIGTTOU", _FAKE_SIGTTOU), \
          patch("infrastructure.scaler._read_pid", return_value=9999), \
          patch("os.kill") as mock_kill:
-        mock_sleep.side_effect = _cancel_after(2)
+        # 1 outer poll sleep + 2 inter-signal sleeps (one per kill), then cancel
+        mock_sleep.side_effect = _cancel_after(4)
         with pytest.raises(asyncio.CancelledError):
             await scaler.run(redis, pid_file="/tmp/x.pid", default_workers=1,
                              min_workers=1, max_workers=8, poll_interval=30)

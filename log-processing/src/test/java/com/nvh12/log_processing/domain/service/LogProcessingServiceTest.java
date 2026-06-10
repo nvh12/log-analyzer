@@ -95,6 +95,110 @@ class LogProcessingServiceTest {
                 .hasMessageContaining("Unparseable CLF entry");
     }
 
+    @Test
+    void acceptsStatusCode100AsValidLowerBound() {
+        String clf = "1.2.3.4 - - [01/Jul/1995:00:00:01 +0000] \"GET / HTTP/1.0\" 100 0";
+
+        NormalizedLog log = ((ProcessingResult.Http) service.process(rawLog(LogSource.HTTP, clf))).log();
+
+        assertThat(log.statusCode()).isEqualTo(100);
+    }
+
+    @Test
+    void acceptsStatusCode599AsValidUpperBound() {
+        String clf = "1.2.3.4 - - [01/Jul/1995:00:00:01 +0000] \"GET / HTTP/1.0\" 599 0";
+
+        NormalizedLog log = ((ProcessingResult.Http) service.process(rawLog(LogSource.HTTP, clf))).log();
+
+        assertThat(log.statusCode()).isEqualTo(599);
+    }
+
+    @Test
+    void rejectsStatusCodeBelow100() {
+        String clf = "1.2.3.4 - - [01/Jul/1995:00:00:01 +0000] \"GET / HTTP/1.0\" 99 0";
+
+        assertThatThrownBy(() -> service.process(rawLog(LogSource.HTTP, clf)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid status code");
+    }
+
+    @Test
+    void rejectsStatusCodeAbove599() {
+        String clf = "1.2.3.4 - - [01/Jul/1995:00:00:01 +0000] \"GET / HTTP/1.0\" 600 0";
+
+        assertThatThrownBy(() -> service.process(rawLog(LogSource.HTTP, clf)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid status code");
+    }
+
+    @Test
+    void acceptsUrlAtMaxLength() {
+        String url = "/" + "a".repeat(LIMITS.maxUrlLength() - 1);
+        String clf = "1.2.3.4 - - [01/Jul/1995:00:00:01 +0000] \"GET " + url + " HTTP/1.0\" 200 0";
+
+        NormalizedLog log = ((ProcessingResult.Http) service.process(rawLog(LogSource.HTTP, clf))).log();
+
+        assertThat(log.url()).hasSize(LIMITS.maxUrlLength());
+    }
+
+    @Test
+    void rejectsUrlExceedingMaxLength() {
+        String url = "/" + "a".repeat(LIMITS.maxUrlLength());
+        String clf = "1.2.3.4 - - [01/Jul/1995:00:00:01 +0000] \"GET " + url + " HTTP/1.0\" 200 0";
+
+        assertThatThrownBy(() -> service.process(rawLog(LogSource.HTTP, clf)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("URL exceeds max length");
+    }
+
+    @Test
+    void rejectsIpExceedingMaxLength() {
+        String ip = "a".repeat(LIMITS.maxIpLength() + 1);
+        String clf = ip + " - - [01/Jul/1995:00:00:01 +0000] \"GET / HTTP/1.0\" 200 0";
+
+        assertThatThrownBy(() -> service.process(rawLog(LogSource.HTTP, clf)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("IP field too long");
+    }
+
+    @Test
+    void throwsOnUnknownHttpMethod() {
+        String clf = "1.2.3.4 - - [01/Jul/1995:00:00:01 +0000] \"FOO / HTTP/1.0\" 200 0";
+
+        assertThatThrownBy(() -> service.process(rawLog(LogSource.HTTP, clf)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unknown HTTP method");
+    }
+
+    @Test
+    void truncatesUserAgentExceedingMaxLength() {
+        String ua = "A".repeat(LIMITS.maxUaLength() + 100);
+        String clf = "1.2.3.4 - - [01/Jul/1995:00:00:01 +0000] \"GET / HTTP/1.0\" 200 100 \"-\" \"" + ua + "\"";
+
+        NormalizedLog log = ((ProcessingResult.Http) service.process(rawLog(LogSource.HTTP, clf))).log();
+
+        assertThat(log.userAgent()).hasSize(LIMITS.maxUaLength());
+    }
+
+    @Test
+    void truncatesMultiByteUserAgentByCharCount() {
+        String ua = "é".repeat(LIMITS.maxUaLength() + 10);
+        String clf = "1.2.3.4 - - [01/Jul/1995:00:00:01 +0000] \"GET / HTTP/1.0\" 200 100 \"-\" \"" + ua + "\"";
+
+        NormalizedLog log = ((ProcessingResult.Http) service.process(rawLog(LogSource.HTTP, clf))).log();
+
+        assertThat(log.userAgent()).hasSize(LIMITS.maxUaLength());
+    }
+
+    @Test
+    void emptyRefererIsEmptyStringNotNull() {
+        String clf = "1.2.3.4 - - [01/Jul/1995:00:00:01 +0000] \"GET / HTTP/1.0\" 200 100 \"\" \"UA\"";
+
+        NormalizedLog log = ((ProcessingResult.Http) service.process(rawLog(LogSource.HTTP, clf))).log();
+
+        assertThat(log.referer()).isEmpty();
+    }
+
     // ── Flow ─────────────────────────────────────────────────────────────────
 
     @Test
@@ -160,6 +264,25 @@ class LogProcessingServiceTest {
         assertThat(rec.features())
                 .containsEntry("zeroed_feature", 0.0)
                 .containsEntry("normal_feature", 99.9);
+    }
+
+    @Test
+    void sanitizesOverflowingFeatureValuesToZero() {
+        String json = """
+                {
+                  "timestamp": 0.0,
+                  "source_port": 0,
+                  "dest_port": 0,
+                  "features": {"overflow_pos": 1e400, "overflow_neg": -1e400, "normal": 5.0}
+                }
+                """;
+
+        NormalizedFlowRecord rec = ((ProcessingResult.Flow) service.process(rawLog(LogSource.FLOW, json))).record();
+
+        assertThat(rec.features())
+                .containsEntry("overflow_pos", 0.0)
+                .containsEntry("overflow_neg", 0.0)
+                .containsEntry("normal", 5.0);
     }
 
     @Test
