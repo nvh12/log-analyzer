@@ -238,11 +238,8 @@ class TestRuleEngineBenign:
             ),
             _MockRepo(),
         )
-        # A bare apostrophe matches the SQLi pattern — this test documents the
-        # known false-positive risk of the rule engine and validates that it
-        # only fires Layer 1 (not Layer 2 without a model).
-        if result.anomaly:
-            assert result.layer_triggered.startswith("rule_engine")
+        assert result.anomaly is False
+        assert result.layer_triggered is None
 
 
 # ---------------------------------------------------------------------------
@@ -266,8 +263,12 @@ class TestXGBoostLayer:
     def test_confidence_equals_model_probability(self):
         repo = _MockRepo(artifact=_web_artifact(0.82))
         result = web_attack_service.detect(_req(url="/admin", query_string="q=1"), repo)
-        if result.anomaly:
-            assert pytest.approx(result.confidence, abs=1e-4) == 0.82
+        # probability (0.82) is above the default threshold (0.5) and the
+        # request contains no rule-engine signatures, so XGBoost must fire
+        # and confidence must equal the model's raw probability.
+        assert result.anomaly is True
+        assert result.layer_triggered == "xgboost"
+        assert pytest.approx(result.confidence, abs=1e-4) == 0.82
 
     def test_custom_threshold_respected(self):
         # threshold=0.95; probability=0.9 → below → benign

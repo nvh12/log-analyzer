@@ -1,4 +1,4 @@
-package com.nvh12.dashboard.config;
+package com.nvh12.dashboard.infrastructure.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;

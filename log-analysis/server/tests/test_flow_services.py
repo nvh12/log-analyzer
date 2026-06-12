@@ -105,11 +105,42 @@ def _bf_repo(artifact, feature_cols=None) -> _MockRepo:
 
 
 # ---------------------------------------------------------------------------
-# DDoS service — severity thresholds
+# DDoS / Brute Force service — severity thresholds (shared logic)
+# ---------------------------------------------------------------------------
+#
+# Both services delegate to the same run_flow_classifier; parametrize over
+# (service, input_factory, repo_factory) to avoid duplicating the test bodies.
+
+FLOW_SERVICES = [
+    pytest.param(ddos_service, _ddos_input, _ddos_repo, id="ddos"),
+    pytest.param(brute_force_service, _bf_input, _bf_repo, id="brute_force"),
+]
+
+
+@pytest.mark.parametrize("service, input_factory, repo_factory", FLOW_SERVICES)
+class TestFlowSeverity:
+    def test_probability_above_09_is_critical(self, service, input_factory, repo_factory):
+        result = service.detect(input_factory(), repo_factory(_artifact(0.95)))
+        assert result.anomaly is True
+        assert result.severity == Severity.CRITICAL
+
+    def test_probability_below_threshold_is_benign(self, service, input_factory, repo_factory):
+        result = service.detect(input_factory(), repo_factory(_artifact(0.10)))
+        assert result.anomaly is False
+        assert result.severity == Severity.NONE
+
+    def test_custom_threshold_is_respected(self, service, input_factory, repo_factory):
+        # threshold=0.8; probability=0.75 → below → benign
+        result = service.detect(input_factory(), repo_factory(_artifact(0.75, threshold=0.8)))
+        assert result.anomaly is False
+
+
+# ---------------------------------------------------------------------------
+# DDoS service — severity thresholds (DDoS-specific bins)
 # ---------------------------------------------------------------------------
 
 class TestDDoSSeverity:
-    def test_probability_above_09_is_critical(self):
+    def test_probability_above_09_is_critical_with_confidence(self):
         result = ddos_service.detect(_ddos_input(), _ddos_repo(_artifact(0.95)))
         assert result.anomaly is True
         assert result.severity == Severity.CRITICAL
@@ -124,16 +155,6 @@ class TestDDoSSeverity:
         result = ddos_service.detect(_ddos_input(), _ddos_repo(_artifact(0.60)))
         assert result.anomaly is True
         assert result.severity == Severity.MEDIUM
-
-    def test_probability_below_threshold_is_benign(self):
-        result = ddos_service.detect(_ddos_input(), _ddos_repo(_artifact(0.20)))
-        assert result.anomaly is False
-        assert result.severity == Severity.NONE
-
-    def test_custom_threshold_is_respected(self):
-        # threshold=0.8; probability=0.75 → below → benign
-        result = ddos_service.detect(_ddos_input(), _ddos_repo(_artifact(0.75, threshold=0.8)))
-        assert result.anomaly is False
 
 
 # ---------------------------------------------------------------------------
@@ -161,20 +182,31 @@ class TestDDoSResultFields:
 
 
 # ---------------------------------------------------------------------------
-# DDoS service — missing artifact / graceful fallback
+# DDoS / Brute Force service — missing artifact / graceful fallback
 # ---------------------------------------------------------------------------
 
-class TestDDoSFallback:
-    def test_missing_model_returns_benign(self):
-        repo = _MockRepo({DDOS_FEATURE_COLS: FEATURE_COLS})  # no model key
-        result = ddos_service.detect(_ddos_input(), repo)
+@pytest.mark.parametrize("service, input_factory, repo_factory, model_key, feature_cols_key", [
+    pytest.param(ddos_service, _ddos_input, _ddos_repo, DDOS_MODEL, DDOS_FEATURE_COLS, id="ddos"),
+    pytest.param(brute_force_service, _bf_input, _bf_repo, BRUTE_FORCE_MODEL, BRUTE_FORCE_FEATURE_COLS, id="brute_force"),
+])
+class TestFlowFallback:
+    def test_missing_model_returns_benign(self, service, input_factory, repo_factory, model_key, feature_cols_key):
+        repo = _MockRepo({feature_cols_key: FEATURE_COLS})  # no model key
+        result = service.detect(input_factory(), repo)
         assert result.anomaly is False
         assert result.severity == Severity.NONE
 
-    def test_missing_feature_cols_returns_benign(self):
-        repo = _MockRepo({DDOS_MODEL: _artifact(0.9)})  # no feature cols
-        result = ddos_service.detect(_ddos_input(), repo)
+    def test_missing_feature_cols_returns_benign(self, service, input_factory, repo_factory, model_key, feature_cols_key):
+        repo = _MockRepo({model_key: _artifact(0.9)})  # no feature cols
+        result = service.detect(input_factory(), repo)
         assert result.anomaly is False
+
+    def test_feature_count_mismatch_raises(self, service, input_factory, repo_factory, model_key, feature_cols_key):
+        # Model trained on 10 features but feature_cols has 45 → ValueError
+        art = _artifact(0.9, n_features=10)
+        repo = repo_factory(art)
+        with pytest.raises(ValueError, match="expects 10 features"):
+            service.detect(input_factory(), repo)
 
 
 # ---------------------------------------------------------------------------
@@ -182,13 +214,6 @@ class TestDDoSFallback:
 # ---------------------------------------------------------------------------
 
 class TestDDoSFeatureValidation:
-    def test_feature_count_mismatch_raises(self):
-        # Model trained on 10 features but feature_cols has 45 → ValueError
-        art = _artifact(0.9, n_features=10)
-        repo = _ddos_repo(art)
-        with pytest.raises(ValueError, match="expects 10 features"):
-            ddos_service.detect(_ddos_input(), repo)
-
     def test_missing_features_are_filled_and_warning_logged(self, caplog):
         inp = _ddos_input(features={})  # all 45 features absent
         with caplog.at_level(logging.WARNING, logger="domain.services._flow_classifier"):
@@ -209,26 +234,6 @@ class TestDDoSFeatureValidation:
 
 
 # ---------------------------------------------------------------------------
-# Brute Force service — severity thresholds (parallel to DDoS)
-# ---------------------------------------------------------------------------
-
-class TestBruteForceSeverity:
-    def test_probability_above_09_is_critical(self):
-        result = brute_force_service.detect(_bf_input(), _bf_repo(_artifact(0.95)))
-        assert result.anomaly is True
-        assert result.severity == Severity.CRITICAL
-
-    def test_probability_below_threshold_is_benign(self):
-        result = brute_force_service.detect(_bf_input(), _bf_repo(_artifact(0.10)))
-        assert result.anomaly is False
-        assert result.severity == Severity.NONE
-
-    def test_custom_threshold_respected(self):
-        result = brute_force_service.detect(_bf_input(), _bf_repo(_artifact(0.7, threshold=0.8)))
-        assert result.anomaly is False
-
-
-# ---------------------------------------------------------------------------
 # Brute Force service — result fields
 # ---------------------------------------------------------------------------
 
@@ -240,23 +245,6 @@ class TestBruteForceResultFields:
     def test_dest_port_22_propagated(self):
         result = brute_force_service.detect(_bf_input(), _bf_repo(_artifact(0.9)))
         assert result.dest_port == 22
-
-
-# ---------------------------------------------------------------------------
-# Brute Force service — graceful fallback
-# ---------------------------------------------------------------------------
-
-class TestBruteForceFallback:
-    def test_missing_model_returns_benign(self):
-        repo = _MockRepo({BRUTE_FORCE_FEATURE_COLS: FEATURE_COLS})
-        result = brute_force_service.detect(_bf_input(), repo)
-        assert result.anomaly is False
-
-    def test_feature_count_mismatch_raises(self):
-        art = _artifact(0.9, n_features=10)
-        repo = _bf_repo(art)
-        with pytest.raises(ValueError, match="expects 10 features"):
-            brute_force_service.detect(_bf_input(), repo)
 
 
 # ---------------------------------------------------------------------------
@@ -293,7 +281,12 @@ class TestRunFlowClassifier:
     def test_artifact_missing_model_key_logs_warning(self, caplog):
         bad_art = {"scaler": _mock_scaler(), "threshold": 0.5}  # no "model" key
         with caplog.at_level(logging.WARNING, logger="domain.services._flow_classifier"):
-            with pytest.raises(AttributeError):
-                # Falls back to treating the dict itself as the model → AttributeError on predict_proba
-                run_flow_classifier(bad_art, FEATURE_COLS, _make_features(), "test_model")
-        assert "missing 'model' or 'scaler'" in caplog.text
+            # Missing 'model' is handled gracefully: returns a NONE-severity result
+            # instead of raising.
+            prob, anomaly, severity = run_flow_classifier(
+                bad_art, FEATURE_COLS, _make_features(), "test_model"
+            )
+        assert prob == 0.0
+        assert anomaly is False
+        assert severity == Severity.NONE
+        assert "missing 'model'" in caplog.text

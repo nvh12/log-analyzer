@@ -91,105 +91,90 @@ def test_flow_features_has_required_keys(scenario):
 
 
 # ---------------------------------------------------------------------------
-# BRUTE_FORCE scenario: attack logs use target_ip (70 %) or the preset secondary
-# pool (30 %); benign mix (20 %) falls through to NORMAL (random IPs).
-# Expected target_ip rate: 80 % attack × 70 % target_ip = 56 %; σ ≈ 5.
-# Threshold set at 40 (>3σ below expected) to avoid flakiness.
+# Probabilistic frequency tests: generate N logs and check how often a
+# scenario-specific marker (target_ip used / attack UA present) appears.
+#
+# BRUTE_FORCE: attack logs use target_ip (70%) or the preset secondary pool
+#   (30%); benign mix (20%) falls through to NORMAL (random IPs).
+#   Expected target_ip rate: 80% attack x 70% target_ip = 56%; sigma ~= 5.
+#   Threshold set at 40 (>3 sigma below expected) to avoid flakiness.
+#
+# WEB_ATTACK: attack logs use attack paths from target_ip (p=0.7). Benign mix
+#   (p=0.3) uses random IPs. Combined target_ip rate ~= 0.7*0.7 = 49%.
+#   Threshold set at 35 (>3 sigma below expected) to avoid flakiness.
+#
+# DDOS: attack logs use "python-requests/2.31.0"; benign mix uses real
+#   browser UAs. Expected attack ratio = 0.7, so UA rate ~= 70%.
+#   Threshold set at 50 (>4 sigma below expected) to avoid flakiness.
 # ---------------------------------------------------------------------------
 
-def test_brute_force_http_mostly_uses_target_ip():
-    target_count = sum(
+def _http_source_ip(log):
+    return log.rawMessage.split(" ")[0]
+
+
+def _flow_source_ip(log):
+    return json.loads(log.rawMessage)["source_ip"]
+
+
+def _http_has_python_requests_ua(log):
+    return '"python-requests/2.31.0"' in log.rawMessage
+
+
+@pytest.mark.parametrize(
+    "scenario, log_type, extractor, expected_value, iterations, min_count, description",
+    [
+        (
+            SimulationScenario.BRUTE_FORCE, LogType.HTTP, _http_source_ip, _TARGET_IP,
+            100, 40, "target_ip in ~56% of BRUTE_FORCE HTTP logs",
+        ),
+        (
+            SimulationScenario.BRUTE_FORCE, LogType.FLOW, _flow_source_ip, _TARGET_IP,
+            100, 40, "target_ip in ~56% of BRUTE_FORCE FLOW logs",
+        ),
+        (
+            SimulationScenario.WEB_ATTACK, LogType.HTTP, _http_source_ip, _TARGET_IP,
+            100, 35, "target_ip in ~49% of WEB_ATTACK HTTP logs",
+        ),
+        (
+            SimulationScenario.DDOS, LogType.HTTP, _http_has_python_requests_ua, True,
+            100, 50, "python-requests UA in ~70% of DDOS HTTP logs",
+        ),
+    ],
+)
+def test_scenario_marker_frequency(scenario, log_type, extractor, expected_value, iterations, min_count, description):
+    count = sum(
         1
-        for _ in range(100)
-        if log_generator.generate(
-            SimulationScenario.BRUTE_FORCE, LogType.HTTP, target_ip=_TARGET_IP
-        ).rawMessage.split(" ")[0] == _TARGET_IP
+        for _ in range(iterations)
+        if extractor(log_generator.generate(scenario, log_type, target_ip=_TARGET_IP)) == expected_value
     )
-    assert target_count >= 40, (
-        f"Expected target_ip in ~56% of BRUTE_FORCE HTTP logs, got {target_count}/100"
+    assert count >= min_count, (
+        f"Expected {description}, got {count}/{iterations}"
     )
 
 
-def test_brute_force_flow_mostly_uses_target_ip():
-    target_count = sum(
-        1
-        for _ in range(100)
-        if json.loads(
-            log_generator.generate(
-                SimulationScenario.BRUTE_FORCE, LogType.FLOW, target_ip=_TARGET_IP
-            ).rawMessage
-        )["source_ip"] == _TARGET_IP
-    )
-    assert target_count >= 40, (
-        f"Expected target_ip in ~56% of BRUTE_FORCE FLOW logs, got {target_count}/100"
-    )
+# ---------------------------------------------------------------------------
+# BRUTE_FORCE scenario: attack logs (attack_ratio=1.0) should come from more
+# than one source IP (target_ip + preset secondary pool), in both HTTP and
+# FLOW formats.
+# ---------------------------------------------------------------------------
 
-
-def test_brute_force_http_uses_multiple_source_ips():
-    """Attack logs should come from more than one source IP (target_ip + preset pool)."""
+@pytest.mark.parametrize(
+    "log_type, extractor",
+    [
+        (LogType.HTTP, _http_source_ip),
+        (LogType.FLOW, _flow_source_ip),
+    ],
+)
+def test_brute_force_uses_multiple_source_ips(log_type, extractor):
     ips = {
-        log_generator.generate(
-            SimulationScenario.BRUTE_FORCE, LogType.HTTP,
+        extractor(log_generator.generate(
+            SimulationScenario.BRUTE_FORCE, log_type,
             target_ip=_TARGET_IP, attack_ratio=1.0,
-        ).rawMessage.split(" ")[0]
+        ))
         for _ in range(50)
     }
     assert len(ips) >= 2, (
-        f"Expected ≥2 distinct source IPs in BRUTE_FORCE HTTP logs, got {sorted(ips)}"
-    )
-
-
-def test_brute_force_flow_uses_multiple_source_ips():
-    """Flow attack logs should carry more than one source_ip value."""
-    ips = {
-        json.loads(
-            log_generator.generate(
-                SimulationScenario.BRUTE_FORCE, LogType.FLOW,
-                target_ip=_TARGET_IP, attack_ratio=1.0,
-            ).rawMessage
-        )["source_ip"]
-        for _ in range(50)
-    }
-    assert len(ips) >= 2, (
-        f"Expected ≥2 distinct source IPs in BRUTE_FORCE FLOW logs, got {sorted(ips)}"
-    )
-
-
-# ---------------------------------------------------------------------------
-# WEB_ATTACK scenario: attack logs use attack paths from target_ip (p=0.7).
-# Benign mix (p=0.3) uses random IPs. Combined target_ip rate ≈ 0.7*0.7 = 49%.
-# Threshold set at 35 (>3σ below expected) to avoid flakiness.
-# ---------------------------------------------------------------------------
-
-def test_web_attack_http_uses_target_ip_frequently():
-    target_count = sum(
-        1
-        for _ in range(100)
-        if log_generator.generate(
-            SimulationScenario.WEB_ATTACK, LogType.HTTP, target_ip=_TARGET_IP
-        ).rawMessage.split(" ")[0] == _TARGET_IP
-    )
-    assert target_count >= 35, (
-        f"Expected target_ip in ~49% of WEB_ATTACK HTTP logs, got {target_count}/100"
-    )
-
-
-# ---------------------------------------------------------------------------
-# DDOS scenario: attack logs use "python-requests/2.31.0"; benign mix uses
-# real browser UAs. Expected attack ratio = 0.7, so UA rate ≈ 70%.
-# Threshold set at 50 (>4σ below expected) to avoid flakiness.
-# ---------------------------------------------------------------------------
-
-def test_ddos_http_user_agent_is_python_requests_frequently():
-    ua_count = sum(
-        1
-        for _ in range(100)
-        if '"python-requests/2.31.0"' in log_generator.generate(
-            SimulationScenario.DDOS, LogType.HTTP, target_ip=_TARGET_IP
-        ).rawMessage
-    )
-    assert ua_count >= 50, (
-        f"Expected python-requests UA in ~70% of DDOS HTTP logs, got {ua_count}/100"
+        f"Expected >=2 distinct source IPs in BRUTE_FORCE {log_type} logs, got {sorted(ips)}"
     )
 
 
@@ -198,29 +183,27 @@ def test_ddos_http_user_agent_is_python_requests_frequently():
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# attack_ratio override: attack_ratio=1.0 → all attack; attack_ratio=0.0 → all benign
+# attack_ratio override: attack_ratio=1.0 -> all attack; attack_ratio=0.0 -> all benign
 # ---------------------------------------------------------------------------
 
-def test_attack_ratio_one_produces_all_attack_logs_for_ddos():
+@pytest.mark.parametrize(
+    "attack_ratio, expected_count",
+    [
+        (1.0, 30),
+        (0.0, 0),
+    ],
+)
+def test_attack_ratio_extremes_for_ddos(attack_ratio, expected_count):
     ua_count = sum(
         1
         for _ in range(30)
         if '"python-requests/2.31.0"' in log_generator.generate(
-            SimulationScenario.DDOS, LogType.HTTP, target_ip=_TARGET_IP, attack_ratio=1.0
+            SimulationScenario.DDOS, LogType.HTTP, target_ip=_TARGET_IP, attack_ratio=attack_ratio
         ).rawMessage
     )
-    assert ua_count == 30, f"Expected all 30 DDOS logs to use attack UA, got {ua_count}"
-
-
-def test_attack_ratio_zero_produces_no_attack_logs_for_ddos():
-    ua_count = sum(
-        1
-        for _ in range(30)
-        if '"python-requests/2.31.0"' in log_generator.generate(
-            SimulationScenario.DDOS, LogType.HTTP, target_ip=_TARGET_IP, attack_ratio=0.0
-        ).rawMessage
+    assert ua_count == expected_count, (
+        f"Expected {expected_count}/30 DDOS logs with attack UA at attack_ratio={attack_ratio}, got {ua_count}"
     )
-    assert ua_count == 0, f"Expected no DDOS attack UA logs when attack_ratio=0, got {ua_count}"
 
 
 def test_attack_ratio_overrides_scenario_default_for_brute_force():
@@ -265,32 +248,26 @@ def test_normal_http_ua_is_non_empty():
     assert len(ua) > 0, "Expected non-empty UA in NORMAL HTTP log"
 
 
-def test_normal_http_referer_is_sometimes_non_dash():
-    """NORMAL scenario generates real referers ~40% of the time.
-    Over 20 samples the probability of zero non-dash referers is (0.6)^20 ≈ 3.7e-5."""
+# NORMAL generates real referers ~40% of the time; over 20 samples the
+# probability of zero non-dash referers is (0.6)^20 ~= 3.7e-5.
+# TRAFFIC_SPIKE generates real referers ~30% of the time.
+@pytest.mark.parametrize(
+    "scenario, iterations",
+    [
+        (SimulationScenario.NORMAL, 20),
+        (SimulationScenario.TRAFFIC_SPIKE, 30),
+    ],
+)
+def test_http_referer_is_sometimes_non_dash(scenario, iterations):
     non_dash = sum(
         1
-        for _ in range(20)
+        for _ in range(iterations)
         if re.findall(r'"([^"]*)"', log_generator.generate(
-            SimulationScenario.NORMAL, LogType.HTTP, target_ip=_TARGET_IP
+            scenario, LogType.HTTP, target_ip=_TARGET_IP
         ).rawMessage)[1] != "-"
     )
     assert non_dash >= 1, (
-        "Expected at least one non-dash referer across 20 NORMAL HTTP logs"
-    )
-
-
-def test_traffic_spike_http_referer_is_sometimes_non_dash():
-    """TRAFFIC_SPIKE generates real referers ~30% of the time."""
-    non_dash = sum(
-        1
-        for _ in range(30)
-        if re.findall(r'"([^"]*)"', log_generator.generate(
-            SimulationScenario.TRAFFIC_SPIKE, LogType.HTTP, target_ip=_TARGET_IP
-        ).rawMessage)[1] != "-"
-    )
-    assert non_dash >= 1, (
-        "Expected at least one non-dash referer across 30 TRAFFIC_SPIKE HTTP logs"
+        f"Expected at least one non-dash referer across {iterations} {scenario} HTTP logs"
     )
 
 

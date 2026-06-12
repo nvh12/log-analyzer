@@ -73,7 +73,7 @@ public abstract class AbstractContainerIT {
     void resetState() {
         jdbcTemplate.execute("TRUNCATE log_processing.normalized_http RESTART IDENTITY CASCADE");
         jdbcTemplate.execute("TRUNCATE log_processing.normalized_flow RESTART IDENTITY CASCADE");
-        jdbcTemplate.execute("TRUNCATE detection_results RESTART IDENTITY CASCADE");
+        jdbcTemplate.execute("TRUNCATE analysis.detection_results RESTART IDENTITY CASCADE");
         jdbcTemplate.execute("TRUNCATE reaction.reaction_logs RESTART IDENTITY CASCADE");
         stringRedisTemplate.execute((RedisCallback<Void>) conn -> {
             conn.serverCommands().flushDb();

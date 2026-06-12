@@ -43,7 +43,7 @@ async def test_web_attack_triggers_ip_block(simulation_client, pg_conn, redis_cl
     # Detection job fires every 2s; rule engine should flag SQLi/XSS patterns.
     async def detection_recorded():
         n = await pg_conn.fetchval(
-            "SELECT COUNT(*) FROM detection_results WHERE detection_type = 'WEB_ATTACK'"
+            "SELECT COUNT(*) FROM analysis.detection_results WHERE detection_type = 'WEB_ATTACK'"
         )
         return n >= 1
 

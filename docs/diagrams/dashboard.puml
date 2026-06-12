@@ -1,0 +1,249 @@
+@startuml dashboard
+top to bottom direction
+
+skinparam packageStyle folder
+skinparam linetype ortho
+skinparam ranksep 100
+skinparam nodesep 40
+skinparam DefaultFontSize 23
+
+hide circle
+hide empty members
+
+' ---- Layout / Together groups ----
+together {
+  package domain {
+    class DetectionType
+    class NetworkLayer
+    class ReactionAction
+    class Severity
+
+    DetectionType -[hidden]down- NetworkLayer
+    NetworkLayer -[hidden]down- ReactionAction
+    ReactionAction -[hidden]down- Severity
+  }
+}
+
+together {
+  package application {
+    class ThroughputService
+    class PageView
+    class DetectionSummaryView
+    class DetectionDetailView
+    class HttpLogView
+    class FlowLogView
+    class ReactionSummaryView
+
+    ThroughputService -[hidden]down- PageView
+    PageView -[hidden]down- DetectionSummaryView
+    DetectionSummaryView -[hidden]down- DetectionDetailView
+    DetectionDetailView -[hidden]down- HttpLogView
+    HttpLogView -[hidden]down- FlowLogView
+    FlowLogView -[hidden]down- ReactionSummaryView
+  }
+
+  package "application.port" {
+    interface DetectionRepository
+    interface HttpLogRepository
+    interface FlowLogRepository
+    interface ReactionRepository
+    interface IpBlockPort
+    interface WhitelistPort
+    interface BroadcastPort
+    interface SseRegistrar
+
+    DetectionRepository -[hidden]down- HttpLogRepository
+    HttpLogRepository -[hidden]down- FlowLogRepository
+    FlowLogRepository -[hidden]down- ReactionRepository
+    ReactionRepository -[hidden]down- IpBlockPort
+    IpBlockPort -[hidden]down- WhitelistPort
+    WhitelistPort -[hidden]down- BroadcastPort
+    BroadcastPort -[hidden]down- SseRegistrar
+  }
+}
+
+together {
+  package presentation {
+    class DetectionController
+    class LogController
+    class ReactionController
+    class SseController
+    class SystemController
+
+    DetectionController -[hidden]down- LogController
+    LogController -[hidden]down- ReactionController
+    ReactionController -[hidden]down- SseController
+    SseController -[hidden]down- SystemController
+  }
+}
+
+together {
+  package "infrastructure.mq" {
+    class DetectionResultListener
+    class ReactionResultListener
+    class RabbitMqConfig
+
+    DetectionResultListener -[hidden]down- ReactionResultListener
+    ReactionResultListener -[hidden]down- RabbitMqConfig
+  }
+
+  package "infrastructure.mq.dto" {
+    class DetectionMessage
+    class ReactionResultMessage
+
+    DetectionMessage -[hidden]down- ReactionResultMessage
+  }
+
+  package "infrastructure.redis" {
+    class IpBlockStore
+    class WhitelistStore
+    class RedisConfig
+
+    IpBlockStore -[hidden]down- WhitelistStore
+    WhitelistStore -[hidden]down- RedisConfig
+  }
+
+  package "infrastructure.sse" {
+    class SseEmitterRegistry
+  }
+}
+
+together {
+  package "infrastructure.persistence.repository" {
+    class DetectionRepositoryImpl
+    class HttpLogRepositoryImpl
+    class FlowLogRepositoryImpl
+    class ReactionRepositoryImpl
+
+    DetectionRepositoryImpl -[hidden]down- HttpLogRepositoryImpl
+    HttpLogRepositoryImpl -[hidden]down- FlowLogRepositoryImpl
+    FlowLogRepositoryImpl -[hidden]down- ReactionRepositoryImpl
+  }
+}
+
+together {
+  package "infrastructure.persistence.repository.jpa" {
+    interface JpaDetectionResultRepository
+    interface JpaHttpLogRepository
+    interface JpaFlowLogRepository
+    interface JpaReactionLogRepository
+
+    JpaDetectionResultRepository -[hidden]down- JpaHttpLogRepository
+    JpaHttpLogRepository -[hidden]down- JpaFlowLogRepository
+    JpaFlowLogRepository -[hidden]down- JpaReactionLogRepository
+  }
+}
+
+together {
+  package "infrastructure.persistence.entity" {
+    class DetectionResultEntity
+    class NormalizedHttpEntity
+    class NormalizedFlowEntity
+    class ReactionLogEntity
+
+    DetectionResultEntity -[hidden]down- NormalizedHttpEntity
+    NormalizedHttpEntity -[hidden]down- NormalizedFlowEntity
+    NormalizedFlowEntity -[hidden]down- ReactionLogEntity
+  }
+
+  package "infrastructure.persistence.mapper" {
+    class DetectionMapper
+    class HttpLogMapper
+    class FlowLogMapper
+    class ReactionMapper
+    class JsonBooleanMapConverter
+    class JsonDoubleMapConverter
+
+    DetectionMapper -[hidden]down- HttpLogMapper
+    HttpLogMapper -[hidden]down- FlowLogMapper
+    FlowLogMapper -[hidden]down- ReactionMapper
+    ReactionMapper -[hidden]down- JsonBooleanMapConverter
+    JsonBooleanMapConverter -[hidden]down- JsonDoubleMapConverter
+  }
+}
+
+together {
+  package "infrastructure.config" {
+    class DashboardProperties
+    class WebConfig
+
+    DashboardProperties -[hidden]down- WebConfig
+  }
+}
+
+' ---- Layer Order ----
+domain -[hidden]down- application
+application -[hidden]down- presentation
+presentation -[hidden]down- "infrastructure.mq"
+"infrastructure.mq" -[hidden]down- "infrastructure.persistence.repository"
+"infrastructure.persistence.repository" -[hidden]down- "infrastructure.persistence.repository.jpa"
+"infrastructure.persistence.repository.jpa" -[hidden]down- "infrastructure.persistence.entity"
+"infrastructure.persistence.entity" -[hidden]down- "infrastructure.config"
+
+application -[hidden]right- "application.port"
+"infrastructure.mq" -[hidden]right- "infrastructure.mq.dto"
+"infrastructure.mq.dto" -[hidden]right- "infrastructure.redis"
+"infrastructure.redis" -[hidden]right- "infrastructure.sse"
+"infrastructure.persistence.entity" -[hidden]right- "infrastructure.persistence.mapper"
+
+' ---- presentation -> application.port ----
+DetectionController --> DetectionRepository
+LogController --> HttpLogRepository
+LogController --> FlowLogRepository
+ReactionController --> ReactionRepository
+ReactionController --> IpBlockPort
+ReactionController --> WhitelistPort
+SseController --> SseRegistrar
+SystemController --> DashboardProperties
+
+' ---- application ----
+ThroughputService --> HttpLogRepository
+ThroughputService --> FlowLogRepository
+ThroughputService --> BroadcastPort
+
+' ---- application.port -> application (views, package-level) ----
+"application.port" ..> application : returns
+
+' ---- domain usage (package-level) ----
+"application.port" ..> domain : uses
+
+' ---- infrastructure.mq ----
+DetectionResultListener --> BroadcastPort
+ReactionResultListener --> BroadcastPort
+"infrastructure.mq" ..> "infrastructure.mq.dto" : uses
+
+' ---- infrastructure.redis ----
+IpBlockStore ..|> IpBlockPort
+WhitelistStore ..|> WhitelistPort
+
+' ---- infrastructure.sse ----
+SseEmitterRegistry ..|> BroadcastPort
+SseEmitterRegistry ..|> SseRegistrar
+
+' ---- infrastructure.persistence.repository ----
+DetectionRepositoryImpl ..|> DetectionRepository
+DetectionRepositoryImpl --> JpaDetectionResultRepository
+DetectionRepositoryImpl --> DetectionMapper
+
+HttpLogRepositoryImpl ..|> HttpLogRepository
+HttpLogRepositoryImpl --> JpaHttpLogRepository
+HttpLogRepositoryImpl --> HttpLogMapper
+
+FlowLogRepositoryImpl ..|> FlowLogRepository
+FlowLogRepositoryImpl --> JpaFlowLogRepository
+FlowLogRepositoryImpl --> FlowLogMapper
+
+ReactionRepositoryImpl ..|> ReactionRepository
+ReactionRepositoryImpl --> JpaReactionLogRepository
+ReactionRepositoryImpl --> ReactionMapper
+
+' ---- jpa -> entity ----
+JpaDetectionResultRepository --> DetectionResultEntity
+JpaHttpLogRepository --> NormalizedHttpEntity
+JpaFlowLogRepository --> NormalizedFlowEntity
+JpaReactionLogRepository --> ReactionLogEntity
+
+' ---- mapper -> entity (package-level) ----
+"infrastructure.persistence.mapper" ..> "infrastructure.persistence.entity" : maps
+
+@enduml

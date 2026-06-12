@@ -51,7 +51,18 @@ Required keys for deploy mode:
 | `MINIO_USER` / `MINIO_PASS` | Min 8 chars for MinIO |
 | `REDIS_PASS` | **Required in deploy mode** — Redis runs password-protected |
 | `ADMIN_API_KEY` | API key for the simulation service admin endpoints |
+| `DOMAIN` | Your public domain name. Used by `dashboard-fe` to mount the Let's Encrypt certificate for that domain (see step 3a) |
 | `CORS_ORIGINS` | Set to your public dashboard URL, e.g. `https://yourdomain.com` |
+
+Optional overrides (sensible defaults are baked into `compose-deploy.yml`):
+
+| Key | Default | Notes |
+|---|---|---|
+| `POSTGRES_DB` | `log-analyzer` | |
+| `MINIO_BUCKET` | `models` | |
+| `MINIO_SECURE` | `false` | Set `true` if MinIO itself is fronted by TLS |
+| `*_PORT` (`POSTGRES_PORT`, `RABBITMQ_PORT`, `RABBITMQ_MGMT_PORT`, `REDIS_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `APP_PORT`, `DETECTION_PORT`, `SIMULATION_PORT`, `REACTION_PORT`, `DASHBOARD_PORT`) | see `.env.example` | All bound to `127.0.0.1` only — not reachable from outside the host |
+| `FRONTEND_PORT` / `FRONTEND_HTTP_PORT` | `443` / `80` | The only ports `dashboard-fe` (Nginx) exposes publicly |
 
 Alert channel (pick one via `ALERT_PROVIDER`):
 
@@ -60,6 +71,24 @@ Alert channel (pick one via `ALERT_PROVIDER`):
 | `smtp` | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `ALERT_MAIL_FROM`, `ALERT_MAIL_TO` |
 | `resend` | `RESEND_API_KEY`, `ALERT_MAIL_FROM`, `ALERT_MAIL_TO` |
 | `discord` | `DISCORD_WEBHOOK_URL` |
+
+---
+
+## 2a. Provision a TLS Certificate
+
+`compose-deploy.yml` builds `dashboard-fe` with `SSL=true` and mounts a Let's Encrypt certificate from the host:
+
+```yaml
+volumes:
+  - /etc/letsencrypt/live/${DOMAIN}/fullchain.pem:/etc/nginx/ssl/cert.pem:ro
+  - /etc/letsencrypt/live/${DOMAIN}/privkey.pem:/etc/nginx/ssl/key.pem:ro
+```
+
+Before the first `up`, obtain a certificate for `DOMAIN` on the host (e.g. via `certbot certonly`), so `/etc/letsencrypt/live/${DOMAIN}/{fullchain,privkey}.pem` exist. Without these files, `dashboard-fe` will fail to start. Renewals are handled on the host (e.g. `certbot renew` via cron/systemd timer); restart `dashboard-fe` after renewal to pick up the new files:
+
+```bash
+docker compose -f compose-deploy.yml restart dashboard-fe
+```
 
 ---
 
@@ -110,34 +139,40 @@ Total cold-start time is typically 3–5 minutes.
 
 ## 5. Verify
 
-After `run.sh` exits, check all service health endpoints:
+After `run.sh` exits, check all service health endpoints from the server itself (these ports are bound to `127.0.0.1`, so they are not reachable remotely):
 
 ```bash
-# Application services
-curl http://localhost:8080/actuator/health   # log-processing
-curl http://localhost:8000/health            # log-analysis
-curl http://localhost:8001/health            # simulation
-curl http://localhost:8083/actuator/health   # dashboard
-
-# Dashboard UI
-open http://localhost:3000
+# Application services (use your configured *_PORT values, defaults shown)
+curl http://localhost:8080/actuator/health   # log-processing (APP_PORT)
+curl http://localhost:8000/health            # log-analysis   (DETECTION_PORT)
+curl http://localhost:8001/health            # simulation     (SIMULATION_PORT)
+curl http://localhost:8082/actuator/health   # reaction       (REACTION_PORT)
+curl http://localhost:8083/actuator/health   # dashboard      (DASHBOARD_PORT)
 ```
 
-RabbitMQ management UI at `http://localhost:15672` and MinIO console at `http://localhost:9001`.
+RabbitMQ management UI at `http://localhost:15672` and MinIO console at `http://localhost:9001` (also localhost-only).
+
+The dashboard UI is the one publicly exposed entrypoint, served over HTTPS by `dashboard-fe`:
+
+```bash
+open https://yourdomain.com   # FRONTEND_PORT (default 443); port 80 redirects to 443
+```
 
 ---
 
-## 6. Expose Publicly (Optional)
+## 6. Public Exposure & Firewall
 
-In deploy mode, all ports except the dashboard frontend (3000) are bound to `127.0.0.1` in `compose-deploy.yml`, so only the UI is reachable from outside the host regardless of firewall configuration. To put a domain in front of it, use a reverse proxy (nginx, Caddy) on port 3000. Example Caddy config:
+`dashboard-fe` (Nginx) is the single public entrypoint. It terminates TLS using the certificate mounted from `/etc/letsencrypt/live/${DOMAIN}/` (see step 2a), redirects HTTP → HTTPS, and reverse-proxies `/api/` to `dashboard` and `/simulate/` to `simulation`. Every other service is bound to `127.0.0.1` and is not reachable externally.
 
+Open only `FRONTEND_HTTP_PORT` (80) and `FRONTEND_PORT` (443) on the host firewall:
+
+```bash
+# Example with ufw
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
 ```
-yourdomain.com {
-    reverse_proxy localhost:3000
-}
-```
 
-Update `CORS_ORIGINS` in `.env` to match your domain and restart the dashboard service:
+Make sure `CORS_ORIGINS` in `.env` matches the public URL (e.g. `https://yourdomain.com`), then restart the dashboard service if you change it:
 
 ```bash
 docker compose -f compose-deploy.yml up -d dashboard

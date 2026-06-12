@@ -83,7 +83,7 @@ async def test_traffic_spike_triggers_scale_up(simulation_client, pg_conn, redis
     # Detection job fires every 2s; spike of 200 vs baseline ~3 triggers Z-score and IQR.
     async def detection_recorded():
         n = await pg_conn.fetchval(
-            "SELECT COUNT(*) FROM detection_results WHERE detection_type = 'TRAFFIC'"
+            "SELECT COUNT(*) FROM analysis.detection_results WHERE detection_type = 'TRAFFIC'"
         )
         return n >= 1
 

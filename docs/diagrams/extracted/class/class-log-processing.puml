@@ -1,0 +1,27 @@
+@startuml class-log-processing
+hide circle
+skinparam classAttributeIconSize 0
+
+class LogProcessingService {
+    - {static} CLF_PATTERN: Pattern
+    - {static} CLF_DATE: DateTimeFormatter
+    - objectMapper: ObjectMapper
+    - validation: ValidationLimits
+    
+    + LogProcessingService(objectMapper: ObjectMapper, validation: ValidationLimits)
+    + process(rawLog: RawLog): ProcessingResult
+    - parseHttp(rawLog: RawLog): NormalizedLog
+    - parseFlow(rawLog: RawLog): NormalizedFlowRecord
+    - toDouble(val: Object): double
+    - sanitize(val: Object): double
+}
+
+' Explanations:
+' CLF_PATTERN: RegEx pattern to parse Apache Common Log Format (CLF) and Combined Log Format.
+' CLF_DATE: Formatter to convert CLF timestamps (e.g. dd/MMM/yyyy:HH:mm:ss Z) to ZonedDateTime.
+' validation: Injectable object containing limits like max URL length, IP length, and User-Agent length to protect against buffer overflows or malicious payloads.
+' process(): Gateway method that switches on rawLog.source (FLOW or HTTP) to invoke specific parsers.
+' parseHttp(): Regex-extracts fields (IP, URL, status code, response size, referrer, user agent) and validates length limits.
+' parseFlow(): Deserializes JSON flow vectors and sanitizes feature fields against NaN and infinite numbers.
+
+@enduml

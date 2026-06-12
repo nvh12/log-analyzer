@@ -1,0 +1,20 @@
+@startuml class-traffic-spike
+hide circle
+skinparam classAttributeIconSize 0
+
+class TrafficUseCase {
+    - _publisher: PublisherPort
+    - _thresholds: TrafficThresholds
+    - _result_repository: ResultRepositoryPort
+    
+    + __init__(publisher: PublisherPort, thresholds: TrafficThresholds, result_repository: ResultRepositoryPort)
+    + execute(input_data: TrafficInput, seasonal_summaries: list[tuple[float, float]]): None {async}
+}
+
+' Explanations:
+' _thresholds: Configuration parameters including weights for the 4 detectors, standard deviation multipliers, and EMA alpha parameters.
+' _publisher: Port adapter publishing traffic anomaly alerts to RabbitMQ.
+' _result_repository: Postgres detection result repository.
+' execute(): Calls the static detect function to run statistical calculations, registers anomalies using weighted voting from 4 detectors, and persists/publishes anomalies when triggered.
+
+@enduml

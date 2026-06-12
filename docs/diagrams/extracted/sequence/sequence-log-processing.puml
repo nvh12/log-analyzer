@@ -1,0 +1,143 @@
+@startuml sequence-log-processing
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 10
+
+box "Ingestion & Presentation Layer" #LightBlue
+participant "RabbitMQ" as MQ
+participant "RawLogConsumer" as Consumer
+participant "DeadLetterConsumer" as DLQConsumer
+end box
+
+box "Application & Domain Layer" #LightYellow
+participant "LogProcessingPoller" as Poller
+participant "LogProcessingWorker" as Worker
+participant "LogProcessingService" as Parser
+participant "DlqRetryScheduler" as Scheduler
+end box
+
+box "Infrastructure & Persistence" #LightGreen
+participant "QueueService\n(RedisQueueService)" as Queue
+participant "ProcessedLogRepository\n(PostgresProcessedLogRepository)" as ProcessedRepo
+participant "EventService\n(EventServiceImpl)" as EventService
+participant "FailedLogRepository\n(RedisDlqRepository)" as FailedRepo
+participant "DropAuditRepository\n(PostgresDropAuditRepository)" as AuditRepo
+end box
+
+== Normal Log Ingestion & Processing Flow ==
+
+MQ -> Consumer : onMessage(RawLog)
+activate Consumer
+Consumer -> Queue : enqueue(RawLog)
+activate Queue
+Queue --> Consumer : accepted / true
+deactivate Queue
+deactivate Consumer
+
+... Polling and Processing loop runs asynchronously ...
+
+Poller -> Poller : check backpressure (queue size)
+activate Poller
+Poller -> Queue : dequeueBatch(batchSize)
+activate Queue
+Queue --> Poller : List<RawLog>
+deactivate Queue
+
+loop for each RawLog
+    Poller -> Worker : execute(() -> processSingleLog(RawLog))
+    activate Worker
+    
+    Worker -> Parser : process(RawLog)
+    activate Parser
+    Parser -> Parser : parseHttp(RawLog) / parseFlow(RawLog)\n(CLF parsing or JSON parsing)
+    Parser --> Worker : ProcessingResult (Http or Flow)
+    deactivate Parser
+    
+    Worker -> ProcessedRepo : save(ProcessingResult)
+    activate ProcessedRepo
+    ProcessedRepo --> Worker : saved
+    deactivate ProcessedRepo
+    
+    Worker -> EventService : publish(ProcessingResult)
+    activate EventService
+    EventService -> MQ : publish to exchange (normalized queue)
+    EventService --> Worker : published
+    deactivate EventService
+    
+    deactivate Worker
+end
+deactivate Poller
+
+== Exception Flow: Dead-Lettering (Broker Level) ==
+
+MQ -> Consumer : onMessage(RawLog)
+activate Consumer
+Consumer -> Queue : enqueue(RawLog)
+activate Queue
+Queue --> Consumer : rejected / false (Queue Full / Exception)
+deactivate Queue
+Consumer -> Consumer : throw AmqpRejectAndDontRequeueException
+deactivate Consumer
+MQ -> MQ : Route to QUEUE_RAW_DLQ
+MQ -> DLQConsumer : onDeadLetter(Message)
+activate DLQConsumer
+DLQConsumer -> AuditRepo : recordDeadLetter(body, logId, reason)
+activate AuditRepo
+AuditRepo --> DLQConsumer : recorded
+deactivate AuditRepo
+deactivate DLQConsumer
+
+== Exception Flow: Worker-level Processing Failure & Retry ==
+
+Poller -> Worker : processSingleLog(RawLog)
+activate Worker
+Worker -> Parser : process(RawLog)
+activate Parser
+Parser --> Worker : throws Parsing Exception / Validation Exception
+deactivate Parser
+Worker -> FailedRepo : save(RawLog, reason)
+activate FailedRepo
+FailedRepo --> Worker : saved to Redis DLQ
+deactivate FailedRepo
+deactivate Worker
+
+... DlqRetryScheduler runs periodically ...
+
+Scheduler -> FailedRepo : getFailedLogEntries(retryBatchSize)
+activate Scheduler
+activate FailedRepo
+FailedRepo --> Scheduler : List<FailedLogEntry>
+deactivate FailedRepo
+
+loop for each FailedLogEntry
+    alt retryCount >= maxRetries
+        Scheduler -> AuditRepo : record(FailedLogEntry, RETRY_EXHAUSTED)
+        activate AuditRepo
+        AuditRepo --> Scheduler : recorded
+        deactivate AuditRepo
+    else retryCount < maxRetries
+        Scheduler -> Parser : process(RawLog)
+        activate Parser
+        alt Retry Success
+            Parser --> Scheduler : ProcessingResult
+            Scheduler -> ProcessedRepo : save(ProcessingResult)
+            activate ProcessedRepo
+            ProcessedRepo --> Scheduler : saved
+            deactivate ProcessedRepo
+            Scheduler -> EventService : publish(ProcessingResult)
+            activate EventService
+            EventService --> Scheduler : published
+            deactivate EventService
+        else Retry Failed
+            Parser --> Scheduler : throws Exception
+            deactivate Parser
+            Scheduler -> FailedRepo : saveEntry(FailedLogEntry with incremented retry count)
+            activate FailedRepo
+            FailedRepo --> Scheduler : updated
+            deactivate FailedRepo
+        end
+    end
+end
+deactivate Scheduler
+
+@enduml

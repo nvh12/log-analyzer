@@ -1,6 +1,6 @@
 # Database Design
 
-Single PostgreSQL instance (`log-analyzer` database) shared across all services. Three application schemas isolate ownership; the `public` schema is owned by the detection service.
+Single PostgreSQL instance (`log-analyzer` database) shared across all services. Three application schemas isolate ownership.
 
 ---
 
@@ -9,7 +9,7 @@ Single PostgreSQL instance (`log-analyzer` database) shared across all services.
 | Schema | Migration Tool | Managed By | Tables |
 |---|---|---|---|
 | `log_processing` | Flyway | log-processing (Java) | `normalized_http`, `normalized_flow`, `drop_audit` |
-| `public` | Custom SQL runner (asyncpg) | log-analysis (Python) | `detection_results`, `schema_migrations` |
+| `analysis` | Custom SQL runner (asyncpg) | log-analysis (Python) | `detection_results`, `schema_migrations` |
 | `reaction` | Flyway | reaction (Java) | `reaction_logs` |
 
 **Cross-schema read access:** The dashboard service reads all tables across all three schemas (read-only via JPA). No foreign key constraints cross schema boundaries — all inter-table relationships are application-level (logical).
@@ -64,7 +64,7 @@ Single PostgreSQL instance (`log-analyzer` database) shared across all services.
              │ (logical join: ip/source_ip + log_timestamp)
              ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  SCHEMA: public                                                           │
+│  SCHEMA: analysis                                                         │
 │                                                                           │
 │  ┌──────────────────────────────────┐   ┌───────────────────────┐        │
 │  │       detection_results          │   │   schema_migrations   │        │
@@ -214,7 +214,7 @@ Permanent audit trail for raw log entries that could not be processed. Populated
 | `failed_at` | TIMESTAMPTZ | Yes | — | Timestamp of the last failed processing attempt; null for first-attempt dead-letters |
 | `dropped_at` | TIMESTAMPTZ | No | — | Timestamp when the entry was written to this table |
 
-### 5.4 `public.detection_results`
+### 5.4 `analysis.detection_results`
 
 Stores anomaly verdicts from all four detection pipelines. **Only anomalies are written** — benign results are discarded and never reach this table. Written by log-analysis (Python), read by reaction service (via RabbitMQ, not direct DB) and dashboard.
 
@@ -235,7 +235,7 @@ Stores anomaly verdicts from all four detection pipelines. **Only anomalies are 
 | `window_end` | TIMESTAMPTZ | Yes | — | End of the 60-second analysis window; **non-null only for TRAFFIC** |
 | `detected_at` | TIMESTAMPTZ | No | — | UTC timestamp when the detection pipeline produced this result |
 
-### 5.5 `public.schema_migrations`
+### 5.5 `analysis.schema_migrations`
 
 Internal migration version tracker used by the log-analysis service's custom SQL runner. Not application data.
 
@@ -274,8 +274,8 @@ Records every automated reaction action taken in response to a detection. Writte
 | `log_processing.drop_audit` | `idx_drop_audit_log_id` | `log_id` | B-tree | Lookup dropped entries by original raw log UUID |
 | `log_processing.drop_audit` | `idx_drop_audit_dropped_at` | `dropped_at` | B-tree | Time-ordered audit queries |
 | `log_processing.drop_audit` | `idx_drop_audit_drop_reason` | `drop_reason` | B-tree | Filter by failure category |
-| `public.detection_results` | `detection_results_detected_at_idx` | `detected_at DESC` | B-tree | Dashboard pagination (most-recent-first default sort) |
-| `public.detection_results` | `detection_results_type_time_idx` | `(detection_type, detected_at DESC)` | B-tree | Filtered list queries by detection type + time |
+| `analysis.detection_results` | `detection_results_detected_at_idx` | `detected_at DESC` | B-tree | Dashboard pagination (most-recent-first default sort) |
+| `analysis.detection_results` | `detection_results_type_time_idx` | `(detection_type, detected_at DESC)` | B-tree | Filtered list queries by detection type + time |
 | `reaction.reaction_logs` | `reaction_logs_source_ip_idx` | `source_ip` | B-tree | IP-filtered reaction queries |
 | `reaction.reaction_logs` | `reaction_logs_reacted_at_idx` | `reacted_at` | B-tree | Time-ordered reaction timeline queries |
 
@@ -286,7 +286,7 @@ Records every automated reaction action taken in response to a detection. Writte
 ```sql
 -- ============================================================
 --  log-analyzer  ·  PostgreSQL database DDL
---  Execution order matters: schemas first, then public tables.
+--  Execution order matters: schemas first, then tables.
 -- ============================================================
 
 
@@ -296,7 +296,7 @@ Records every automated reaction action taken in response to a detection. Writte
 
 CREATE SCHEMA IF NOT EXISTS log_processing;
 CREATE SCHEMA IF NOT EXISTS reaction;
--- public schema already exists in PostgreSQL by default
+CREATE SCHEMA IF NOT EXISTS analysis;
 
 
 -- ============================================================
@@ -371,12 +371,12 @@ CREATE INDEX idx_drop_audit_drop_reason
 
 
 -- ============================================================
---  SCHEMA: public
+--  SCHEMA: analysis
 --  Owner: log-analysis service (custom SQL runner, version 0001)
 -- ============================================================
 
 -- Internal migration tracker (bootstrapped by runner.py before any version SQL is applied)
-CREATE TABLE IF NOT EXISTS schema_migrations
+CREATE TABLE IF NOT EXISTS analysis.schema_migrations
 (
     version    VARCHAR(20) PRIMARY KEY,
     applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -384,7 +384,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations
 
 
 -- Migration 0001
-CREATE TABLE detection_results
+CREATE TABLE analysis.detection_results
 (
     id             BIGSERIAL        PRIMARY KEY,
     detection_type VARCHAR(20)      NOT NULL,
@@ -403,10 +403,10 @@ CREATE TABLE detection_results
 );
 
 CREATE INDEX detection_results_detected_at_idx
-    ON detection_results (detected_at DESC);
+    ON analysis.detection_results (detected_at DESC);
 
 CREATE INDEX detection_results_type_time_idx
-    ON detection_results (detection_type, detected_at DESC);
+    ON analysis.detection_results (detection_type, detected_at DESC);
 
 
 -- ============================================================
@@ -454,7 +454,7 @@ Simulation ──► [log.raw MQ] ──► log-processing
                                 log-analysis
                                      │ (anomalies only)
                               detection_results
-                                    (public)
+                                   (analysis)
                                      │
                            [detection.results MQ]
                                      │

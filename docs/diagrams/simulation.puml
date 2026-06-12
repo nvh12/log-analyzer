@@ -1,0 +1,144 @@
+@startuml simulation
+top to bottom direction
+
+skinparam packageStyle folder
+skinparam linetype ortho
+skinparam ranksep 100
+skinparam nodesep 40
+skinparam DefaultFontSize 23
+
+hide circle
+hide empty members
+
+' ---- Layout / Together groups ----
+together {
+  package "domain.services" {
+    class LogGenerator
+  }
+
+  package "domain.models" {
+    class RawLog
+    class LogSource
+    class SimulationScenario
+    class LogType
+
+    RawLog -[hidden]down- LogSource
+    LogSource -[hidden]down- SimulationScenario
+    SimulationScenario -[hidden]down- LogType
+  }
+}
+
+together {
+  package application {
+    class SimulationUseCase
+  }
+
+  package "application.ports" {
+    interface PublishPort
+  }
+}
+
+together {
+  package "presentation.routers" {
+    class SimulationRouter
+    class AccessControlRouter
+    class TargetRouter
+
+    SimulationRouter -[hidden]down- AccessControlRouter
+    AccessControlRouter -[hidden]down- TargetRouter
+  }
+
+  package "presentation.schemas" {
+    class StartSimulationRequest
+    class ReplayRequest
+    class AccessControlSchemas
+
+    StartSimulationRequest -[hidden]down- ReplayRequest
+    ReplayRequest -[hidden]down- AccessControlSchemas
+  }
+}
+
+together {
+  package "infrastructure.ports" {
+    class RabbitMQPublisherAdapter
+  }
+
+  package "infrastructure.middleware" {
+    class AccessControlMiddleware
+    class HttpLogMiddleware
+
+    AccessControlMiddleware -[hidden]down- HttpLogMiddleware
+  }
+}
+
+together {
+  package infrastructure {
+    class FlowStatsLoader
+    class ReplayLoader
+    class Scaler
+
+    FlowStatsLoader -[hidden]down- ReplayLoader
+    ReplayLoader -[hidden]down- Scaler
+  }
+
+  package "infrastructure.config" {
+    class Settings
+    class Rabbitmq
+    class Redis
+
+    Settings -[hidden]down- Rabbitmq
+    Rabbitmq -[hidden]down- Redis
+  }
+}
+
+together {
+  package dependencies {
+    class Container
+    class AdminAuth
+
+    Container -[hidden]down- AdminAuth
+  }
+}
+
+' ---- Layer Order ----
+"domain.services" -[hidden]down- application
+application -[hidden]down- "presentation.routers"
+"presentation.routers" -[hidden]down- "infrastructure.ports"
+"infrastructure.ports" -[hidden]down- infrastructure
+infrastructure -[hidden]down- dependencies
+
+"domain.services" -[hidden]right- "domain.models"
+application -[hidden]right- "application.ports"
+"presentation.routers" -[hidden]right- "presentation.schemas"
+"infrastructure.ports" -[hidden]right- "infrastructure.middleware"
+infrastructure -[hidden]right- "infrastructure.config"
+
+' ---- presentation ----
+SimulationRouter --> SimulationUseCase
+SimulationRouter --> ReplayLoader
+AccessControlRouter --> AdminAuth
+"presentation.routers" ..> "presentation.schemas" : uses
+
+' ---- application ----
+SimulationUseCase --> PublishPort
+SimulationUseCase --> LogGenerator
+
+' ---- domain ----
+"domain.services" ..> "domain.models" : uses
+
+' ---- infrastructure adapters ----
+RabbitMQPublisherAdapter ..|> PublishPort
+
+' ---- infrastructure -> config ----
+RabbitMQPublisherAdapter --> Rabbitmq
+AccessControlRouter --> Redis
+FlowStatsLoader ..> Settings : configured via
+ReplayLoader ..> Settings : configured via
+Scaler --> Redis
+
+' ---- DI container wiring ----
+Container --> SimulationUseCase
+Container --> RabbitMQPublisherAdapter
+Container --> Settings
+
+@enduml

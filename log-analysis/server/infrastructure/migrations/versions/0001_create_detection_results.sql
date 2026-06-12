@@ -1,4 +1,4 @@
-CREATE TABLE detection_results (
+CREATE TABLE analysis.detection_results (
     id             BIGSERIAL        PRIMARY KEY,
     detection_type VARCHAR(20)      NOT NULL,
     severity       VARCHAR(10)      NOT NULL,
@@ -16,7 +16,7 @@ CREATE TABLE detection_results (
 );
 
 CREATE INDEX detection_results_detected_at_idx
-    ON detection_results (detected_at DESC);
+    ON analysis.detection_results (detected_at DESC);
 
 CREATE INDEX detection_results_type_time_idx
-    ON detection_results (detection_type, detected_at DESC);
+    ON analysis.detection_results (detection_type, detected_at DESC);

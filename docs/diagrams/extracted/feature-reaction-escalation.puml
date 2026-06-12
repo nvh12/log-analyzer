@@ -1,0 +1,127 @@
+@startuml feature-reaction-escalation
+top to bottom direction
+
+skinparam packageStyle folder
+skinparam linetype ortho
+skinparam ranksep 100
+skinparam nodesep 40
+skinparam DefaultFontSize 23
+
+hide circle
+hide empty members
+
+together {
+  package "presentation" {
+    class DetectionResultConsumer
+  }
+}
+
+together {
+  package "service" {
+    abstract class ReactionService
+    interface AlertService
+    interface ReactionLogService
+    interface IpBlockService
+    interface RateLimitService
+    interface ScaleService
+    interface ReactionEventPort
+    interface AlertChannel
+
+    ReactionService -[hidden]down- AlertService
+    AlertService -[hidden]down- ReactionLogService
+    ReactionLogService -[hidden]down- IpBlockService
+    IpBlockService -[hidden]down- RateLimitService
+    RateLimitService -[hidden]down- ScaleService
+    ScaleService -[hidden]down- ReactionEventPort
+    ReactionEventPort -[hidden]down- AlertChannel
+  }
+}
+
+together {
+  package "service.impl" {
+    abstract class EscalatingIpReactionService
+    class BruteForceReactionService
+    class DDoSReactionService
+    class TrafficReactionService
+    class WebAttackReactionService
+    class CompositeAlertService
+    class DiscordAlertService
+    class ResendAlertService
+    class SmtpAlertService
+    class RedisIpBlockService
+    class RedisRateLimitService
+    class RedisScaleService
+    class JpaReactionLogService
+
+    EscalatingIpReactionService -[hidden]down- BruteForceReactionService
+    BruteForceReactionService -[hidden]down- DDoSReactionService
+    DDoSReactionService -[hidden]down- TrafficReactionService
+    TrafficReactionService -[hidden]down- WebAttackReactionService
+    WebAttackReactionService -[hidden]down- CompositeAlertService
+    CompositeAlertService -[hidden]down- DiscordAlertService
+    DiscordAlertService -[hidden]down- ResendAlertService
+    ResendAlertService -[hidden]down- SmtpAlertService
+    SmtpAlertService -[hidden]down- RedisIpBlockService
+    RedisIpBlockService -[hidden]down- RedisRateLimitService
+    RedisRateLimitService -[hidden]down- RedisScaleService
+    RedisScaleService -[hidden]down- JpaReactionLogService
+  }
+}
+
+together {
+  package "infrastructure.mq" {
+    class ReactionResultPublisher
+  }
+
+  package "infrastructure.persistence" {
+    interface ReactionLogRepository
+    class ReactionLogEntity
+
+    ReactionLogRepository -[hidden]down- ReactionLogEntity
+  }
+}
+
+' ---- Layer Order ----
+"presentation" -[hidden]down- "service"
+"service" -[hidden]down- "service.impl"
+"service.impl" -[hidden]down- "infrastructure.mq"
+"infrastructure.mq" -[hidden]right- "infrastructure.persistence"
+
+' ---- Interactions / Relationships ----
+DetectionResultConsumer o-- ReactionService
+
+ReactionService o-- AlertService
+ReactionService o-- ReactionLogService
+
+EscalatingIpReactionService --|> ReactionService
+EscalatingIpReactionService o-- IpBlockService
+EscalatingIpReactionService o-- RateLimitService
+
+BruteForceReactionService --|> EscalatingIpReactionService
+DDoSReactionService --|> EscalatingIpReactionService
+
+TrafficReactionService --|> ReactionService
+TrafficReactionService o-- ScaleService
+
+WebAttackReactionService --|> ReactionService
+WebAttackReactionService o-- IpBlockService
+
+CompositeAlertService ..|> AlertService
+CompositeAlertService o-- AlertChannel
+
+DiscordAlertService ..|> AlertChannel
+ResendAlertService ..|> AlertChannel
+SmtpAlertService ..|> AlertChannel
+
+RedisIpBlockService ..|> IpBlockService
+RedisRateLimitService ..|> RateLimitService
+RedisScaleService ..|> ScaleService
+
+JpaReactionLogService ..|> ReactionLogService
+JpaReactionLogService o-- ReactionEventPort
+JpaReactionLogService o-- ReactionLogRepository
+
+ReactionResultPublisher ..|> ReactionEventPort
+ReactionLogRepository o-- ReactionLogEntity
+
+@enduml

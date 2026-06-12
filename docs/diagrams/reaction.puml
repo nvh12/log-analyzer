@@ -1,0 +1,206 @@
+@startuml reaction
+top to bottom direction
+
+skinparam packageStyle folder
+skinparam linetype ortho
+skinparam ranksep 100
+skinparam nodesep 40
+skinparam DefaultFontSize 23
+
+hide circle
+hide empty members
+
+' ---- Layout / Together groups ----
+together {
+  package "service.dto" {
+    class ReactionInput
+    class BruteForceInput
+    class DDoSInput
+    class TrafficInput
+    class WebAttackInput
+    class ReactionAction
+    class ScaleEvent
+    class DetectionType
+    class Severity
+    class MethodFlags
+    class NetworkLayer
+    class Alert
+    class BruteForceAlert
+    class DDoSAlert
+    class TrafficAlert
+    class WebAttackAlert
+
+    ReactionInput -[hidden]down- BruteForceInput
+    BruteForceInput -[hidden]down- DDoSInput
+    DDoSInput -[hidden]down- TrafficInput
+    TrafficInput -[hidden]down- WebAttackInput
+    WebAttackInput -[hidden]down- ReactionAction
+    ReactionAction -[hidden]down- ScaleEvent
+    ScaleEvent -[hidden]down- DetectionType
+    DetectionType -[hidden]down- Severity
+    Severity -[hidden]down- MethodFlags
+    MethodFlags -[hidden]down- NetworkLayer
+    NetworkLayer -[hidden]down- Alert
+    Alert -[hidden]down- BruteForceAlert
+    BruteForceAlert -[hidden]down- DDoSAlert
+    DDoSAlert -[hidden]down- TrafficAlert
+    TrafficAlert -[hidden]down- WebAttackAlert
+  }
+}
+
+together {
+  package service {
+    abstract class ReactionService
+    interface AlertService
+    interface ReactionLogService
+    interface IpBlockService
+    interface RateLimitService
+    interface ScaleService
+    interface ReactionEventPort
+    interface AlertChannel
+
+    ReactionService -[hidden]down- AlertService
+    AlertService -[hidden]down- ReactionLogService
+    ReactionLogService -[hidden]down- IpBlockService
+    IpBlockService -[hidden]down- RateLimitService
+    RateLimitService -[hidden]down- ScaleService
+    ScaleService -[hidden]down- ReactionEventPort
+    ReactionEventPort -[hidden]down- AlertChannel
+  }
+}
+
+together {
+  package presentation {
+    class DetectionResultConsumer
+  }
+}
+
+together {
+  package "service.impl" {
+    abstract class EscalatingIpReactionService
+    class BruteForceReactionService
+    class DDoSReactionService
+    class TrafficReactionService
+    class WebAttackReactionService
+    class CompositeAlertService
+    class DiscordAlertService
+    class ResendAlertService
+    class SmtpAlertService
+    class AlertHtmlTemplate
+    class RedisIpBlockService
+    class RedisRateLimitService
+    class RedisScaleService
+    class JpaReactionLogService
+    class Retry
+
+    EscalatingIpReactionService -[hidden]down- BruteForceReactionService
+    BruteForceReactionService -[hidden]down- DDoSReactionService
+    DDoSReactionService -[hidden]down- TrafficReactionService
+    TrafficReactionService -[hidden]down- WebAttackReactionService
+    WebAttackReactionService -[hidden]down- CompositeAlertService
+    CompositeAlertService -[hidden]down- DiscordAlertService
+    DiscordAlertService -[hidden]down- ResendAlertService
+    ResendAlertService -[hidden]down- SmtpAlertService
+    SmtpAlertService -[hidden]down- AlertHtmlTemplate
+    AlertHtmlTemplate -[hidden]down- RedisIpBlockService
+    RedisIpBlockService -[hidden]down- RedisRateLimitService
+    RedisRateLimitService -[hidden]down- RedisScaleService
+    RedisScaleService -[hidden]down- JpaReactionLogService
+    JpaReactionLogService -[hidden]down- Retry
+  }
+}
+
+together {
+  package "infrastructure.mq" {
+    class ReactionResultPublisher
+  }
+
+  package "infrastructure.persistence.repository" {
+    interface ReactionLogRepository
+  }
+
+  package "infrastructure.persistence.entity" {
+    class ReactionLogEntity
+  }
+
+  package config {
+    class AlertProperties
+    class RabbitMqConfig
+    class RedisConfig
+    class ResendConfig
+
+    AlertProperties -[hidden]down- RabbitMqConfig
+    RabbitMqConfig -[hidden]down- RedisConfig
+    RedisConfig -[hidden]down- ResendConfig
+  }
+}
+
+' ---- Layer Order ----
+"service.dto" -[hidden]down- service
+service -[hidden]down- presentation
+presentation -[hidden]down- "service.impl"
+"service.impl" -[hidden]down- "infrastructure.mq"
+
+"infrastructure.mq" -[hidden]right- "infrastructure.persistence.repository"
+"infrastructure.persistence.repository" -[hidden]right- "infrastructure.persistence.entity"
+"infrastructure.persistence.entity" -[hidden]right- config
+
+' ---- presentation -> service ----
+DetectionResultConsumer --> ReactionService
+
+' ---- service -> service.dto (package-level, kept minimal) ----
+service ..> "service.dto" : uses
+
+' ---- service abstractions ----
+ReactionService --> AlertService
+ReactionService --> ReactionLogService
+
+' ---- service.impl reaction hierarchy ----
+EscalatingIpReactionService --|> ReactionService
+EscalatingIpReactionService --> IpBlockService
+EscalatingIpReactionService --> RateLimitService
+
+BruteForceReactionService --|> EscalatingIpReactionService
+DDoSReactionService --|> EscalatingIpReactionService
+
+TrafficReactionService --|> ReactionService
+TrafficReactionService --> ScaleService
+
+WebAttackReactionService --|> ReactionService
+WebAttackReactionService --> IpBlockService
+
+' ---- alert services ----
+CompositeAlertService ..|> AlertService
+CompositeAlertService --> AlertChannel
+
+DiscordAlertService ..|> AlertChannel
+ResendAlertService ..|> AlertChannel
+SmtpAlertService ..|> AlertChannel
+DiscordAlertService --> AlertHtmlTemplate
+ResendAlertService --> AlertHtmlTemplate
+SmtpAlertService --> AlertHtmlTemplate
+
+' ---- redis-backed services ----
+RedisIpBlockService ..|> IpBlockService
+RedisRateLimitService ..|> RateLimitService
+RedisScaleService ..|> ScaleService
+RedisIpBlockService --> Retry
+RedisRateLimitService --> Retry
+RedisScaleService --> Retry
+
+' ---- reaction log + mq ----
+JpaReactionLogService ..|> ReactionLogService
+JpaReactionLogService --> ReactionEventPort
+JpaReactionLogService --> ReactionLogRepository
+
+ReactionResultPublisher ..|> ReactionEventPort
+
+' ---- persistence ----
+ReactionLogRepository --> ReactionLogEntity
+
+' ---- config ----
+DiscordAlertService --> AlertProperties
+ResendAlertService --> AlertProperties
+SmtpAlertService --> AlertProperties
+
+@enduml

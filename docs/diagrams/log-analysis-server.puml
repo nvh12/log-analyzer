@@ -1,0 +1,315 @@
+@startuml log-analysis-server
+top to bottom direction
+
+skinparam packageStyle folder
+skinparam linetype ortho
+skinparam ranksep 100
+skinparam nodesep 40
+skinparam DefaultFontSize 23
+
+hide circle
+hide empty members
+
+' =====================================================
+' PRESENTATION
+' =====================================================
+
+together {
+
+  package "presentation.consumers" {
+    class HttpLogConsumer
+    class FlowConsumer
+  }
+
+  package "presentation.schemas" {
+    class LogMessage
+    class FlowMessage
+  }
+
+}
+
+' =====================================================
+' APPLICATION
+' =====================================================
+
+together {
+
+  package application {
+
+    class BruteForceUseCase
+    class DDoSUseCase
+    class TrafficUseCase
+    class WebAttackUseCase
+
+  }
+
+  package "application.ports" {
+
+    package Runtime {
+      interface WindowPort
+      interface HistoryPort
+      interface LockPort
+    }
+
+    package Output {
+      interface PublisherPort
+      interface ResultRepositoryPort
+    }
+
+  }
+
+}
+
+' =====================================================
+' DOMAIN
+' =====================================================
+
+together {
+
+  package "domain.services" {
+
+  package Detection {
+
+    class BruteForceService
+    class DDoSService
+    class TrafficService
+    class WebAttackService
+
+    BruteForceService -[hidden]down- DDoSService
+    DDoSService -[hidden]down- TrafficService
+    TrafficService -[hidden]down- WebAttackService
+  }
+
+  package Support {
+
+    class FlowClassifier
+    class LogWindowAggregator
+
+    FlowClassifier -[hidden]down- LogWindowAggregator
+  }
+
+  Detection -[hidden]right- Support
+}
+
+  package "domain.repository" {
+    interface ModelRepository
+  }
+
+  package "domain.models" {
+
+  package Core {
+
+    class Log
+    class Flow
+    class Vocab
+
+    Log -[hidden]down- Flow
+    Flow -[hidden]down- Vocab
+  }
+
+  package Inputs {
+
+    class BruteForceInput
+    class DDoSInput
+    class TrafficInput
+    class WebAttackInput
+
+    BruteForceInput -[hidden]down- DDoSInput
+    DDoSInput -[hidden]down- TrafficInput
+    TrafficInput -[hidden]down- WebAttackInput
+  }
+
+  package Results {
+
+    class BruteForceResult
+    class DDoSResult
+    class TrafficResult
+    class WebAttackResult
+
+    BruteForceResult -[hidden]down- DDoSResult
+    DDoSResult -[hidden]down- TrafficResult
+    TrafficResult -[hidden]down- WebAttackResult
+  }
+
+  package Shared {
+
+    class TrafficThresholds
+    class DetectionResult
+    class DetectionType
+    class NetworkLayer
+    class Severity
+
+    TrafficThresholds -[hidden]down- DetectionResult
+    DetectionResult -[hidden]down- DetectionType
+    DetectionType -[hidden]down- NetworkLayer
+    NetworkLayer -[hidden]down- Severity
+  }
+
+}
+
+}
+
+' =====================================================
+' INFRASTRUCTURE
+' =====================================================
+
+together {
+
+  package "infrastructure.jobs" {
+    class DetectionJobRunner
+  }
+
+  package "infrastructure.adapters" {
+
+    package Redis {
+      class RedisWindowAdapter
+      class RedisHistoryAdapter
+      class RedisLockAdapter
+    }
+
+    package RabbitMQ {
+      class RabbitMQPublisherAdapter
+    }
+
+    package PostgreSQL {
+      class PostgresDetectionResultRepository
+    }
+
+    
+  }
+
+  package "infrastructure.model_store" {
+    class MinIOModelStore
+  }
+
+  package "infrastructure.config" {
+
+    class Settings
+
+    package Connections {
+      class Postgres
+      class Rabbitmq
+      class Redis
+    }
+
+  }
+
+  package "infrastructure.migrations" {
+    class MigrationRunner
+  }
+
+  package dependencies {
+    class Container
+  }
+  
+  
+
+}
+
+' =====================================================
+' LAYER ORDER
+' =====================================================
+
+"presentation.consumers" -[hidden]down- application
+application -[hidden]down- "domain.services"
+"domain.services" -[hidden]down- "infrastructure.jobs"
+
+"presentation.consumers" -[hidden]right- "presentation.schemas"
+
+application -[hidden]right- "application.ports"
+
+"domain.services" -[hidden]right- "domain.repository"
+"domain.repository" -[hidden]right- "domain.models"
+
+"infrastructure.jobs" -[hidden]down- "infrastructure.adapters"
+"infrastructure.adapters" -[hidden]down- "infrastructure.model_store"
+"infrastructure.model_store" -[hidden]down- "infrastructure.config"
+"infrastructure.config" -[hidden]down- "infrastructure.migrations"
+"infrastructure.migrations" -[hidden]down- dependencies
+
+' =====================================================
+' PRESENTATION
+' =====================================================
+
+HttpLogConsumer --> WindowPort
+
+FlowConsumer --> BruteForceUseCase
+FlowConsumer --> DDoSUseCase
+
+"presentation.consumers" ..> "presentation.schemas" : uses
+
+' =====================================================
+' APPLICATION
+' =====================================================
+
+BruteForceUseCase --> BruteForceService
+BruteForceUseCase --> ModelRepository
+BruteForceUseCase --> PublisherPort
+BruteForceUseCase --> ResultRepositoryPort
+
+DDoSUseCase --> DDoSService
+DDoSUseCase --> ModelRepository
+DDoSUseCase --> PublisherPort
+DDoSUseCase --> ResultRepositoryPort
+
+TrafficUseCase --> TrafficService
+TrafficUseCase --> PublisherPort
+TrafficUseCase --> ResultRepositoryPort
+
+WebAttackUseCase --> WebAttackService
+WebAttackUseCase --> ModelRepository
+WebAttackUseCase --> PublisherPort
+WebAttackUseCase --> ResultRepositoryPort
+
+application ..> "domain.models" : uses
+
+' =====================================================
+' DOMAIN
+' =====================================================
+
+BruteForceService --> FlowClassifier
+DDoSService --> FlowClassifier
+
+' =====================================================
+' JOB ORCHESTRATION
+' =====================================================
+
+DetectionJobRunner --> WindowPort
+DetectionJobRunner --> HistoryPort
+DetectionJobRunner --> LockPort
+
+DetectionJobRunner --> TrafficUseCase
+DetectionJobRunner --> WebAttackUseCase
+
+DetectionJobRunner --> LogWindowAggregator
+
+' =====================================================
+' ADAPTERS
+' =====================================================
+
+RedisWindowAdapter ..|> WindowPort
+RedisHistoryAdapter ..|> HistoryPort
+RedisLockAdapter ..|> LockPort
+
+RabbitMQPublisherAdapter ..|> PublisherPort
+
+PostgresDetectionResultRepository ..|> ResultRepositoryPort
+
+MinIOModelStore ..|> ModelRepository
+
+' =====================================================
+' DEPENDENCY INJECTION
+' =====================================================
+
+Container --> DetectionJobRunner
+
+Container --> BruteForceUseCase
+Container --> DDoSUseCase
+Container --> TrafficUseCase
+Container --> WebAttackUseCase
+
+Container --> "infrastructure.adapters" : creates
+Container --> MinIOModelStore
+Container --> Settings
+
+@enduml

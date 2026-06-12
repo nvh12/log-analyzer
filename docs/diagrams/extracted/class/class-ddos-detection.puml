@@ -1,0 +1,20 @@
+@startuml class-ddos-detection
+hide circle
+skinparam classAttributeIconSize 0
+
+class DDoSUseCase {
+    - _repository: ModelRepository
+    - _publisher: PublisherPort
+    - _result_repository: ResultRepositoryPort
+    
+    + __init__(repository: ModelRepository, publisher: PublisherPort, result_repository: ResultRepositoryPort)
+    + execute(input_data: DDoSInput): None {async}
+}
+
+' Explanations:
+' _repository: Adapter port pointing to MinIOModelStore which caches model binaries and features.
+' _publisher: Port adapter using RabbitMQ to broadcast alert events to the reaction service.
+' _result_repository: Postgres detection result persistence database adapter.
+' execute(): Orchestrator that loads the DDoS XGBoost model/features from MinIO, invokes the classifier detection service, and conditionally saves and publishes the result if an anomaly is confirmed.
+
+@enduml

@@ -1,0 +1,127 @@
+@startuml sequence-traffic-spike-uc1
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 10
+
+box "Presentation & Ingestion" #LightBlue
+participant "RabbitMQ" as MQ
+participant "HttpLogConsumer\n(consumer.py)" as Consumer
+end box
+
+box "Detection Job & UseCase" #LightYellow
+participant "DetectionJobRunner" as Runner
+participant "TrafficUseCase" as UseCase
+end box
+
+box "Domain Services" #LightPink
+participant "LogWindowAggregator" as Aggregator
+participant "TrafficService\n(traffic_service.detect)" as Service
+end box
+
+box "Infrastructure Adapters" #LightGreen
+participant "WindowPort\n(RedisWindowAdapter)" as WindowAdapter
+participant "HistoryPort\n(RedisHistoryAdapter)" as HistoryAdapter
+participant "LockPort\n(RedisLockAdapter)" as LockAdapter
+participant "ResultRepositoryPort\n(PostgresDetectionResultRepository)" as ResultRepo
+participant "PublisherPort\n(RabbitMQPublisherAdapter)" as Publisher
+end box
+
+== Log Ingestion Flow ==
+
+MQ -> Consumer : handle_message(IncomingMessage)
+activate Consumer
+Consumer -> Consumer : parse_log(message.body) -> LogMessage
+Consumer -> WindowAdapter : add_log(Log)
+activate WindowAdapter
+WindowAdapter --> Consumer : added
+deactivate WindowAdapter
+deactivate Consumer
+
+== Periodic Detection Job Flow ==
+
+Runner -> Runner : Trigger by Cron (CRON_TRAFFIC)
+activate Runner
+
+Runner -> LockAdapter : lock("job:traffic", timeout)
+activate LockAdapter
+alt Lock Not Acquired
+    LockAdapter --> Runner : throws LockNotAcquiredError
+    Runner -> Runner : Skip execution
+else Lock Acquired
+    LockAdapter --> Runner : acquired
+    deactivate LockAdapter
+    
+    Runner -> WindowAdapter : get_window()
+    activate WindowAdapter
+    WindowAdapter --> Runner : List<Log>
+    deactivate WindowAdapter
+    
+    Runner -> HistoryAdapter : get_history(traffic_history_key)
+    activate HistoryAdapter
+    HistoryAdapter --> Runner : history counts (req_counts)
+    deactivate HistoryAdapter
+    
+    Runner -> Aggregator : instantiate LogWindowAggregator(logs)
+    activate Aggregator
+    Aggregator --> Runner : aggregator
+    
+    Runner -> Aggregator : to_traffic_input(history)
+    Aggregator --> Runner : TrafficInput
+    deactivate Aggregator
+    
+    alt Hourly Rollover Summary Calculation
+        Runner -> HistoryAdapter : update_timed_history(seasonal_history_key, prev_hour_ts, median, iqr)
+        activate HistoryAdapter
+        HistoryAdapter --> Runner : done
+        deactivate HistoryAdapter
+    end
+    
+    Runner -> HistoryAdapter : get_seasonal_bucket(seasonal_history_key, current_ts)
+    activate HistoryAdapter
+    HistoryAdapter --> Runner : List<tuple<median, iqr>> (seasonal_summaries)
+    deactivate HistoryAdapter
+    
+    Runner -> UseCase : execute(TrafficInput, seasonal_summaries)
+    activate UseCase
+    
+    UseCase -> Service : detect(TrafficInput, thresholds, seasonal_summaries)
+    activate Service
+    note over Service
+      Runs 4-method ensemble:
+      1. Z-Score
+      2. IQR Flag
+      3. EMA Deviation
+      4. Seasonal Robust Z-Score (V2)
+    end note
+    Service --> UseCase : TrafficResult
+    deactivate Service
+    
+    alt Anomaly Detected
+        UseCase -> ResultRepo : save(TrafficResult)
+        activate ResultRepo
+        ResultRepo --> UseCase : saved
+        deactivate ResultRepo
+        
+        UseCase -> Publisher : publish(TrafficResult)
+        activate Publisher
+        Publisher -> MQ : publish to detection results exchange
+        Publisher --> UseCase : published
+        deactivate Publisher
+    end
+    UseCase --> Runner : done
+    deactivate UseCase
+    
+    Runner -> HistoryAdapter : update_history(traffic_history_key, input_data.req_counts, limit=360)
+    activate HistoryAdapter
+    HistoryAdapter --> Runner : done
+    deactivate HistoryAdapter
+    
+    Runner -> LockAdapter : release lock
+    activate LockAdapter
+    LockAdapter --> Runner : released
+    deactivate LockAdapter
+end
+
+deactivate Runner
+
+@enduml

@@ -24,9 +24,9 @@ This document traces every message and table through the pipeline, field by fiel
 | `normalized_http` | `log_processing` | log-processing writes, Dashboard reads | |
 | `normalized_flow` | `log_processing` | log-processing writes, Dashboard reads | |
 | `drop_audit` | `log_processing` | log-processing writes | Dropped/failed logs |
-| `detection_results` | `public` | log-analysis writes, Dashboard reads | |
+| `detection_results` | `analysis` | log-analysis writes, Dashboard reads | |
 | `reaction_logs` | `reaction` | reaction writes, Dashboard reads | |
-| `schema_migrations` | `public` | log-analysis schema tracker | Internal |
+| `schema_migrations` | `analysis` | log-analysis schema tracker | Internal |
 
 ---
 
@@ -282,7 +282,7 @@ Same shape as UC2 (DDOS).
 | `dest_ip` | string | Yes | |
 | `dest_port` | int | Yes | |
 
-### Database: `detection_results` (public schema, written by log-analysis)
+### Database: `detection_results` (analysis schema, written by log-analysis)
 
 | Column | Type | Nullable | Notes |
 |---|---|---|---|

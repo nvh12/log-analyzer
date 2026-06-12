@@ -1,0 +1,101 @@
+@startuml feature-network-flow-uc2-uc4
+top to bottom direction
+
+skinparam packageStyle folder
+skinparam linetype ortho
+skinparam ranksep 100
+skinparam nodesep 40
+skinparam DefaultFontSize 23
+
+hide circle
+hide empty members
+
+together {
+  package "presentation.consumers" {
+    class FlowConsumer
+  }
+}
+
+together {
+  package "application" {
+    class DDoSUseCase
+    class BruteForceUseCase
+  }
+}
+
+together {
+  package "application.ports" {
+    interface PublisherPort
+    interface ResultRepositoryPort
+    interface ModelRepository
+
+    PublisherPort -[hidden]down- ResultRepositoryPort
+    ResultRepositoryPort -[hidden]down- ModelRepository
+  }
+}
+
+together {
+  package "domain.services.detection" {
+    class DDoSService
+    class BruteForceService
+    class FlowClassifier
+
+    DDoSService -[hidden]down- BruteForceService
+    BruteForceService -[hidden]down- FlowClassifier
+  }
+
+  package "domain.models" {
+    class Flow
+    class DDoSInput
+    class BruteForceInput
+    class DDoSResult
+    class BruteForceResult
+
+    Flow -[hidden]down- DDoSInput
+    DDoSInput -[hidden]down- BruteForceInput
+    BruteForceInput -[hidden]down- DDoSResult
+    DDoSResult -[hidden]down- BruteForceResult
+  }
+}
+
+together {
+  package "infrastructure.adapters" {
+    class RabbitMQPublisherAdapter
+    class PostgresDetectionResultRepository
+    class MinIOModelStore
+
+    RabbitMQPublisherAdapter -[hidden]down- PostgresDetectionResultRepository
+    PostgresDetectionResultRepository -[hidden]down- MinIOModelStore
+  }
+}
+
+' ---- Layer Order ----
+"presentation.consumers" -[hidden]down- "application"
+"application" -[hidden]down- "application.ports"
+"application.ports" -[hidden]down- "domain.services.detection"
+"domain.services.detection" -[hidden]down- "infrastructure.adapters"
+
+"domain.services.detection" -[hidden]right- "domain.models"
+
+' ---- Interactions / Relationships ----
+FlowConsumer o-- DDoSUseCase
+FlowConsumer o-- BruteForceUseCase
+
+DDoSUseCase o-- DDoSService
+DDoSUseCase o-- ModelRepository
+DDoSUseCase o-- PublisherPort
+DDoSUseCase o-- ResultRepositoryPort
+
+BruteForceUseCase o-- BruteForceService
+BruteForceUseCase o-- ModelRepository
+BruteForceUseCase o-- PublisherPort
+BruteForceUseCase o-- ResultRepositoryPort
+
+DDoSService o-- FlowClassifier
+BruteForceService o-- FlowClassifier
+
+RabbitMQPublisherAdapter ..|> PublisherPort
+PostgresDetectionResultRepository ..|> ResultRepositoryPort
+MinIOModelStore ..|> ModelRepository
+
+@enduml

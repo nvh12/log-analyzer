@@ -1,0 +1,183 @@
+@startuml log-processing
+top to bottom direction
+
+skinparam packageStyle folder
+skinparam linetype ortho
+skinparam ranksep 100
+skinparam nodesep 40
+skinparam DefaultFontSize 23
+
+hide circle
+hide empty members
+
+' ---- Layout / Together groups ----
+together {
+  package "domain.service" {
+    interface QueueService
+    interface EventService
+    interface ProcessedLogRepository
+    interface FailedLogRepository
+    interface DropAuditRepository
+    class LogProcessingService
+
+    QueueService -[hidden]down- EventService
+    EventService -[hidden]down- ProcessedLogRepository
+    ProcessedLogRepository -[hidden]down- FailedLogRepository
+    FailedLogRepository -[hidden]down- DropAuditRepository
+    DropAuditRepository -[hidden]down- LogProcessingService
+  }
+
+  package "domain.model" {
+    class RawLog
+    class NormalizedLog
+    class NormalizedFlowRecord
+    class ProcessingResult
+    class FailedLogEntry
+    class ValidationLimits
+    class DropReason
+    class HttpMethod
+    class LogSource
+
+    RawLog -[hidden]down- NormalizedLog
+    NormalizedLog -[hidden]down- NormalizedFlowRecord
+    NormalizedFlowRecord -[hidden]down- ProcessingResult
+    ProcessingResult -[hidden]down- FailedLogEntry
+    FailedLogEntry -[hidden]down- ValidationLimits
+    ValidationLimits -[hidden]down- DropReason
+    DropReason -[hidden]down- HttpMethod
+    HttpMethod -[hidden]down- LogSource
+  }
+}
+
+together {
+  package application {
+    class LogProcessingWorker
+    class DlqRetryScheduler
+
+    LogProcessingWorker -[hidden]down- DlqRetryScheduler
+  }
+}
+
+together {
+  package presentation {
+    class RawLogConsumer
+    class DeadLetterConsumer
+
+    RawLogConsumer -[hidden]down- DeadLetterConsumer
+  }
+}
+
+together {
+  package "infrastructure.polling" {
+    class LogProcessingPoller
+  }
+
+  package "infrastructure.service" {
+    class RedisQueueService
+    class EventServiceImpl
+
+    RedisQueueService -[hidden]down- EventServiceImpl
+  }
+}
+
+together {
+  package "infrastructure.persistence.repository" {
+    class RedisDlqRepository
+    class PostgresDropAuditRepository
+    class PostgresProcessedLogRepository
+    class DropAuditJpaRepository
+    class NormalizedHttpJpaRepository
+    class NormalizedFlowJpaRepository
+
+    RedisDlqRepository -[hidden]down- PostgresDropAuditRepository
+    PostgresDropAuditRepository -[hidden]down- PostgresProcessedLogRepository
+    PostgresProcessedLogRepository -[hidden]down- DropAuditJpaRepository
+    DropAuditJpaRepository -[hidden]down- NormalizedHttpJpaRepository
+    NormalizedHttpJpaRepository -[hidden]down- NormalizedFlowJpaRepository
+  }
+
+  package "infrastructure.persistence.entity" {
+    class DropAuditEntity
+    class NormalizedHttpEntity
+    class NormalizedFlowEntity
+
+    DropAuditEntity -[hidden]down- NormalizedHttpEntity
+    NormalizedHttpEntity -[hidden]down- NormalizedFlowEntity
+  }
+}
+
+together {
+  package "infrastructure.config" {
+    class ApplicationBeans
+    class LogProcessingProperties
+    class RabbitMqConfig
+    class ThreadPoolConfig
+
+    ApplicationBeans -[hidden]down- LogProcessingProperties
+    LogProcessingProperties -[hidden]down- RabbitMqConfig
+    RabbitMqConfig -[hidden]down- ThreadPoolConfig
+  }
+}
+
+' ---- Layer Order ----
+"domain.service" -[hidden]down- application
+application -[hidden]down- presentation
+presentation -[hidden]down- "infrastructure.polling"
+"infrastructure.polling" -[hidden]down- "infrastructure.persistence.repository"
+"infrastructure.persistence.repository" -[hidden]down- "infrastructure.config"
+
+"domain.service" -[hidden]right- "domain.model"
+"infrastructure.polling" -[hidden]right- "infrastructure.service"
+"infrastructure.persistence.repository" -[hidden]right- "infrastructure.persistence.entity"
+
+' ---- presentation -> application & domain.service ----
+RawLogConsumer --> QueueService
+DeadLetterConsumer --> DropAuditRepository
+
+' ---- application -> domain.service ----
+LogProcessingWorker --> LogProcessingService
+LogProcessingWorker --> EventService
+LogProcessingWorker --> ProcessedLogRepository
+LogProcessingWorker --> FailedLogRepository
+
+DlqRetryScheduler --> FailedLogRepository
+DlqRetryScheduler --> LogProcessingService
+DlqRetryScheduler --> EventService
+DlqRetryScheduler --> ProcessedLogRepository
+DlqRetryScheduler --> DropAuditRepository
+
+' ---- domain.service -> domain.model (package-level, kept minimal) ----
+"domain.service" ..> "domain.model" : uses
+
+' ---- infrastructure.polling -> application & domain.service ----
+LogProcessingPoller --> QueueService
+LogProcessingPoller --> LogProcessingWorker
+LogProcessingPoller --> LogProcessingProperties
+
+' ---- infrastructure implementations of domain.service ----
+RedisQueueService ..|> QueueService
+EventServiceImpl ..|> EventService
+RedisDlqRepository ..|> FailedLogRepository
+PostgresDropAuditRepository ..|> DropAuditRepository
+PostgresProcessedLogRepository ..|> ProcessedLogRepository
+
+RedisQueueService --> DropAuditRepository
+RedisDlqRepository --> DropAuditRepository
+
+' ---- infrastructure -> config ----
+RedisQueueService --> LogProcessingProperties
+RedisDlqRepository --> LogProcessingProperties
+
+' ---- repository -> entity ----
+PostgresDropAuditRepository --> DropAuditJpaRepository
+PostgresDropAuditRepository --> DropAuditEntity
+PostgresProcessedLogRepository --> NormalizedHttpJpaRepository
+PostgresProcessedLogRepository --> NormalizedFlowJpaRepository
+PostgresProcessedLogRepository ..> NormalizedHttpEntity
+PostgresProcessedLogRepository ..> NormalizedFlowEntity
+
+' ---- config ----
+ApplicationBeans ..> ValidationLimits : creates
+ApplicationBeans ..> DlqRetryScheduler : creates Config
+
+@enduml

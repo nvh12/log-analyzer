@@ -25,6 +25,8 @@ Các kỹ thuật kiểm thử áp dụng:
 
 **Kỹ thuật sử dụng:** Phân hoạch tương đương (7 lớp tương đương), Phân tích giá trị biên (chuỗi `-` cho kích thước phản hồi).
 
+**Phương thức được kiểm thử:** `LogProcessingService.process(RawLog)` — duy nhất, qua `LogProcessingServiceTest` (JUnit/AssertJ).
+
 | TC# | Mô tả | Đầu vào đại diện | Kết quả mong đợi | Kết quả thực tế |
 |---|---|---|---|---|
 | LP-01 | CLF tối giản hợp lệ | `192.168.1.1 - - [...] "GET /index.html HTTP/1.0" 200 1234` | `ip=192.168.1.1`, `method=GET`, `status=200`, `size=1234`, `queryString=""` | Đạt |
@@ -37,6 +39,8 @@ Các kỹ thuật kiểm thử áp dụng:
 | LP-08 | Flow JSON không hợp lệ | `"definitely not json"` | Ném `RuntimeException("Failed to parse flow record")` | Đạt |
 | LP-09 | Feature với giá trị zero | `"zeroed_feature": 0.0` trong map | Giá trị zero được giữ nguyên trong `features` | Đạt |
 
+**Thống kê:** 9 trường hợp kiểm thử đơn vị (`LogProcessingServiceTest`) bao phủ 7 lớp tương đương định dạng log (CLF tối giản, Combined, query string, Flow JSON hợp lệ/thiếu trường/không hợp lệ, dòng log lỗi) và phân tích giá trị biên (kích thước phản hồi `-`, feature zero) — **9/9 đạt**.
+
 ---
 
 ## 3. Chức Năng 2 — Leo Thang Phản Ứng và Chặn IP (Reaction Service)
@@ -44,6 +48,8 @@ Các kỹ thuật kiểm thử áp dụng:
 Đây là chức năng trọng tâm bảo mật: mỗi lần phát hiện tấn công từ một IP tích lũy vào bộ đếm Redis. Dưới ngưỡng → giới hạn tốc độ (`RATE_LIMIT`); đạt ngưỡng → chặn hoàn toàn (`BLOCK`). Chính sách whitelist ngăn chặn chặn nhầm IP đáng tin cậy.
 
 **Kỹ thuật sử dụng:** Phân tích giá trị biên (ngưỡng leo thang = 3), Kiểm thử chuyển trạng thái (chưa chặn → chặn → TTL hết hạn), Kiểm thử fail-open.
+
+**Phương thức được kiểm thử:** `EscalatingIpReactionService.doHandle(ReactionInput)` (logic leo thang dùng chung cho `BruteForceReactionService`/`DDoSReactionService`); `RedisRateLimitService.limit(String, Severity)` / `isLimited(String)`; `RedisIpBlockService.block(String, Severity)` / `isBlocked(String)`.
 
 ### 3.1 Kiểm Thử Đơn Vị (Mockito)
 
@@ -77,6 +83,8 @@ Dashboard cung cấp API cho quản trị viên xem/thay thế danh sách IP whi
 
 **Kỹ thuật sử dụng:** Kiểm thử hộp trắng (Mockito cho `WhitelistStore`), Kiểm thử tích hợp container (`ReactionControllerIT` với Redis thực).
 
+**Phương thức được kiểm thử:** `WhitelistStore.listWhitelistedIps()` / `replaceWhitelist(List<String>)`; `ReactionController` — `GET/PUT /api/reactions/whitelist`, `POST /api/reactions/blocks/lift`.
+
 ### 3.3.1 Kiểm Thử Đơn Vị (Mockito)
 
 | TC# | Mô tả | Điều kiện tiên quyết | Kết quả mong đợi | Kết quả thực tế |
@@ -97,6 +105,8 @@ Dashboard cung cấp API cho quản trị viên xem/thay thế danh sách IP whi
 | WL-IT-04 | `PUT /api/reactions/whitelist` với body rỗng | `whitelist:ips` bị xóa sạch | Đạt |
 | WL-IT-05 | `POST /api/reactions/blocks/lift` với danh sách IP | Khóa `blocklist:ip:{ip}` và thành viên trong `blocklist:ips` bị xóa cho từng IP | Đạt |
 
+**Thống kê:** 14 trường hợp kiểm thử đơn vị (9 cho leo thang phản ứng RX-01–RX-09 + 5 cho quản lý whitelist WL-01–WL-05) và 10 trường hợp kiểm thử tích hợp (5 RX-IT-01–RX-IT-05 + 5 WL-IT-01–WL-IT-05) = **24 trường hợp**, tất cả đạt.
+
 ---
 
 ## 4. Chức Năng 3 — Pipeline Phát Hiện Tấn Công Đầu Cuối (E2E)
@@ -104,6 +114,8 @@ Dashboard cung cấp API cho quản trị viên xem/thay thế danh sách IP whi
 Kiểm thử đầu cuối xác nhận toàn bộ dòng chảy dữ liệu: Simulation → log.raw → Processing → Detection → Reaction → Redis/PostgreSQL. Các bài kiểm thử được viết bằng Python (pytest-asyncio) và chạy trên môi trường Docker Compose đầy đủ (`compose.test.yml`).
 
 **Kỹ thuật sử dụng:** Kiểm thử hệ thống bất đồng bộ với polling có timeout — mỗi bước trong pipeline được xác nhận tuần tự trước khi chuyển sang bước tiếp theo, đảm bảo không có điều kiện chạy đua giả tạo.
+
+**Điểm vào được kiểm thử:** Publish trực tiếp vào queue `log.raw` (E2E-01, E2E-02, E2E-05, E2E-06) và Simulation API (`/simulate/start` với scenario `WEB_ATTACK`/`TRAFFIC_SPIKE`, E2E-03/E2E-04); xác nhận trạng thái cuối qua bảng PostgreSQL (`normalized_http`, `normalized_flow`, `detection_results`, `reaction_logs`, `drop_audit`) và key Redis (`ratelimit:ip:*`, `blocklist:ip:*`, `scale:state`).
 
 | TC# | Kịch bản | Đầu vào | Các bước xác nhận | Kết quả thực tế |
 |---|---|---|---|---|
@@ -113,6 +125,10 @@ Kiểm thử đầu cuối xác nhận toàn bộ dòng chảy dữ liệu: Simu
 | E2E-04 | **Traffic spike → scale up** | 200 HTTP request tốc độ cao (với lịch sử baseline được seed sẵn) | (1) Detection_type=`TRAFFIC` trong `detection_results` · (2) `reaction_logs` có `SCALE_UP` · (3) `scale:state = "scaled_up"` trong Redis | Đạt |
 | E2E-05 | **Payload không hợp lệ → DLQ** | Chuỗi không phải JSON gửi vào `log.raw` | (1) Không có bản ghi trong `normalized_http`/`normalized_flow` · (2) Bản ghi trong `drop_audit` với `reason="DEAD_LETTERED"` | Đạt |
 | E2E-06 | **`receivedAt=null` → từ chối trước hàng đợi** | `RawLog` với `receivedAt=null` | Không có bản ghi trong `normalized_*`; không có bản ghi trong `drop_audit` | Đạt |
+
+*Lưu ý triển khai:* E2E-01 và E2E-02 trước đây là hai file riêng (`test_ddos.py`, `test_brute_force.py`) với hai hàm test gần như trùng lặp; nay đã gộp thành một hàm tham số hóa `test_flow_attack_detected_and_ip_blocked` (tham số `source_ip/dest_ip/dest_port/features/n_records/detection_type`, các case `[ddos]`/`[brute_force]`) trong `tests/e2e/test_flow_attacks.py` — cùng các bước xác nhận, không thay đổi phạm vi kiểm thử.
+
+**Thống kê:** 6 kịch bản kiểm thử đầu cuối (E2E-01–E2E-06) bao phủ toàn bộ pipeline cho DDoS, brute force, web attack, traffic spike (leo thang đến scale-up), và 2 đường lỗi xử lý log (payload không hợp lệ, `receivedAt=null`) — **6/6 đạt**.
 
 ---
 
@@ -240,5 +256,5 @@ Trong quá trình phát triển, một số lỗi được phát hiện nhờ ki
 
 - **`Severity.NONE` thiếu trong enum Java** (Dashboard): `DetectionControllerIT` báo lỗi HTTP 500 khi deserialize kết quả phát hiện có mức độ `NONE`. Nguyên nhân: enum `Severity` phía dashboard thiếu giá trị `NONE` so với phía detection service. Khắc phục bằng cách bổ sung giá trị.
 - **`FormatMapper` cho Flow log** (Dashboard): `JsonConverterIT` thất bại do Hibernate 7.2.12 yêu cầu Jackson 2 nhưng Spring Boot 4 chỉ cung cấp Jackson 3. Khắc phục bằng cách chuyển sang `AttributeConverter` thay vì dùng `@JdbcTypeCode(SqlTypes.JSON)`.
-- **Mô hình ML nhận sai key tên feature** (log-analysis): E2E test `test_ddos_detected_and_ip_blocked` không phát sinh phát hiện. Nguyên nhân: tên cột feature trong bản ghi flow không khớp với tên cột mô hình XGBoost đã được huấn luyện. Khắc phục bằng cách chuẩn hóa lại tên trường trong Processing Service.
+- **Mô hình ML nhận sai key tên feature** (log-analysis): E2E test `test_flow_attack_detected_and_ip_blocked[ddos]` (trước đây `test_ddos_detected_and_ip_blocked`) không phát sinh phát hiện. Nguyên nhân: tên cột feature trong bản ghi flow không khớp với tên cột mô hình XGBoost đã được huấn luyện. Khắc phục bằng cách chuẩn hóa lại tên trường trong Processing Service.
 - **`sourceIp=null` trong phản ứng traffic** (Reaction): `DetectionResultConsumerIT` xác nhận `SCALE_UP` reaction thất bại vì `sourceIp` null không được xử lý đúng khi lưu vào cơ sở dữ liệu. Khắc phục bằng cách cho phép `source_ip` nullable trong schema và logic phản ứng.

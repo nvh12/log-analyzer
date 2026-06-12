@@ -1,6 +1,6 @@
 package com.nvh12.dashboard;
 
-import com.nvh12.dashboard.config.DashboardProperties;
+import com.nvh12.dashboard.infrastructure.config.DashboardProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

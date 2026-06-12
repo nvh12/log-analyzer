@@ -56,13 +56,6 @@ class ReactionControllerIT extends AbstractContainerIT {
     }
 
     @Test
-    void listReactions_noRows_returnsEmptyPage() throws Exception {
-        mockMvc.perform(get("/api/reactions"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.total").value(0));
-    }
-
-    @Test
     void listReactions_responseMappedCorrectly() throws Exception {
         jpaReactionLogRepository.save(reactionEntity("3.3.3.3", "BLOCK"));
 

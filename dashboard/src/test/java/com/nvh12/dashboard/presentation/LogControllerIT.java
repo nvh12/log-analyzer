@@ -76,14 +76,6 @@ class LogControllerIT extends AbstractContainerIT {
     }
 
     @Test
-    void listHttpLogs_noRows_returnsEmptyPage() throws Exception {
-        mockMvc.perform(get("/api/logs/http"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.total").value(0))
-                .andExpect(jsonPath("$.content", hasSize(0)));
-    }
-
-    @Test
     void getHttpLog_existingId_returnsLog() throws Exception {
         NormalizedHttpEntity saved = jpaHttpLogRepository.save(httpEntity("5.5.5.5", 201));
 

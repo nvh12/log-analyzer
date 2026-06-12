@@ -12,7 +12,7 @@ import java.time.Instant;
 import java.util.Map;
 
 @Entity
-@Table(name = "detection_results")
+@Table(schema = "analysis", name = "detection_results")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor

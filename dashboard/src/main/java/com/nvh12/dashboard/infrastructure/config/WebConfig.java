@@ -1,4 +1,4 @@
-package com.nvh12.dashboard.config;
+package com.nvh12.dashboard.infrastructure.config;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;

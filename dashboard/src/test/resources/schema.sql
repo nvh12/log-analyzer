@@ -1,5 +1,6 @@
 CREATE SCHEMA IF NOT EXISTS log_processing;
 CREATE SCHEMA IF NOT EXISTS reaction;
+CREATE SCHEMA IF NOT EXISTS analysis;
 
 CREATE TABLE IF NOT EXISTS log_processing.normalized_http (
     id            BIGSERIAL PRIMARY KEY,
@@ -26,7 +27,7 @@ CREATE TABLE IF NOT EXISTS log_processing.normalized_flow (
     processed_at TIMESTAMPTZ NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS detection_results (
+CREATE TABLE IF NOT EXISTS analysis.detection_results (
     id             BIGSERIAL PRIMARY KEY,
     detection_type VARCHAR(20)  NOT NULL,
     severity       VARCHAR(10)  NOT NULL,

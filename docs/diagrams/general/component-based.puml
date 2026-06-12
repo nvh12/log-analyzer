@@ -1,0 +1,65 @@
+@startuml component-based
+top to bottom direction
+
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam defaultFontName "Sans"
+skinparam ArrowColor #555555
+skinparam packageBorderColor #333333
+skinparam padding 10
+skinparam ranksep 80
+skinparam nodesep 50
+skinparam DefaultFontSize 14
+skinparam packageFontSize 14
+
+hide circle
+hide empty members
+
+' =====================================================
+' Generic Component-based architecture
+' Used by: dashboard-fe
+' =====================================================
+
+package src
+
+package pages
+
+package components
+
+package hooks
+
+package "api.js" as api
+
+' =====================================================
+' Composition & data-flow relationships
+' =====================================================
+
+src --> components : renders Layout / ErrorBoundary
+src ..> pages : routes to
+
+pages ..> components : composed of
+pages ..> hooks : reads live/query state
+pages ..> api : REST calls
+
+components ..> hooks : uses (e.g. Filters + useDebounce)
+
+hooks --> api : axios GET (useData)
+
+' useSSE talks directly to the backend via new EventSource('/api/stream'),
+' bypassing the api.js axios client.
+
+' =====================================================
+' Layout hints
+' =====================================================
+
+src -[hidden]down- pages
+pages -[hidden]down- components
+components -[hidden]right- hooks
+hooks -[hidden]down- api
+
+' Each page is a self-contained view composed from shared, presentational
+' components and stateful hooks; pages do not share state directly with
+' each other, only via hooks/api.
+
+@enduml

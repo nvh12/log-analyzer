@@ -4,7 +4,7 @@ from domain.models.results import DetectionResult
 from infrastructure.config import postgres
 
 _INSERT = """
-    INSERT INTO detection_results (
+    INSERT INTO analysis.detection_results (
         detection_type, severity, anomaly, confidence, network_layer,
         source_ip, dest_ip, dest_port, method_flags,
         log_timestamp, window_start, window_end, detected_at

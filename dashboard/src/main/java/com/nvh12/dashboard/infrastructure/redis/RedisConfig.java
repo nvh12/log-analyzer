@@ -1,4 +1,4 @@
-package com.nvh12.dashboard.config;
+package com.nvh12.dashboard.infrastructure.redis;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

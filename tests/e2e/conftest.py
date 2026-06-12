@@ -65,7 +65,7 @@ ALL_TABLES = (
     "log_processing.normalized_http",
     "log_processing.normalized_flow",
     "log_processing.drop_audit",
-    "detection_results",          # public schema (log-analysis migration)
+    "analysis.detection_results", # analysis schema (log-analysis migration)
     "reaction.reaction_logs",
 )
 QUEUES_TO_PURGE = (
@@ -212,7 +212,7 @@ async def compose_stack():
 async def pg_conn(compose_stack):
     """asyncpg connection for asserting table state."""
     conn = await asyncpg.connect(PG_DSN)
-    await conn.execute("SET search_path TO log_processing, reaction, public")
+    await conn.execute("SET search_path TO log_processing, reaction, analysis, public")
     yield conn
     await conn.close()
 

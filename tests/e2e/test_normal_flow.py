@@ -42,7 +42,7 @@ async def test_http_logs_normalized(simulation_client, pg_conn):
 
     await poll_until(rows_present, timeout=20)
 
-    n_det = await pg_conn.fetchval("SELECT COUNT(*) FROM detection_results")
+    n_det = await pg_conn.fetchval("SELECT COUNT(*) FROM analysis.detection_results")
     assert n_det == 0, "Normal traffic must not trigger any detection"
 
 
@@ -62,5 +62,5 @@ async def test_flow_logs_normalized(simulation_client, pg_conn):
 
     await poll_until(rows_present, timeout=20)
 
-    n_det = await pg_conn.fetchval("SELECT COUNT(*) FROM detection_results")
+    n_det = await pg_conn.fetchval("SELECT COUNT(*) FROM analysis.detection_results")
     assert n_det == 0, "Normal traffic must not trigger any detection"

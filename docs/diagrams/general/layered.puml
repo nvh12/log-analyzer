@@ -1,0 +1,86 @@
+@startuml layered
+top to bottom direction
+
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam defaultFontName "Sans"
+skinparam ArrowColor #555555
+skinparam packageBorderColor #333333
+skinparam padding 10
+skinparam ranksep 80
+skinparam nodesep 50
+skinparam DefaultFontSize 14
+skinparam packageFontSize 14
+
+hide circle
+hide empty members
+
+' =====================================================
+' Generic Layered architecture
+' Used by: reaction
+' =====================================================
+
+package presentation
+
+package config
+
+package service {
+  package "service.dto" {
+    package "service.dto.alert"
+  }
+
+  package "service.impl"
+
+  service -[hidden]right- "service.dto"
+  "service.dto" -[hidden]right- "service.impl"
+}
+
+package infrastructure {
+  package "infrastructure.mq"
+
+  package "infrastructure.persistence" {
+    package "infrastructure.persistence.entity"
+    package "infrastructure.persistence.repository"
+
+    "infrastructure.persistence.entity" -[hidden]right- "infrastructure.persistence.repository"
+  }
+
+  "infrastructure.mq" -[hidden]down- "infrastructure.persistence"
+}
+
+' =====================================================
+' Calls flow top-down through the layers; each layer
+' only calls into the layer directly beneath it
+' =====================================================
+
+presentation --> service : dispatch by DetectionType
+
+"service.impl" --|> service : extends ReactionTemplate /\nimplements collaborator ports
+"service.impl" ..> "service.dto" : uses
+
+"service.impl" --> "infrastructure.persistence.repository"
+"infrastructure.persistence.repository" --> "infrastructure.persistence.entity"
+
+"infrastructure.mq" ..|> service : implements ReactionEventPort
+
+config ..> infrastructure : configures
+config ..> service : configures
+
+' =====================================================
+' Layout hints
+' =====================================================
+
+presentation -[hidden]down- service
+service -[hidden]down- infrastructure
+config -[hidden]right- presentation
+
+' No dedicated domain/application split: business rules, DTOs, and
+' orchestration (ReactionTemplate, the collaborator port interfaces,
+' and their impl/dto sub-packages) all live together under one
+' "service" package. The layer still defines collaborator ports
+' (e.g. ReactionEventPort) that an infrastructure adapter implements,
+' but call flow is otherwise top-down: presentation -> service ->
+' infrastructure.
+
+@enduml

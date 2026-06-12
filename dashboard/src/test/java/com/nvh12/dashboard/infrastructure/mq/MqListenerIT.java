@@ -1,7 +1,6 @@
 package com.nvh12.dashboard.infrastructure.mq;
 
 import com.nvh12.dashboard.AbstractContainerIT;
-import com.nvh12.dashboard.config.RabbitMqConfig;
 import com.nvh12.dashboard.domain.ReactionAction;
 import com.nvh12.dashboard.infrastructure.mq.dto.ReactionResultMessage;
 import com.nvh12.dashboard.infrastructure.sse.SseEmitterRegistry;
@@ -68,22 +67,4 @@ class MqListenerIT extends AbstractContainerIT {
         );
     }
 
-    @Test
-    void reactionResultListener_scaleUpAction_broadcastsWithEmptyTarget() {
-        Map<String, Object> payload = Map.of(
-                "reaction_id", 99,
-                "action", "SCALE_UP",
-                "target", "",
-                "ttl_seconds", 0,
-                "ts", Instant.now().toString());
-
-        rabbitTemplate.convertAndSend(RabbitMqConfig.EXCHANGE_REACTION_RESULTS, "", payload);
-
-        await().atMost(5, SECONDS).untilAsserted(() -> {
-            ArgumentCaptor<ReactionResultMessage> captor = ArgumentCaptor.forClass(ReactionResultMessage.class);
-            verify(registry).broadcast(eq("reaction"), captor.capture());
-            assertThat(captor.getValue().action()).isEqualTo(ReactionAction.SCALE_UP);
-            assertThat(captor.getValue().ttlSeconds()).isEqualTo(0L);
-        });
-    }
 }

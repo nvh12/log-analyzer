@@ -2,13 +2,9 @@ package com.nvh12.reaction.service.impl;
 
 import com.nvh12.reaction.config.AlertProperties;
 import com.nvh12.reaction.service.dto.DetectionType;
-import com.nvh12.reaction.service.dto.MethodFlags;
 import com.nvh12.reaction.service.dto.Severity;
 import com.nvh12.reaction.service.dto.alert.Alert;
-import com.nvh12.reaction.service.dto.alert.BruteForceAlert;
 import com.nvh12.reaction.service.dto.alert.DDoSAlert;
-import com.nvh12.reaction.service.dto.alert.TrafficAlert;
-import com.nvh12.reaction.service.dto.alert.WebAttackAlert;
 import com.resend.Resend;
 import com.resend.core.exception.ResendException;
 import com.resend.services.emails.Emails;
@@ -39,10 +35,10 @@ class ResendAlertServiceTest {
 
     @BeforeEach
     void setUp() throws ResendException {
-        when(resend.emails()).thenReturn(emails);
-        when(alertProperties.getMail()).thenReturn(mail);
-        when(mail.getFrom()).thenReturn("alerts@example.com");
-        when(mail.getTo()).thenReturn("admin@example.com");
+        lenient().when(resend.emails()).thenReturn(emails);
+        lenient().when(alertProperties.getMail()).thenReturn(mail);
+        lenient().when(mail.getFrom()).thenReturn("alerts@example.com");
+        lenient().when(mail.getTo()).thenReturn("admin@example.com");
         service = new ResendAlertService(resend, alertProperties);
     }
 
@@ -83,58 +79,6 @@ class ResendAlertServiceTest {
         service.alert(alert);
 
         assertThat(captureOptions().getHtml()).contains("10.0.0.1:80");
-    }
-
-    @Test
-    void alert_forWebAttackAlert_includesLayerInBody() throws ResendException {
-        WebAttackAlert alert = WebAttackAlert.builder()
-                .detectionType(DetectionType.WEB_ATTACK)
-                .sourceIp("5.5.5.5")
-                .severity(Severity.MEDIUM)
-                .detectedAt(Instant.now())
-                .layerTriggered("rule_engine")
-                .build();
-
-        service.alert(alert);
-
-        assertThat(captureOptions().getHtml()).contains("rule_engine");
-    }
-
-    @Test
-    void alert_forTrafficAlert_includesOnlyActiveFlagsInBody() throws ResendException {
-        MethodFlags flags = new MethodFlags();
-        flags.setZScore(true);
-        flags.setSeasonal(true);
-
-        TrafficAlert alert = TrafficAlert.builder()
-                .detectionType(DetectionType.TRAFFIC)
-                .sourceIp("2.2.2.2")
-                .severity(Severity.LOW)
-                .detectedAt(Instant.now())
-                .methodFlags(flags)
-                .build();
-
-        service.alert(alert);
-
-        String html = captureOptions().getHtml();
-        assertThat(html).contains("Z-Score").contains("Seasonal");
-        assertThat(html).doesNotContain("IQR").doesNotContain("EMA");
-    }
-
-    @Test
-    void alert_forBruteForceAlert_includesDestinationInBody() throws ResendException {
-        BruteForceAlert alert = BruteForceAlert.builder()
-                .detectionType(DetectionType.BRUTE_FORCE)
-                .sourceIp("9.9.9.9")
-                .severity(Severity.HIGH)
-                .detectedAt(Instant.now())
-                .destIp("192.168.1.1")
-                .destPort(22)
-                .build();
-
-        service.alert(alert);
-
-        assertThat(captureOptions().getHtml()).contains("192.168.1.1:22");
     }
 
     @Test

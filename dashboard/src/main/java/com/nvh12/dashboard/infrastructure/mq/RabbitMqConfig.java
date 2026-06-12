@@ -1,4 +1,4 @@
-package com.nvh12.dashboard.config;
+package com.nvh12.dashboard.infrastructure.mq;
 
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;

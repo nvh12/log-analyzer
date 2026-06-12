@@ -1,0 +1,96 @@
+@startuml ddd-hexagonal
+top to bottom direction
+
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam defaultFontName "Sans"
+skinparam ArrowColor #555555
+skinparam packageBorderColor #333333
+skinparam padding 10
+skinparam ranksep 80
+skinparam nodesep 50
+skinparam DefaultFontSize 14
+skinparam packageFontSize 14
+
+hide circle
+hide empty members
+
+' =====================================================
+' Generic DDD / Hexagonal (Ports & Adapters) layout
+' Used by: log-processing, log-analysis-server,
+'          simulation, dashboard (backend)
+' =====================================================
+
+package presentation
+
+package domain {
+  package "domain.model"
+  package "domain.service"
+
+  "domain.model" -[hidden]right- "domain.service"
+}
+
+package application {
+  package "application.port"
+}
+
+package infrastructure {
+  package "infrastructure.persistence"
+  package "infrastructure.mq"
+  package "infrastructure.config"
+
+  "infrastructure.persistence" -[hidden]right- "infrastructure.mq"
+  "infrastructure.mq" -[hidden]right- "infrastructure.config"
+}
+
+' =====================================================
+' Dependency directions (dependency inversion: arrows
+' point INWARD, toward domain/application; adapters
+' implement the ports defined by the inner layers)
+' =====================================================
+
+presentation --> application : invoke use case
+
+application --> "domain.service" : invoke domain logic
+
+"domain.service" --> "domain.model" : operates on
+
+"infrastructure.persistence" ..|> "domain.service" : implements repository port
+"infrastructure.persistence" ..|> "application.port" : implements outbound port
+
+"infrastructure.mq" ..|> "domain.service" : implements queue port
+"infrastructure.mq" ..|> "application.port" : implements outbound port
+
+"infrastructure.config" ..> application : wires adapters into ports
+
+' =====================================================
+' Layout hints
+' =====================================================
+
+presentation -[hidden]down- application
+application -[hidden]down- domain
+domain -[hidden]down- infrastructure
+
+' Ports may be declared alongside domain services in domain.service
+' (e.g. log-processing's QueueService / *Repository interfaces sit
+' next to LogProcessingService) or in application.port
+' (log-analysis-server's application.ports, simulation's
+' application.ports, dashboard's application.port); either way
+' infrastructure adapters implement them so dependencies always
+' point inward.
+'
+' presentation holds whichever inbound adapters a service needs:
+' REST controllers (simulation's presentation.routers, dashboard's
+' presentation controllers) and/or RabbitMQ listeners
+' (log-processing's presentation consumers, log-analysis-server's
+' presentation.consumers); a given service does not necessarily have
+' both.
+'
+' Adapter sub-package names vary too: dashboard splits
+' infrastructure.mq / infrastructure.persistence; log-processing
+' keeps its queue + event adapters under infrastructure.service;
+' log-analysis-server and simulation group adapters under
+' infrastructure.ports.
+
+@enduml

@@ -1,0 +1,116 @@
+@startuml sequence-reaction-escalation
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 10
+
+box "Presentation & Routing" #LightBlue
+participant "RabbitMQ" as MQ
+participant "DetectionResultConsumer" as Consumer
+end box
+
+box "Reaction Services" #LightYellow
+participant "Base ReactionService" as ReactionSvc
+participant "EscalatingIpReactionService\n(for Brute Force / DDoS)" as EscalatingSvc
+participant "TrafficReactionService\n(for Traffic Spikes)" as TrafficSvc
+participant "WebAttackReactionService\n(for Web Attacks)" as WebSvc
+end box
+
+box "Infrastructure & Actions" #LightGreen
+participant "RedisTemplate\n(attempts tracker)" as Redis
+participant "IpBlockService\n(RedisIpBlockService)" as BlockSvc
+participant "RateLimitService\n(RedisRateLimitService)" as LimitSvc
+participant "ScaleService\n(RedisScaleService)" as ScaleSvc
+participant "ReactionLogService\n(JpaReactionLogService)" as LogSvc
+participant "AlertService\n(CompositeAlertService)" as AlertSvc
+participant "AlertChannel\n(Discord/Resend/SMTP)" as Channel
+end box
+
+== Routing & Dispatch ==
+
+MQ -> Consumer : consume(ReactionInput)
+activate Consumer
+Consumer -> Consumer : validate detection type, severity, and IP
+Consumer -> ReactionSvc : handle(ReactionInput)
+activate ReactionSvc
+
+ReactionSvc -> ReactionSvc : doHandle(ReactionInput)
+activate ReactionSvc
+
+== Threat-Specific Reaction Logic ==
+
+alt DetectionType = BRUTE_FORCE or DDOS (Escalating IP Reaction)
+    ReactionSvc -> EscalatingSvc : doHandle(ReactionInput)
+    activate EscalatingSvc
+    
+    EscalatingSvc -> Redis : execute(INCR_WITH_EXPIRE, Key)
+    activate Redis
+    Redis --> EscalatingSvc : attempts count
+    deactivate Redis
+    
+    alt attempts >= ESCALATION_THRESHOLD (3)
+        EscalatingSvc -> BlockSvc : block(ip, severity)
+        activate BlockSvc
+        BlockSvc --> EscalatingSvc : blocked
+        deactivate BlockSvc
+        EscalatingSvc --> ReactionSvc : ReactionAction.BLOCK
+    else attempts < ESCALATION_THRESHOLD
+        EscalatingSvc -> LimitSvc : limit(ip, severity)
+        activate LimitSvc
+        LimitSvc --> EscalatingSvc : limited
+        deactivate LimitSvc
+        EscalatingSvc --> ReactionSvc : ReactionAction.RATE_LIMIT
+    end
+    deactivate EscalatingSvc
+
+else DetectionType = WEB_ATTACK
+    ReactionSvc -> WebSvc : doHandle(ReactionInput)
+    activate WebSvc
+    
+    WebSvc -> BlockSvc : block(ip, severity)
+    activate BlockSvc
+    BlockSvc --> WebSvc : blocked
+    deactivate BlockSvc
+    
+    WebSvc --> ReactionSvc : ReactionAction.BLOCK
+    deactivate WebSvc
+
+else DetectionType = TRAFFIC
+    ReactionSvc -> TrafficSvc : doHandle(ReactionInput)
+    activate TrafficSvc
+    
+    TrafficSvc -> ScaleSvc : requestScale(type, severity)
+    activate ScaleSvc
+    ScaleSvc --> TrafficSvc : scaled
+    deactivate ScaleSvc
+    
+    TrafficSvc --> ReactionSvc : ReactionAction.SCALE_UP
+    deactivate TrafficSvc
+end
+
+deactivate ReactionSvc
+
+== Auditing & Notification Phase ==
+
+ReactionSvc -> LogSvc : save(ReactionInput, ReactionAction)
+activate LogSvc
+LogSvc -> LogSvc : save reaction log to database
+LogSvc --> ReactionSvc : saved
+deactivate LogSvc
+
+ReactionSvc -> ReactionSvc : buildAlertDto(ReactionInput)
+
+ReactionSvc -> AlertSvc : enqueue(Alert)
+activate AlertSvc
+AlertSvc -> AlertSvc : dispatch alert to active channels
+AlertSvc -> Channel : send(Alert)
+activate Channel
+Channel --> AlertSvc : dispatched
+deactivate Channel
+AlertSvc --> ReactionSvc : done
+deactivate AlertSvc
+
+ReactionSvc --> Consumer : done
+deactivate ReactionSvc
+deactivate Consumer
+
+@enduml

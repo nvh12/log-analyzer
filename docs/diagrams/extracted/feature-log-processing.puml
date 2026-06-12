@@ -1,0 +1,137 @@
+@startuml feature-log-processing
+top to bottom direction
+
+skinparam packageStyle folder
+skinparam linetype ortho
+skinparam ranksep 100
+skinparam nodesep 40
+skinparam DefaultFontSize 23
+
+hide circle
+hide empty members
+
+together {
+  package "presentation" {
+    class RawLogConsumer
+    class DeadLetterConsumer
+  }
+}
+
+together {
+  package "application" {
+    class LogProcessingWorker
+    class DlqRetryScheduler
+  }
+}
+
+together {
+  package "domain.service" {
+    interface QueueService
+    interface EventService
+    interface ProcessedLogRepository
+    interface FailedLogRepository
+    interface DropAuditRepository
+    class LogProcessingService
+
+    QueueService -[hidden]down- EventService
+    EventService -[hidden]down- ProcessedLogRepository
+    ProcessedLogRepository -[hidden]down- FailedLogRepository
+    FailedLogRepository -[hidden]down- DropAuditRepository
+    DropAuditRepository -[hidden]down- LogProcessingService
+  }
+
+  package "domain.model" {
+    class RawLog
+    class NormalizedLog
+    class NormalizedFlowRecord
+    class FailedLogEntry
+    class ValidationLimits
+    class DropReason
+
+    RawLog -[hidden]down- NormalizedLog
+    NormalizedLog -[hidden]down- NormalizedFlowRecord
+    NormalizedFlowRecord -[hidden]down- FailedLogEntry
+    FailedLogEntry -[hidden]down- ValidationLimits
+    ValidationLimits -[hidden]down- DropReason
+  }
+}
+
+together {
+  package "infrastructure.polling" {
+    class LogProcessingPoller
+  }
+
+  package "infrastructure.service" {
+    class RedisQueueService
+    class EventServiceImpl
+  }
+}
+
+together {
+  package "infrastructure.persistence.repository" {
+    class RedisDlqRepository
+    class PostgresDropAuditRepository
+    class PostgresProcessedLogRepository
+    interface DropAuditJpaRepository
+    interface NormalizedHttpJpaRepository
+    interface NormalizedFlowJpaRepository
+
+    RedisDlqRepository -[hidden]down- PostgresDropAuditRepository
+    PostgresDropAuditRepository -[hidden]down- PostgresProcessedLogRepository
+    PostgresProcessedLogRepository -[hidden]down- DropAuditJpaRepository
+    DropAuditJpaRepository -[hidden]down- NormalizedHttpJpaRepository
+    NormalizedHttpJpaRepository -[hidden]down- NormalizedFlowJpaRepository
+  }
+
+  package "infrastructure.persistence.entity" {
+    class DropAuditEntity
+    class NormalizedHttpEntity
+    class NormalizedFlowEntity
+
+    DropAuditEntity -[hidden]down- NormalizedHttpEntity
+    NormalizedHttpEntity -[hidden]down- NormalizedFlowEntity
+  }
+}
+
+' ---- Layer Order ----
+"presentation" -[hidden]down- "application"
+"application" -[hidden]down- "domain.service"
+"domain.service" -[hidden]down- "infrastructure.polling"
+"infrastructure.polling" -[hidden]down- "infrastructure.persistence.repository"
+
+"domain.service" -[hidden]right- "domain.model"
+"infrastructure.polling" -[hidden]right- "infrastructure.service"
+"infrastructure.persistence.repository" -[hidden]right- "infrastructure.persistence.entity"
+
+' ---- Interactions / Relationships ----
+RawLogConsumer o-- QueueService
+DeadLetterConsumer o-- DropAuditRepository
+
+LogProcessingPoller o-- QueueService
+LogProcessingPoller o-- LogProcessingWorker
+
+LogProcessingWorker o-- LogProcessingService
+LogProcessingWorker o-- EventService
+LogProcessingWorker o-- ProcessedLogRepository
+LogProcessingWorker o-- FailedLogRepository
+
+DlqRetryScheduler o-- FailedLogRepository
+DlqRetryScheduler o-- LogProcessingService
+DlqRetryScheduler o-- EventService
+DlqRetryScheduler o-- ProcessedLogRepository
+DlqRetryScheduler o-- DropAuditRepository
+
+RedisQueueService ..|> QueueService
+EventServiceImpl ..|> EventService
+RedisDlqRepository ..|> FailedLogRepository
+PostgresDropAuditRepository ..|> DropAuditRepository
+PostgresProcessedLogRepository ..|> ProcessedLogRepository
+
+PostgresDropAuditRepository --> DropAuditJpaRepository
+PostgresDropAuditRepository --> DropAuditEntity
+PostgresProcessedLogRepository --> NormalizedHttpJpaRepository
+PostgresProcessedLogRepository --> NormalizedFlowJpaRepository
+PostgresProcessedLogRepository ..> NormalizedHttpEntity
+PostgresProcessedLogRepository ..> NormalizedFlowEntity
+
+@enduml
