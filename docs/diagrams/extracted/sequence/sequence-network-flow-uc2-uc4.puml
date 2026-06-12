@@ -3,121 +3,43 @@ autonumber
 skinparam BoxPadding 10
 skinparam ParticipantPadding 10
 
-box "Presentation Layer" #LightBlue
-participant "RabbitMQ" as MQ
+box "Presentation"
 participant "FlowConsumer" as Consumer
 end box
 
-box "Application Layer" #LightYellow
+box "Application UseCases"
 participant "DDoSUseCase" as DDoS_UC
 participant "BruteForceUseCase" as BF_UC
 end box
 
-box "Domain Layer" #LightPink
-participant "DDoSService\n(ddos_service.detect)" as DDoS_Svc
-participant "BruteForceService\n(brute_force_service.detect)" as BF_Svc
-participant "FlowClassifier\n(run_flow_classifier)" as Classifier
+box "Infrastructure Ports"
+participant "ModelRepository" as ModelStore
+participant "ResultRepositoryPort" as ResultRepo
+participant "PublisherPort" as Publisher
 end box
 
-box "Infrastructure & Adapters" #LightGreen
-participant "ModelRepository\n(MinIOModelStore)" as ModelStore
-participant "ResultRepositoryPort\n(PostgresDetectionResultRepository)" as ResultRepo
-participant "PublisherPort\n(RabbitMQPublisherAdapter)" as Publisher
-end box
-
-== Flow Ingestion & Parallel Detection Flow ==
-
-MQ -> Consumer : handle_flow_message(IncomingMessage)
-activate Consumer
-Consumer -> Consumer : parse_flow(message.body) -> FlowMessage
-Consumer -> Consumer : map to DDoSInput & BruteForceInput
-
-note over Consumer
-  Parallel execution of DDoS and Brute Force detection
-  using asyncio.gather()
-end note
-
-par DDoS Detection (UC2)
-    Consumer -> DDoS_UC : execute(DDoSInput)
-    activate DDoS_UC
-    
-    DDoS_UC -> DDoS_Svc : detect(DDoSInput, ModelRepository)
-    activate DDoS_Svc
-    
-    DDoS_Svc -> ModelStore : get(DDOS_MODEL)
-    activate ModelStore
-    ModelStore --> DDoS_Svc : XGBoost Model
-    deactivate ModelStore
-    
-    DDoS_Svc -> ModelStore : get(DDOS_FEATURE_COLS)
-    activate ModelStore
-    ModelStore --> DDoS_Svc : feature_cols list
-    deactivate ModelStore
-    
-    DDoS_Svc -> Classifier : run_flow_classifier(model, feature_cols, features)
-    activate Classifier
-    Classifier --> DDoS_Svc : probability, anomaly, severity
-    deactivate Classifier
-    
-    DDoS_Svc --> DDoS_UC : DDoSResult
-    deactivate DDoS_Svc
-    
-    alt Anomaly Detected
-        DDoS_UC -> ResultRepo : save(DDoSResult)
-        activate ResultRepo
-        ResultRepo --> DDoS_UC : saved
-        deactivate ResultRepo
-        
-        DDoS_UC -> Publisher : publish(DDoSResult)
-        activate Publisher
-        Publisher -> MQ : publish anomaly to detection exchange
-        Publisher --> DDoS_UC : published
-        deactivate Publisher
-    end
-    DDoS_UC --> Consumer : done
-    deactivate DDoS_UC
-
-else Brute Force Detection (UC4)
-    Consumer -> BF_UC : execute(BruteForceInput)
-    activate BF_UC
-    
-    BF_UC -> BF_Svc : detect(BruteForceInput, ModelRepository)
-    activate BF_Svc
-    
-    BF_Svc -> ModelStore : get(BRUTE_FORCE_MODEL)
-    activate ModelStore
-    ModelStore --> BF_Svc : XGBoost Model
-    deactivate ModelStore
-    
-    BF_Svc -> ModelStore : get(BRUTE_FORCE_FEATURE_COLS)
-    activate ModelStore
-    ModelStore --> BF_Svc : feature_cols list
-    deactivate ModelStore
-    
-    BF_Svc -> Classifier : run_flow_classifier(model, feature_cols, features)
-    activate Classifier
-    Classifier --> BF_Svc : probability, anomaly, severity
-    deactivate Classifier
-    
-    BF_Svc --> BF_UC : BruteForceResult
-    deactivate BF_Svc
-    
-    alt Anomaly Detected
-        BF_UC -> ResultRepo : save(BruteForceResult)
-        activate ResultRepo
-        ResultRepo --> BF_UC : saved
-        deactivate ResultRepo
-        
-        BF_UC -> Publisher : publish(BruteForceResult)
-        activate Publisher
-        Publisher -> MQ : publish anomaly to detection exchange
-        Publisher --> BF_UC : published
-        deactivate Publisher
-    end
-    BF_UC --> Consumer : done
-    deactivate BF_UC
+Consumer -> DDoS_UC : execute(DDoSInput)
+DDoS_UC -> ModelStore : get(DDOS_MODEL)
+ModelStore --> DDoS_UC : XGBoost Model
+DDoS_UC -> DDoS_UC : run classifier inference
+alt Anomaly Detected
+    DDoS_UC -> ResultRepo : save(DDoSResult)
+    ResultRepo --> DDoS_UC : saved
+    DDoS_UC -> Publisher : publish(DDoSResult)
+    Publisher --> DDoS_UC : published
 end
+DDoS_UC --> Consumer : done
 
-deactivate Consumer
+Consumer -> BF_UC : execute(BruteForceInput)
+BF_UC -> ModelStore : get(BRUTE_FORCE_MODEL)
+ModelStore --> BF_UC : XGBoost Model
+BF_UC -> BF_UC : run classifier inference
+alt Anomaly Detected
+    BF_UC -> ResultRepo : save(BruteForceResult)
+    ResultRepo --> BF_UC : saved
+    BF_UC -> Publisher : publish(BruteForceResult)
+    Publisher --> BF_UC : published
+end
+BF_UC --> Consumer : done
 
 @enduml

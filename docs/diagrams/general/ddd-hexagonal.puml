@@ -2,16 +2,16 @@
 top to bottom direction
 
 skinparam shadowing false
-skinparam packageStyle rectangle
+skinparam packageStyle folder
 skinparam linetype ortho
 skinparam defaultFontName "Sans"
 skinparam ArrowColor #555555
 skinparam packageBorderColor #333333
-skinparam padding 10
-skinparam ranksep 80
+skinparam padding 5
+skinparam ranksep 120
 skinparam nodesep 50
-skinparam DefaultFontSize 14
-skinparam packageFontSize 14
+skinparam DefaultFontSize 16
+skinparam packageFontSize 12
 
 hide circle
 hide empty members
@@ -22,23 +22,65 @@ hide empty members
 '          simulation, dashboard (backend)
 ' =====================================================
 
-package presentation
+package presentation {
+  class " " as _presentationA
+  class " " as _presentationB
+  hide _presentationA
+  hide _presentationB
+  _presentationA -[hidden]right- _presentationB
+}
 
 package domain {
-  package "domain.model"
-  package "domain.service"
+  package "domain.model" {
+    class " " as _domain_modelA
+    class " " as _domain_modelB
+    hide _domain_modelA
+    hide _domain_modelB
+    _domain_modelA -[hidden]right- _domain_modelB
+  }
+  package "domain.service" {
+    class " " as _domain_serviceA
+    class " " as _domain_serviceB
+    hide _domain_serviceA
+    hide _domain_serviceB
+    _domain_serviceA -[hidden]right- _domain_serviceB
+  }
 
   "domain.model" -[hidden]right- "domain.service"
 }
 
 package application {
-  package "application.port"
+  package "application.port" {
+    class " " as _application_portA
+    class " " as _application_portB
+    hide _application_portA
+    hide _application_portB
+    _application_portA -[hidden]right- _application_portB
+  }
 }
 
 package infrastructure {
-  package "infrastructure.persistence"
-  package "infrastructure.mq"
-  package "infrastructure.config"
+  package "infrastructure.persistence" {
+    class " " as _infrastructure_persistenceA
+    class " " as _infrastructure_persistenceB
+    hide _infrastructure_persistenceA
+    hide _infrastructure_persistenceB
+    _infrastructure_persistenceA -[hidden]right- _infrastructure_persistenceB
+  }
+  package "infrastructure.mq" {
+    class " " as _infrastructure_mqA
+    class " " as _infrastructure_mqB
+    hide _infrastructure_mqA
+    hide _infrastructure_mqB
+    _infrastructure_mqA -[hidden]right- _infrastructure_mqB
+  }
+  package "infrastructure.config" {
+    class " " as _infrastructure_configA
+    class " " as _infrastructure_configB
+    hide _infrastructure_configA
+    hide _infrastructure_configB
+    _infrastructure_configA -[hidden]right- _infrastructure_configB
+  }
 
   "infrastructure.persistence" -[hidden]right- "infrastructure.mq"
   "infrastructure.mq" -[hidden]right- "infrastructure.config"
@@ -50,19 +92,10 @@ package infrastructure {
 ' implement the ports defined by the inner layers)
 ' =====================================================
 
-presentation --> application : invoke use case
-
-application --> "domain.service" : invoke domain logic
-
-"domain.service" --> "domain.model" : operates on
-
-"infrastructure.persistence" ..|> "domain.service" : implements repository port
-"infrastructure.persistence" ..|> "application.port" : implements outbound port
-
-"infrastructure.mq" ..|> "domain.service" : implements queue port
-"infrastructure.mq" ..|> "application.port" : implements outbound port
-
-"infrastructure.config" ..> application : wires adapters into ports
+presentation ..> application
+application ..> domain
+infrastructure ..> domain
+infrastructure ..> application
 
 ' =====================================================
 ' Layout hints

@@ -106,7 +106,8 @@ graph TD
     React -->|Apply Blocks & Limits| Redis[(Redis Cache)]
     React -->|Write Actions| DB
     Sim -->|Validate Blocklist| Redis
-    Dash -->|SSE / REST| FE[React UI]
+    Dash --> FE[React UI]
+    FE --> Sim
     DB -->|Query History| Dash
 ```
 

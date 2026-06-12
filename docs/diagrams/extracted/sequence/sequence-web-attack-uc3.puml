@@ -3,131 +3,37 @@ autonumber
 skinparam BoxPadding 10
 skinparam ParticipantPadding 10
 
-box "Presentation & Ingestion" #LightBlue
-participant "RabbitMQ" as MQ
-participant "HttpLogConsumer\n(consumer.py)" as Consumer
+box "Application"
+participant "DetectionJobRunner" as Runner
 end box
 
-box "Detection Job & UseCase" #LightYellow
-participant "DetectionJobRunner" as Runner
+box "Application UseCase (WebAttackUseCase)"
 participant "WebAttackUseCase" as UseCase
 end box
 
-box "Domain Services" #LightPink
-participant "LogWindowAggregator" as Aggregator
-participant "WebAttackService\n(web_attack_service.detect)" as Service
+box "Infrastructure Ports"
+participant "ModelRepository" as ModelStore
+participant "ResultRepositoryPort" as ResultRepo
+participant "PublisherPort" as Publisher
 end box
 
-box "Infrastructure Adapters & Repositories" #LightGreen
-participant "WindowPort\n(RedisWindowAdapter)" as WindowAdapter
-participant "LockPort\n(RedisLockAdapter)" as LockAdapter
-participant "ModelRepository\n(MinIOModelStore)" as ModelStore
-participant "ResultRepositoryPort\n(PostgresDetectionResultRepository)" as ResultRepo
-participant "PublisherPort\n(RabbitMQPublisherAdapter)" as Publisher
-end box
+Runner -> UseCase : execute(WebAttackInput)
+UseCase -> UseCase : detect(WebAttackInput, ModelRepository)
 
-== Log Ingestion Flow ==
-
-MQ -> Consumer : handle_message(IncomingMessage)
-activate Consumer
-Consumer -> Consumer : parse_log(message.body) -> LogMessage
-Consumer -> WindowAdapter : add_log(Log)
-activate WindowAdapter
-WindowAdapter --> Consumer : added
-deactivate WindowAdapter
-deactivate Consumer
-
-== Periodic Detection Job Flow ==
-
-Runner -> Runner : Trigger by Cron (CRON_WEB_ATTACK)
-activate Runner
-
-Runner -> LockAdapter : lock("job:webattack", timeout)
-activate LockAdapter
-alt Lock Not Acquired
-    LockAdapter --> Runner : throws LockNotAcquiredError
-    Runner -> Runner : Skip execution
-else Lock Acquired
-    LockAdapter --> Runner : acquired
-    deactivate LockAdapter
-    
-    Runner -> WindowAdapter : get_window()
-    activate WindowAdapter
-    WindowAdapter --> Runner : List<Log>
-    deactivate WindowAdapter
-    
-    Runner -> Runner : filter logs newer than last run
-    
-    Runner -> Aggregator : instantiate LogWindowAggregator(new_logs)
-    activate Aggregator
-    Aggregator -> Aggregator : to_web_requests()
-    Aggregator --> Runner : List<WebAttackInput>
-    deactivate Aggregator
-    
-    loop for each WebAttackInput request
-        Runner -> UseCase : execute(WebAttackInput)
-        activate UseCase
-        
-        UseCase -> Service : detect(WebAttackInput, ModelRepository)
-        activate Service
-        
-        note over Service
-          Layer 1: Rule Engine Check
-          SQLi, XSS, Path Traversal, RCE regex signatures
-        end note
-        
-        alt Signature Match
-            Service --> UseCase : WebAttackResult (anomaly=True, layer="rule_engine")
-        else No Signature Match
-            alt No Payload (No query string and no body)
-                Service --> UseCase : WebAttackResult (anomaly=False)
-            else Has Payload
-                Service -> ModelStore : get(WEB_MODEL)
-                activate ModelStore
-                ModelStore --> Service : Model Artifact (model, scaler, embedded vocab)
-                deactivate ModelStore
-                
-                Service -> ModelStore : get(WEB_VOCAB)
-                activate ModelStore
-                ModelStore --> Service : External Vocab (known param names)
-                deactivate ModelStore
-                
-                Service -> Service : Extract Structural Features (Shannon entropy, special char count/ratio, depth, length)
-                Service -> Service : Extract Vocab Features (unknown param count/ratio, edit distance)
-                Service -> Service : scale & run XGBoost model prediction
-                
-                alt Prediction probability > threshold
-                    Service --> UseCase : WebAttackResult (anomaly=True, layer="xgboost")
-                else Prediction probability <= threshold
-                    Service --> UseCase : WebAttackResult (anomaly=False)
-                end
-            end
-        end
-        deactivate Service
-        
-        alt Anomaly Detected
-            UseCase -> ResultRepo : save(WebAttackResult)
-            activate ResultRepo
-            ResultRepo --> UseCase : saved
-            deactivate ResultRepo
-            
-            UseCase -> Publisher : publish(WebAttackResult)
-            activate Publisher
-            Publisher -> MQ : publish to detection results exchange
-            Publisher --> UseCase : published
-            deactivate Publisher
-        end
-        
-        UseCase --> Runner : done
-        deactivate UseCase
-    end
-    
-    Runner -> LockAdapter : release lock
-    activate LockAdapter
-    LockAdapter --> Runner : released
-    deactivate LockAdapter
+alt Layer 1 Anomaly
+    UseCase --> UseCase : WebAttackResult (anomaly=True, layer="rule_engine")
+else Layer 1 Clear (Has Payload)
+    UseCase -> ModelStore : get(WEB_MODEL)
+    ModelStore --> UseCase : Model Artifact (XGBoost, scaler, vocab)
+    UseCase -> UseCase : Extract features & run XGBoost model prediction
 end
 
-deactivate Runner
+alt Anomaly Detected (anomaly == True)
+    UseCase -> ResultRepo : save(WebAttackResult)
+    ResultRepo --> UseCase : saved
+    UseCase -> Publisher : publish(WebAttackResult)
+    Publisher --> UseCase : published
+end
+UseCase --> Runner : done
 
 @enduml

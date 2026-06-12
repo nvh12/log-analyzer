@@ -28,6 +28,7 @@ package "processing"              as PROC
 package "detection\n(log-analysis)" as DET
 package "reaction"                as REACT
 package "dashboard"              as DASH
+package "dashboard-fe"           as DASHFE
 
 ' -----------------------------
 ' Conceptual dependencies
@@ -37,6 +38,12 @@ PROC  ..> MC : «use»
 DET   ..> MC : «use»
 REACT ..> MC : «use»
 DASH  ..> MC : «use»
+
+' -----------------------------
+' Client -> backend calls
+' -----------------------------
+DASHFE ...> DASH
+DASHFE ...> SIM
 
 ' -----------------------------
 ' Horizontal layout constraint

@@ -1,7 +1,7 @@
 package com.nvh12.reaction.presentation;
 
 import com.nvh12.reaction.AbstractContainerIT;
-import com.nvh12.reaction.config.RabbitMqConfig;
+import com.nvh12.reaction.infrastructure.config.RabbitMqConfig;
 import com.nvh12.reaction.service.dto.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;

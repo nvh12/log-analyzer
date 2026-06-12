@@ -1,6 +1,6 @@
 package com.nvh12.reaction.presentation;
 
-import com.nvh12.reaction.config.RabbitMqConfig;
+import com.nvh12.reaction.infrastructure.config.RabbitMqConfig;
 import com.nvh12.reaction.service.ReactionService;
 import com.nvh12.reaction.service.dto.DetectionType;
 import com.nvh12.reaction.service.dto.ReactionInput;

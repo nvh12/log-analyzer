@@ -1,6 +1,6 @@
 package com.nvh12.reaction.infrastructure.mq;
 
-import com.nvh12.reaction.config.RabbitMqConfig;
+import com.nvh12.reaction.infrastructure.config.RabbitMqConfig;
 import com.nvh12.reaction.service.ReactionEventPort;
 import com.nvh12.reaction.service.dto.ReactionAction;
 import com.nvh12.reaction.service.dto.Severity;

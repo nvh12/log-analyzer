@@ -1,6 +1,6 @@
 package com.nvh12.reaction;
 
-import com.nvh12.reaction.config.RabbitMqConfig;
+import com.nvh12.reaction.infrastructure.config.RabbitMqConfig;
 import com.redis.testcontainers.RedisContainer;
 import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;

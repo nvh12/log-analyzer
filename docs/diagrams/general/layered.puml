@@ -2,16 +2,16 @@
 top to bottom direction
 
 skinparam shadowing false
-skinparam packageStyle rectangle
+skinparam packageStyle folder
 skinparam linetype ortho
 skinparam defaultFontName "Sans"
 skinparam ArrowColor #555555
 skinparam packageBorderColor #333333
-skinparam padding 10
-skinparam ranksep 80
+skinparam padding 5
+skinparam ranksep 120
 skinparam nodesep 50
-skinparam DefaultFontSize 14
-skinparam packageFontSize 14
+skinparam DefaultFontSize 16
+skinparam packageFontSize 12
 
 hide circle
 hide empty members
@@ -21,51 +21,87 @@ hide empty members
 ' Used by: reaction
 ' =====================================================
 
-package presentation
-
-package config
+package presentation {
+  class " " as _presentationA
+  class " " as _presentationB
+  hide _presentationA
+  hide _presentationB
+  _presentationA -[hidden]right- _presentationB
+}
 
 package service {
   package "service.dto" {
-    package "service.dto.alert"
+    package "service.dto.alert" {
+      class " " as _service_dto_alertA
+      class " " as _service_dto_alertB
+      hide _service_dto_alertA
+      hide _service_dto_alertB
+      _service_dto_alertA -[hidden]right- _service_dto_alertB
+    }
   }
-
-  package "service.impl"
-
-  service -[hidden]right- "service.dto"
-  "service.dto" -[hidden]right- "service.impl"
 }
 
 package infrastructure {
-  package "infrastructure.mq"
+  package "infrastructure.config" {
+    class " " as _infrastructure_configA
+    class " " as _infrastructure_configB
+    hide _infrastructure_configA
+    hide _infrastructure_configB
+    _infrastructure_configA -[hidden]right- _infrastructure_configB
+  }
+
+  package "infrastructure.mq" {
+    class " " as _infrastructure_mqA
+    class " " as _infrastructure_mqB
+    hide _infrastructure_mqA
+    hide _infrastructure_mqB
+    _infrastructure_mqA -[hidden]right- _infrastructure_mqB
+  }
 
   package "infrastructure.persistence" {
-    package "infrastructure.persistence.entity"
-    package "infrastructure.persistence.repository"
+    package "infrastructure.persistence.entity" {
+      class " " as _infrastructure_persistence_entityA
+      class " " as _infrastructure_persistence_entityB
+      hide _infrastructure_persistence_entityA
+      hide _infrastructure_persistence_entityB
+      _infrastructure_persistence_entityA -[hidden]right- _infrastructure_persistence_entityB
+    }
+    package "infrastructure.persistence.repository" {
+      class " " as _infrastructure_persistence_repositoryA
+      class " " as _infrastructure_persistence_repositoryB
+      hide _infrastructure_persistence_repositoryA
+      hide _infrastructure_persistence_repositoryB
+      _infrastructure_persistence_repositoryA -[hidden]right- _infrastructure_persistence_repositoryB
+    }
 
     "infrastructure.persistence.entity" -[hidden]right- "infrastructure.persistence.repository"
   }
 
+  package "infrastructure.service" {
+    package "infrastructure.service.impl" {
+      class " " as _infrastructure_service_implA
+      class " " as _infrastructure_service_implB
+      hide _infrastructure_service_implA
+      hide _infrastructure_service_implB
+      _infrastructure_service_implA -[hidden]right- _infrastructure_service_implB
+    }
+  }
+
+  "infrastructure.config" -[hidden]right- "infrastructure.mq"
   "infrastructure.mq" -[hidden]down- "infrastructure.persistence"
+  "infrastructure.persistence" -[hidden]right- "infrastructure.service"
 }
 
 ' =====================================================
-' Calls flow top-down through the layers; each layer
-' only calls into the layer directly beneath it
+' Calls flow top-down through the layers; infrastructure
+' depends on service (infrastructure.service.impl implements
+' ports and uses DTOs declared in service, infrastructure.mq
+' implements ReactionEventPort), never the reverse.
 ' =====================================================
 
-presentation --> service : dispatch by DetectionType
+presentation ..> service
 
-"service.impl" --|> service : extends ReactionTemplate /\nimplements collaborator ports
-"service.impl" ..> "service.dto" : uses
-
-"service.impl" --> "infrastructure.persistence.repository"
-"infrastructure.persistence.repository" --> "infrastructure.persistence.entity"
-
-"infrastructure.mq" ..|> service : implements ReactionEventPort
-
-config ..> infrastructure : configures
-config ..> service : configures
+infrastructure ..> service
 
 ' =====================================================
 ' Layout hints
@@ -73,14 +109,13 @@ config ..> service : configures
 
 presentation -[hidden]down- service
 service -[hidden]down- infrastructure
-config -[hidden]right- presentation
 
 ' No dedicated domain/application split: business rules, DTOs, and
 ' orchestration (ReactionTemplate, the collaborator port interfaces,
-' and their impl/dto sub-packages) all live together under one
-' "service" package. The layer still defines collaborator ports
-' (e.g. ReactionEventPort) that an infrastructure adapter implements,
-' but call flow is otherwise top-down: presentation -> service ->
-' infrastructure.
+' and their dto sub-packages) live under "service", which declares
+' collaborator ports (e.g. ReactionEventPort, AlertService) that
+' infrastructure.service.impl implements alongside the Redis/JPA/MQ/
+' external-API adapters and config beans. Call flow is otherwise
+' top-down: presentation -> service -> infrastructure.
 
 @enduml
