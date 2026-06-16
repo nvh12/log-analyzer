@@ -1,22 +1,24 @@
 @startuml sequence-network-flow-uc2-uc4
 autonumber
-skinparam BoxPadding 10
-skinparam ParticipantPadding 10
+<style>
+root {
+  BackgroundColor white
+  LineColor black
+  FontColor black
+}
+sequenceDiagram {
+  participant {
+    Padding 10
+  }
+}
+</style>
 
-box "Presentation"
 participant "FlowConsumer" as Consumer
-end box
-
-box "Application UseCases"
 participant "DDoSUseCase" as DDoS_UC
 participant "BruteForceUseCase" as BF_UC
-end box
-
-box "Infrastructure Ports"
 participant "ModelRepository" as ModelStore
 participant "ResultRepositoryPort" as ResultRepo
 participant "PublisherPort" as Publisher
-end box
 
 Consumer -> DDoS_UC : execute(DDoSInput)
 DDoS_UC -> ModelStore : get(DDOS_MODEL)

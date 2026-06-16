@@ -15,12 +15,15 @@ def _ema(values: list[float], thresholds: TrafficThresholds) -> list[float]:
     return result[1:]  # trim to match input length
 
 
-def _z_score(values: np.ndarray) -> float:
+def _z_score(values: np.ndarray, thresholds: TrafficThresholds) -> float:
     """Computes z-score of current value against history-only baseline."""
     history = values[:-1]
-    if len(history) < 2 or history.std(ddof=1) == 0:
+    if len(history) < 2:
         return 0.0
-    return float((values[-1] - history.mean()) / history.std(ddof=1))
+    std = max(history.std(ddof=1), thresholds.variance_min_floor)
+    if std == 0.0:
+        return 0.0
+    return float((values[-1] - history.mean()) / std)
 
 
 def _iqr_flag(values: np.ndarray, thresholds: TrafficThresholds) -> bool:
@@ -29,7 +32,7 @@ def _iqr_flag(values: np.ndarray, thresholds: TrafficThresholds) -> bool:
     if len(history) < 4:
         return False
     q1, q3 = np.percentile(history, [25, 75])
-    iqr = q3 - q1
+    iqr = max(q3 - q1, thresholds.variance_min_floor)
     upper = q3 + thresholds.iqr_multiplier * iqr
     return bool(values[-1] > upper)
 
@@ -40,10 +43,11 @@ def _ema_deviation(values: list[float], thresholds: TrafficThresholds) -> float:
     if len(history) < 2:
         return 0.0
     ema_history = _ema(history, thresholds)
-    std = np.std(history, ddof=1)
-    if std == 0:
+    std = max(np.std(history, ddof=1), thresholds.variance_min_floor)
+    if std == 0.0:
         return 0.0
     return float((values[-1] - ema_history[-1]) / std)
+
 
 
 def _seasonal_flag(
@@ -68,10 +72,11 @@ def _seasonal_flag(
     avg_iqr = np.median(historical_iqrs)
 
     # 0.7413 * IQR is the standard robust estimator for standard deviation
-    scale = 0.7413 * max(avg_iqr, 1.0)
+    scale = 0.7413 * max(avg_iqr, thresholds.variance_min_floor)
     robust_z = float((current_count - baseline) / (scale + 1e-6))
 
     return robust_z > thresholds.seasonal_z_threshold, robust_z
+
 
 
 def detect(
@@ -89,19 +94,20 @@ def detect(
     scored = bool(seasonal_summaries)
 
     vals = np.array(window.req_counts)
-    if len(vals) < thresholds.min_history:
+    current_count = window.req_counts[-1] if window.req_counts else 0.0
+    if len(vals) < thresholds.min_history or current_count < thresholds.absolute_min_floor:
         return TrafficResult(
             anomaly=False,
             confidence=0.0,
             method_flags={"z_score": False, "iqr": False, "ema": False, "seasonal": False},
             severity=Severity.NONE,
-            scored=False,
+            scored=scored,
             log_timestamp=window.window_end,
             window_start=window.window_start,
             window_end=window.window_end,
         )
 
-    z = _z_score(vals)
+    z = _z_score(vals, thresholds)
     iqr = _iqr_flag(vals, thresholds)
     ema_dev = _ema_deviation(window.req_counts, thresholds)
     seasonal_anomaly, _ = _seasonal_flag(

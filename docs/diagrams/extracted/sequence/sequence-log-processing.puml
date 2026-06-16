@@ -1,15 +1,20 @@
 @startuml sequence-log-processing
 autonumber
-skinparam BoxPadding 10
-skinparam ParticipantPadding 10
+<style>
+root {
+  BackgroundColor white
+  LineColor black
+  FontColor black
+}
+sequenceDiagram {
+  participant {
+    Padding 10
+  }
+}
+</style>
 
-box "Application"
 participant "LogProcessingWorker" as Worker
-end box
-
-box "Domain Service (LogProcessingService)"
 participant "LogProcessingService" as Service
-end box
 
 Worker -> Service : process(RawLog)
 alt rawLog.source == HTTP

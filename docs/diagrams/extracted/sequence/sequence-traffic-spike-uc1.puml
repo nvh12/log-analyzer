@@ -1,20 +1,22 @@
 @startuml sequence-traffic-spike-uc1
 autonumber
-skinparam BoxPadding 10
-skinparam ParticipantPadding 10
+<style>
+root {
+  BackgroundColor white
+  LineColor black
+  FontColor black
+}
+sequenceDiagram {
+  participant {
+    Padding 10
+  }
+}
+</style>
 
-box "Application"
 participant "DetectionJobRunner" as Runner
-end box
-
-box "Application UseCase (TrafficUseCase)"
 participant "TrafficUseCase" as UseCase
-end box
-
-box "Infrastructure Ports"
 participant "ResultRepositoryPort" as ResultRepo
 participant "PublisherPort" as Publisher
-end box
 
 Runner -> UseCase : execute(TrafficInput, seasonal_summaries)
 UseCase -> UseCase : detect(TrafficInput, thresholds, seasonal_summaries)\n(Statistical Z-score, IQR, EMA, & Robust Seasonal voting)

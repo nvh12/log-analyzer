@@ -183,7 +183,11 @@ def test_partial_votes_severity_is_medium(thresholds):
     # Disable z-score and EMA so only IQR can fire; seasonal bucket absent.
     # Use a spike value just above the IQR upper bound (~107) but control
     # thresholds so z-score and EMA stay silent.
-    silent = low_bar.model_copy(update={"z_score_flag": 1000.0, "ema_dev_threshold": 1000.0})
+    silent = low_bar.model_copy(update={
+        "z_score_flag": 1000.0,
+        "ema_dev_threshold": 1000.0,
+        "variance_min_floor": 0.0,
+    })
     history = [100.0] * 9
     # IQR on 9 identical values → IQR=0, upper=100; value 101 > 100 → fires.
     window = make_window(history + [101.0])
@@ -250,3 +254,41 @@ def test_scored_false_when_seasonal_summaries_empty(thresholds):
 def test_scored_true_when_seasonal_summaries_provided(thresholds):
     result = traffic_service.detect(make_window(SPIKE), thresholds, seasonal_summaries=SEASONAL_BUCKET)
     assert result.scored is True
+
+
+# ---------------------------------------------------------------------------
+# Floors (absolute and variance min floors)
+# ---------------------------------------------------------------------------
+
+def test_absolute_min_floor_blocks_anomalies(thresholds):
+    # Standard SPIKE counts has values around 100, but let's test a spike of 10
+    # in an idle stream where absolute_min_floor is 15.
+    idle_history = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0]
+    # Current value = 10 (above history, but below absolute_min_floor = 15)
+    window = make_window(idle_history + [10.0])
+    
+    # Configure absolute_min_floor to 15.0
+    floor_thresholds = thresholds.model_copy(update={"absolute_min_floor": 15.0})
+    result = traffic_service.detect(window, floor_thresholds)
+    
+    assert result.anomaly is False
+
+
+def test_variance_min_floor_stifles_small_variations(thresholds):
+    # Flat history [20.0] * 9, current value = 21.0
+    # absolute_min_floor is 15, so 21.0 is allowed.
+    # Without variance floor, any increase from flat 20.0 fires IQR (IQR=0, upper=20.0).
+    window = make_window([20.0] * 9 + [21.0])
+    
+    # Configure absolute_min_floor to 15.0 and variance_min_floor to 5.0
+    floor_thresholds = thresholds.model_copy(update={
+        "absolute_min_floor": 15.0,
+        "variance_min_floor": 5.0
+    })
+    
+    result = traffic_service.detect(window, floor_thresholds)
+    
+    # IQR should not fire because upper = 20 + 1.5 * 5 = 27.5 (and 21 <= 27.5)
+    assert result.method_flags["iqr"] is False
+    assert result.anomaly is False
+

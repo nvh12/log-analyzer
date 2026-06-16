@@ -1,21 +1,23 @@
 @startuml sequence-web-attack-uc3
 autonumber
-skinparam BoxPadding 10
-skinparam ParticipantPadding 10
+<style>
+root {
+  BackgroundColor white
+  LineColor black
+  FontColor black
+}
+sequenceDiagram {
+  participant {
+    Padding 10
+  }
+}
+</style>
 
-box "Application"
 participant "DetectionJobRunner" as Runner
-end box
-
-box "Application UseCase (WebAttackUseCase)"
 participant "WebAttackUseCase" as UseCase
-end box
-
-box "Infrastructure Ports"
 participant "ModelRepository" as ModelStore
 participant "ResultRepositoryPort" as ResultRepo
 participant "PublisherPort" as Publisher
-end box
 
 Runner -> UseCase : execute(WebAttackInput)
 UseCase -> UseCase : detect(WebAttackInput, ModelRepository)

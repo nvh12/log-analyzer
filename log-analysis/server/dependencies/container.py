@@ -39,7 +39,10 @@ def create_traffic_thresholds(data: dict, settings) -> TrafficThresholds:
         weight_zscore=w.get("zscore", settings.TRAFFIC_WEIGHT_ZSCORE),
         weight_iqr=w.get("iqr", settings.TRAFFIC_WEIGHT_IQR),
         weight_seasonal=w.get("seasonal", settings.TRAFFIC_WEIGHT_SEASONAL),
+        absolute_min_floor=t.get("absolute_min_floor", settings.TRAFFIC_ABSOLUTE_MIN_FLOOR),
+        variance_min_floor=t.get("variance_min_floor", settings.TRAFFIC_VARIANCE_MIN_FLOOR),
     )
+
 
 
 class Container(containers.DeclarativeContainer):

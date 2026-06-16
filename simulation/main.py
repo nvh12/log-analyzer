@@ -42,20 +42,23 @@ async def lifespan(app: FastAPI):
 
     if settings.AUTO_START_NORMAL:
         baseline_uc = container.baseline_use_case()
-        # Clear any stale lock left by an unclean previous shutdown so the
-        # fresh process always starts a new baseline task.
-        ns = settings.REDIS_BASELINE_NAMESPACE
-        await redis_client.delete(f"{ns}:lock", f"{ns}:stop_signal")
-        await baseline_uc.start(
-            scenario=SimulationScenario.NORMAL,
-            log_type=LogType.MIXED,       # 50 % HTTP + 50 % FLOW each tick
-            count=0,                       # unlimited — runs until service stops
-            rate_per_second=settings.AUTO_START_RATE,
-            target_ip="192.168.100.100",   # unused by NORMAL (always _random_ip)
-        )
-        logger.info(
-            "Baseline NORMAL traffic started at %.1f logs/s", settings.AUTO_START_RATE
-        )
+        # Only one worker should run the baseline loop. start() acquires a Redis
+        # lock via SETNX — if another worker (or a previous run whose lock hasn't
+        # expired yet) already holds it, skip rather than spawning a duplicate
+        # overlapping task.
+        try:
+            await baseline_uc.start(
+                scenario=SimulationScenario.NORMAL,
+                log_type=LogType.MIXED,       # 50 % HTTP + 50 % FLOW each tick
+                count=0,                       # unlimited — runs until service stops
+                rate_per_second=settings.AUTO_START_RATE,
+                target_ip="192.168.100.100",   # unused by NORMAL (always _random_ip)
+            )
+            logger.info(
+                "Baseline NORMAL traffic started at %.1f logs/s", settings.AUTO_START_RATE
+            )
+        except RuntimeError:
+            logger.info("Baseline NORMAL traffic already running in another worker — skipping")
 
     # Reset tracked worker count so a stale Redis value from a previous run
     # doesn't cause the scaler to miscalculate deltas on startup.

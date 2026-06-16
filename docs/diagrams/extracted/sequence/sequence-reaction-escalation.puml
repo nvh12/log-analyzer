@@ -1,24 +1,26 @@
 @startuml sequence-reaction-escalation
 autonumber
-skinparam BoxPadding 10
-skinparam ParticipantPadding 10
+<style>
+root {
+  BackgroundColor white
+  LineColor black
+  FontColor black
+}
+sequenceDiagram {
+  participant {
+    Padding 10
+  }
+}
+</style>
 
-box "Presentation"
 participant "DetectionResultConsumer" as Consumer
-end box
-
-box "Reaction Service Layer"
 participant "ReactionService" as ReactionSvc
 participant "EscalatingIpReactionService" as EscalatingSvc
-end box
-
-box "Infrastructure Ports"
 participant "RedisTemplate" as Redis
 participant "IpBlockService" as BlockSvc
 participant "RateLimitService" as LimitSvc
 participant "ReactionLogService" as LogSvc
 participant "AlertService" as AlertSvc
-end box
 
 Consumer -> ReactionSvc : handle(ReactionInput)
 ReactionSvc -> EscalatingSvc : doHandle(ReactionInput)

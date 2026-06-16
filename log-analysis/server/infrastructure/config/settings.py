@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     TRAFFIC_WEIGHT_ZSCORE: float = 0.5
     TRAFFIC_WEIGHT_IQR: float = 1.0
     TRAFFIC_WEIGHT_SEASONAL: float = 1.0
+    TRAFFIC_ABSOLUTE_MIN_FLOOR: float = 15.0
+    TRAFFIC_VARIANCE_MIN_FLOOR: float = 5.0
+
 
     @field_validator("CRON_TRAFFIC", "CRON_WEB_ATTACK", mode="before")
     @classmethod

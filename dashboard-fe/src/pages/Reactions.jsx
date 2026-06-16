@@ -228,7 +228,7 @@ export default function Reactions() {
                     <span className={isPending ? 'text-green-400 italic' : 'text-green-300'}>{ip}</span>
                     <button
                       onClick={() => removeFromWl(ip)}
-                      className="text-xs text-gray-500 hover:text-red-300 border border-gray-700 hover:border-red-700 rounded px-2 py-0.5 transition-colors"
+                      className="text-xs text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 rounded px-2 py-0.5 transition-colors"
                     >
                       Remove
                     </button>
@@ -245,7 +245,7 @@ export default function Reactions() {
           <button
             onClick={handleApply}
             disabled={applying}
-            className="px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded transition-colors text-white"
+            className="mono text-xs px-4 py-2 rounded bg-green-900 border border-green-700 text-green-300 hover:bg-green-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-medium"
           >
             {applying ? 'Applying…' : 'Apply changes'}
           </button>

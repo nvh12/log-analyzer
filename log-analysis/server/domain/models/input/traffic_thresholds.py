@@ -19,6 +19,9 @@ class TrafficThresholds(BaseModel):
     weight_zscore: float = Field(ge=0)
     weight_iqr: float = Field(ge=0)
     weight_seasonal: float = Field(ge=0)
+    absolute_min_floor: float = Field(default=15.0, ge=0)
+    variance_min_floor: float = Field(default=5.0, ge=0)
+
 
     @model_validator(mode="after")
     def _check_weight_sum(self) -> "TrafficThresholds":

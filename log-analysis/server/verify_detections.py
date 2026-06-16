@@ -145,7 +145,9 @@ class TestDetectionPipelines(unittest.TestCase):
             weight_zscore=0.5,
             weight_iqr=1.0,
             weight_ema=0.5,
-            weight_seasonal=1.0
+            weight_seasonal=1.0,
+            absolute_min_floor=15.0,
+            variance_min_floor=5.0
         )
 
         # Seasonal bucket: (median, iqr) summaries for the same hour-of-week slot.

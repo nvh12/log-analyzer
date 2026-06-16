@@ -36,8 +36,12 @@ class Settings(BaseSettings):
 
     # Baseline auto-start — continuously generate NORMAL/MIXED traffic from startup.
     # Disabled in compose.test.yml so E2E tests control all traffic themselves.
+    # MIXED log_type is a 50/50 HTTP/FLOW coin-flip per message, and only HTTP
+    # logs feed the traffic window — so this rate must be 2x the desired HTTP
+    # rate. 10.0 -> ~5 HTTP req/s -> ~300 logs/60s window, matching
+    # seed_traffic_baseline.py's BASELINE_MEDIAN.
     AUTO_START_NORMAL:        bool  = True
-    AUTO_START_RATE:          float = Field(default=2.0, gt=0)
+    AUTO_START_RATE:          float = Field(default=10.0, gt=0)
     REDIS_BASELINE_NAMESPACE: str   = "baseline"
 
 

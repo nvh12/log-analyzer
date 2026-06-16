@@ -41,11 +41,16 @@ function ttlLabel(seconds) {
 const TZ = { timeZone: 'Asia/Ho_Chi_Minh' }
 
 function fmtTs(ts) {
+  return ts ? new Date(ts).toLocaleString(undefined, { ...TZ, dateStyle: 'short', timeStyle: 'medium' }) : '—'
+}
+
+// Chart axis labels stay time-only to avoid cluttering the x-axis.
+function fmtChartTime(ts) {
   return ts ? new Date(ts).toLocaleTimeString(undefined, TZ) : '—'
 }
 
 function fmtLogTs(r) {
-  if (r.timestamp) return new Date(r.timestamp * 1000).toLocaleTimeString(undefined, TZ)
+  if (r.timestamp) return new Date(r.timestamp * 1000).toLocaleString(undefined, { ...TZ, dateStyle: 'short', timeStyle: 'medium' })
   if (r.processedAt) return fmtTs(r.processedAt)
   return '—'
 }
@@ -188,7 +193,7 @@ export default function Live() {
     },
     log_throughput: (t) => {
       setThroughput(prev => {
-        const next = [...prev, { time: fmtTs(t.ts), http: t.http_per_sec, flow: t.flow_per_sec }]
+        const next = [...prev, { time: fmtChartTime(t.ts), http: t.http_per_sec, flow: t.flow_per_sec }]
         return next.length > MAX_POINTS ? next.slice(-MAX_POINTS) : next
       })
     },
@@ -275,7 +280,7 @@ export default function Live() {
             <FilterInput label="IP" value={ipFilter} onChange={setIpFilter} placeholder="10.0.0.1" />
           </div>
           <div
-            className="overflow-y-auto flex-1 min-h-0 max-h-96"
+            className="overflow-y-auto flex-1 min-h-0 max-h-[30rem]"
             onMouseEnter={() => { pausedRef.current = true }}
             onMouseLeave={() => { pausedRef.current = false }}
           >
@@ -314,85 +319,87 @@ export default function Live() {
           </div>
         </Card>
 
-        {/* Throughput chart */}
-        <Card className="flex flex-col">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800">
-            <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Queue throughput (req/s)</span>
-            <div className="flex gap-1">
-              {WINDOWS.map((w, i) => (
-                <button
-                  key={w.label}
-                  onClick={() => setWindowIdx(i)}
-                  className={`mono text-xs px-2 py-0.5 rounded transition-colors ${
-                    i === windowIdx
-                      ? 'bg-gray-700 text-white'
-                      : 'text-gray-500 hover:text-gray-300'
-                  }`}
-                >
-                  {w.label}
-                </button>
-              ))}
+        <div className="space-y-4">
+          {/* Throughput chart */}
+          <Card className="flex flex-col">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800">
+              <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Queue throughput (req/s)</span>
+              <div className="flex gap-1">
+                {WINDOWS.map((w, i) => (
+                  <button
+                    key={w.label}
+                    onClick={() => setWindowIdx(i)}
+                    className={`mono text-xs px-2 py-0.5 rounded transition-colors ${
+                      i === windowIdx
+                        ? 'bg-gray-700 text-white'
+                        : 'text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    {w.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-          <div className="flex-1 p-3">
-            {throughputPoints.length === 0 ? (
-              <Empty message="Waiting for data…" />
-            ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={throughputPoints.slice(-WINDOWS[windowIdx].points)} isAnimationActive={false}>
-                  <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#6b7280' }} interval="preserveStartEnd" />
-                  <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} width={36} />
-                  <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', fontSize: 11 }}
-                    labelStyle={{ color: '#9ca3af' }} />
-                  <Line type="linear" dataKey="http" stroke="#f97316" dot={false} name="HTTP" strokeWidth={1.5} isAnimationActive={false} />
-                  <Line type="linear" dataKey="flow" stroke="#60a5fa" dot={false} name="Flow" strokeWidth={1.5} isAnimationActive={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </Card>
-      </div>
+            <div className="flex-1 p-3">
+              {throughputPoints.length === 0 ? (
+                <Empty message="Waiting for data…" />
+              ) : (
+                <ResponsiveContainer width="100%" height={180}>
+                  <LineChart data={throughputPoints.slice(-WINDOWS[windowIdx].points)} isAnimationActive={false}>
+                    <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#6b7280' }} interval="preserveStartEnd" />
+                    <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} width={36} />
+                    <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', fontSize: 11 }}
+                      labelStyle={{ color: '#9ca3af' }} />
+                    <Line type="linear" dataKey="http" stroke="#f97316" dot={false} name="HTTP" strokeWidth={1.5} isAnimationActive={false} />
+                    <Line type="linear" dataKey="flow" stroke="#60a5fa" dot={false} name="Flow" strokeWidth={1.5} isAnimationActive={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </Card>
 
-      {/* Active reactions */}
-      <Card title="Active reactions">
-        {blocklist.length === 0 && rateLimits.length === 0 ? (
-          <Empty message="No active blocks or rate limits" />
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4">
-            <div>
-              <div className="text-xs text-gray-500 mb-2">Blocked ({blocklist.length})</div>
-              {blocklist.length === 0 ? <Empty message="No active blocks" /> : (
-                <ul className="space-y-1.5">
-                  {blocklist.map((b, i) => (
-                    <li key={i} className="flex items-center justify-between gap-3 mono text-xs
-                                            bg-red-900/20 border border-red-800/60 rounded px-2.5 py-1.5">
-                      <span className="text-red-300">{b.ip ?? b}</span>
-                      {b.ttl_seconds != null && <span className="text-red-400/70 shrink-0">{ttlLabel(b.ttl_seconds)}</span>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div>
-              <div className="text-xs text-gray-500 mb-2">Rate-limited ({rateLimits.length})</div>
-              {rateLimits.length === 0 ? <Empty message="No active rate limits" /> : (
-                <ul className="space-y-1.5">
-                  {rateLimits.map((r, i) => (
-                    <li key={i} className="flex items-center justify-between gap-3 mono text-xs
-                                            bg-orange-900/20 border border-orange-800/60 rounded px-2.5 py-1.5">
-                      <span className="text-orange-300">{r.ip ?? r}</span>
-                      <span className="text-orange-400/70 flex gap-3 shrink-0">
-                        {r.requests_per_minute != null && <span>{r.requests_per_minute} req/min</span>}
-                        {r.ttl_seconds != null && <span>{ttlLabel(r.ttl_seconds)}</span>}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        )}
-      </Card>
+          {/* Active reactions */}
+          <Card title="Active reactions">
+            {blocklist.length === 0 && rateLimits.length === 0 ? (
+              <Empty message="No active blocks or rate limits" />
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4">
+                <div>
+                  <div className="text-xs text-gray-500 mb-2">Blocked ({blocklist.length})</div>
+                  {blocklist.length === 0 ? <Empty message="No active blocks" /> : (
+                    <ul className="space-y-1.5">
+                      {blocklist.map((b, i) => (
+                        <li key={i} className="flex items-center justify-between gap-3 mono text-xs
+                                                bg-red-900/20 border border-red-800/60 rounded px-2.5 py-1.5">
+                          <span className="text-red-300">{b.ip ?? b}</span>
+                          {b.ttl_seconds != null && <span className="text-red-400/70 shrink-0">{ttlLabel(b.ttl_seconds)}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-2">Rate-limited ({rateLimits.length})</div>
+                  {rateLimits.length === 0 ? <Empty message="No active rate limits" /> : (
+                    <ul className="space-y-1.5">
+                      {rateLimits.map((r, i) => (
+                        <li key={i} className="flex items-center justify-between gap-3 mono text-xs
+                                                bg-orange-900/20 border border-orange-800/60 rounded px-2.5 py-1.5">
+                          <span className="text-orange-300">{r.ip ?? r}</span>
+                          <span className="text-orange-400/70 flex gap-3 shrink-0">
+                            {r.requests_per_minute != null && <span>{r.requests_per_minute} req/min</span>}
+                            {r.ttl_seconds != null && <span>{ttlLabel(r.ttl_seconds)}</span>}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
 
       {/* Recent activity — compact previews of the Logs/Detections/Reactions detail pages */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
