@@ -131,6 +131,21 @@ def test_whitelist_remove(acr_client):
     redis.srem.assert_called()
 
 
+def test_whitelist_replace(acr_client):
+    client, redis = acr_client
+    # Mocking pipeline context manager
+    pipeline_mock = redis.pipeline.return_value.__aenter__.return_value
+
+    response = client.put("/admin/whitelist", json=["10.0.0.2", "10.0.0.3"], headers=_ADMIN_HEADERS)
+    assert response.status_code == 200
+    assert response.json()["replaced"] is True
+    assert response.json()["count"] == 2
+
+    pipeline_mock.delete.assert_called_with("whitelist:ips")
+    pipeline_mock.sadd.assert_called_with("whitelist:ips", "10.0.0.2", "10.0.0.3")
+    pipeline_mock.execute.assert_called_once()
+
+
 # ---------------------------------------------------------------------------
 # Rate-limit
 # ---------------------------------------------------------------------------

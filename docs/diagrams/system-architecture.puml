@@ -46,6 +46,11 @@ DASHFE ...> DASH
 DASHFE ...> SIM
 
 ' -----------------------------
+' Service -> service calls (REST)
+' -----------------------------
+REACT ..> SIM : «use»\n(whitelist check)
+
+' -----------------------------
 ' Horizontal layout constraint
 ' -----------------------------
 SIM   -[hidden]right- PROC

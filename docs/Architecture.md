@@ -50,7 +50,7 @@ The system is structured as five decoupled microservices. Below is a detailed br
 │   │         FastAPI Scheduler & Jobs               │   │   │   │         FastAPI Consumer / Model Store         │   │
 │   ├────────────────────────────────────────────────┤   │   │   ├────────────────────────────────────────────────┤   │
 │   │ • Statistical Ensemble (EMA, Z-Score, IQR, SB) │   │   │   │ • ML Classifiers (XGBoost DDoS / Brute Force)  │   │
-│   │ • Web Attack Layer (Regex Signature + XGBoost) │   │   │   │ • 45-Feature Parity Alignment                  │   │
+│   │ • Web Attack Layer (Regex Signature + XGBoost) │   │   │   │ • 43-Feature Parity Alignment                  │   │
 │   └───────────────────────┬────────────────────────┘   │   │   └───────────────────────┬────────────────────────┘   │
 │                           ▼ (PostgreSQL Write)         │   │                           ▼ (PostgreSQL Write)         │
 │                     [ Publisher (aio-pika) ]           │   │                     [ Publisher (aio-pika) ]           │
@@ -105,6 +105,7 @@ graph TD
     React -->|reaction.results Exchange| Dash
     React -->|Apply Blocks & Limits| Redis[(Redis Cache)]
     React -->|Write Actions| DB
+    React -->|HTTP GET /admin/whitelist| Sim
     Sim -->|Validate Blocklist| Redis
     Dash --> FE[React UI]
     FE --> Sim
@@ -115,13 +116,13 @@ graph TD
 *   **Role**: Dedicated script and mock generator running on FastAPI/Uvicorn.
 *   **Architecture**: Follows an asynchronous task loop pattern powered by `asyncio`. It publishes raw log lines (CLF formatted logs and JSON flow arrays) using `aio-pika` to prevent blocking the generator thread.
 *   **Concurrency**: Implements a non-blocking asynchronous event loop, running baseline Poisson-based normal traffic generators and flow replayers concurrently.
-*   **Auto-Scaling Mechanism**: Exposes a scaling mechanism (`infrastructure/scaler.py`) that polls dynamic load requirements from Redis and orchestrates Gunicorn/Uvicorn child worker counts on the fly using signal traps (`SIGUSR1` to scale up, `SIGUSR2` to scale down).
+*   **Auto-Scaling Mechanism**: Exposes a scaling mechanism (`infrastructure/scaler.py`) that polls dynamic load requirements from Redis and orchestrates Gunicorn/Uvicorn child worker counts on the fly using signal traps (`SIGTTIN` to scale up, `SIGTTOU` to scale down). Only one worker holds the Redis scaler lock (`scale:scaler_lock`) at a time.
 
 ### 1.2 Processing Service
 *   **Role**: Normalization and ingestion entrypoint.
-*   **Architecture**: Built using Spring Boot 3.x following a Clean Architecture Controller-Service-Repository layout. Uses Flyway for database migrations.
-*   **Concurrency**: Employs a multi-threaded Spring AMQP listener container (`SimpleMessageListenerContainer`) configured with a concurrent consumer count (default: 5, max: 20). 
-*   **Feature Alignment**: Standardizes various incoming logs. For HTTP, it parses headers, methods, and routes. For Flows, it maps properties into exactly **45 standard columns** and replaces any `NaN` or `Infinity` properties with `0.0`.
+*   **Architecture**: Built using Spring Boot 4.x following a Clean Architecture Controller-Service-Repository layout. Uses Flyway for database migrations.
+*   **Concurrency**: The Spring AMQP listener (`RawLogConsumer`) only enqueues incoming messages into a Redis sorted set (`RedisQueueService`, key `raw-log-queue`). A separate poller thread (`LogProcessingPoller`) dequeues batches and dispatches them to a `ThreadPoolTaskExecutor` (core: 4, max: 12, configurable via `LogProcessingProperties`).
+*   **Feature Alignment**: Standardizes various incoming logs. For HTTP, it parses headers, methods, and routes. For Flows, it passes through whatever feature keys the incoming record contains (no fixed column count is enforced) and replaces any `NaN` or `Infinity` values with `0.0`. The trained ML models (UC2/UC4) expect 43 specific feature keys.
 *   **Hikari Pool Configuration**: Configured with a dedicated `maximum-pool-size: 10` (minimum-idle: 2) to maintain database connection stability under high-rate inserts.
 
 ### 1.3 Detection Service
@@ -129,12 +130,12 @@ graph TD
 *   **Architecture**: Written in Python / FastAPI. It houses the `model_store` which dynamically downloads model binaries (`.pkl` files) from MinIO on startup.
 *   **Concurrency & Pipelines**:
     *   **HTTP Analysis Track**: Consumes windowed data from `log.normalized.http` and executes batch statistics (EMA, Z-score, IQR, and Robust Seasonal Baseline V2) scheduled at 60-second bounds. Web attacks (UC3) run through a Regex Signature matching layer followed by a supervised XGBoost classification layer.
-    *   **Flow Analysis Track**: Consumes individual flow records in real time from `log.normalized.flow`, running parallel async XGBoost inference processes for DDoS (UC2) and Brute Force (UC4) using a shared 45-feature vector.
+    *   **Flow Analysis Track**: Consumes individual flow records in real time from `log.normalized.flow`, running parallel async XGBoost inference processes for DDoS (UC2) and Brute Force (UC4) using a shared 43-feature vector.
 *   **Inference Loop**: FastAPI runs under Uvicorn utilizing an `asyncio`-driven client pool for PostgreSQL (`asyncpg`) and Redis (`redis-py`).
 
 ### 1.4 Reaction Service
 *   **Role**: Defense logic and automated incident response.
-*   **Architecture**: Built with Spring Boot 3.x using JPA and Spring AMQP.
+*   **Architecture**: Built with Spring Boot 4.x using JPA and Spring AMQP.
 *   **Concurrency**: Utilizes a single listener thread per queue to guarantee execution order of reactions for any given IP address.
 *   **Sliding Window Rate Limiter**: Inherits from `EscalatingIpReactionService`. Uses Redis-backed Lua scripts (`INCR_WITH_EXPIRE`) to track IP violations over a 10-minute sliding window:
     *   `< 3 violations`: Emits a `RATE_LIMIT` action.
@@ -245,7 +246,7 @@ All RabbitMQ exchanges are configured as durable to withstand broker restarts.
 
 ### 2.2 Serialization & Message Payload Schemas
 All messages are serialized and transmitted in **JSON UTF-8** format:
--   `log.raw`: `{ "id": "uuid", "source": "HTTP|FLOW", "raw_message": "...", "timestamp": 12345.67 }`
+-   `log.raw`: `{ "id": "uuid", "source": "HTTP|FLOW", "rawMessage": "...", "receivedAt": "2025-01-01T00:00:00Z", "headers": {} }`
 -   `log.normalized.http`: `{ "timestamp": 12345.67, "ip": "1.2.3.4", "method": "GET", "url": "/index", "status": 200, "bytes": 512, "query_string": "", "user_agent": "..." }`
 -   `log.normalized.flow`: `{ "timestamp": 12345.67, "source_ip": "1.2.3.4", "dest_ip": "5.6.7.8", "source_port": 443, "dest_port": 8080, "features": { "Flow Bytes/s": 120.0, "Total Fwd Packets": 4.0, ... } }`
 -   `detection.results`: `{ "detection_id": "uuid", "uc": "UC2", "ts": "ISO-8601", "verdict": "DDoS", "severity": "HIGH", "source_ip": "1.2.3.4", "dest_ip": "5.6.7.8", "confidence": 0.95 }`
@@ -263,8 +264,8 @@ The `log-processing` service implements two distinct error paths depending on th
 
 1.  **Transient Processing/Database Failures (DB-backed Retry - `DlqRetryScheduler`)**:
     -   If parsing or persistence fails due to transient database connection issues or transaction rollbacks, the exception is caught.
-    -   Instead of losing the message, the raw payload is saved in the `failed_log_entry` table in PostgreSQL with `retry_count = 0`.
-    -   A dedicated background scheduler (`DlqRetryScheduler`) polls failed entries, re-processes, and republishes them with a configurable backoff (default: 5000ms) and randomized jitter. Exceeding `max_retries` (default: 3) marks the log as exhausted and pushes it to a `drop_audit` table.
+    -   Instead of losing the message, the raw payload is saved as a `FailedLogEntry` in a Redis list DLQ (key `failed-log-queue`, via `RedisDlqRepository`) with `retry_count = 0`.
+    -   A dedicated background scheduler (`DlqRetryScheduler`) polls failed entries, re-processes, and republishes them with a configurable backoff (default: 30000ms) and randomized jitter (default: ±5000ms). Exceeding `max_retries` (default: 3) marks the log as exhausted and persists it to the Postgres `drop_audit` table; if that Postgres write itself fails, the entry is pushed back onto the Redis DLQ for a future retry rather than being lost.
 2.  **Fatal Serialization/Validation Failures (RabbitMQ DLX - `DeadLetterConsumer`)**:
     -   Fatal payload conversion issues or JSON formatting errors in the Spring listener container trigger rejection without requeueing.
     -   These messages are routed through the Dead Letter Exchange (`log.dlx`) to the `log.raw.dlq` queue.

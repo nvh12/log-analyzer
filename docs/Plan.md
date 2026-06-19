@@ -36,7 +36,7 @@ Hệ thống phát hiện bất thường trên hai tầng dữ liệu mạng: t
 
 - Phương pháp:
 
-- XGBoost: Phân loại nhị phân (Benign / DDoS) trên vector đặc trưng flow. Dữ liệu flow đã được trích xuất sẵn bởi CICFlowMeter với ~80 đặc trưng. Quy trình tiền xử lý bao gồm loại bỏ cột hằng số, xử lý NaN/infinity, phân tích tương quan để giảm chiều xuống xác định bộ 45 đặc trưng tối ưu (đảm bảo feature parity với UC4).
+- XGBoost: Phân loại nhị phân (Benign / DDoS) trên vector đặc trưng flow. Dữ liệu flow đã được trích xuất sẵn bởi CICFlowMeter với ~80 đặc trưng. Quy trình tiền xử lý bao gồm loại bỏ cột hằng số, xử lý NaN/infinity, phân tích tương quan để giảm chiều xuống xác định bộ 43 đặc trưng tối ưu (đảm bảo feature parity với UC4).
 
 - Dữ liệu: CICIDS2017 — Monday (Benign) + Friday afternoon (DDoS) với nhãn được cung cấp sẵn bởi Canadian Institute for Cybersecurity. Chia tập huấn luyện/kiểm thử theo thứ tự thời gian trong ngày Friday (temporal split).
 
@@ -84,7 +84,7 @@ Hệ thống xử lý hai tầng dữ liệu song song: tầng HTTP access log (
 
 - **log.raw**: Tiếp nhận dữ liệu thô từ module Simulation gửi tới Processing service.
 - **log.normalized.http** (Processing → Detection): dữ liệu HTTP access log đã chuẩn hóa và tổng hợp theo cửa sổ 60 giây.
-- **log.normalized.flow** (Processing → Detection): dữ liệu network flow đã chuẩn hóa, gửi theo từng flow record (45 đặc trưng).
+- **log.normalized.flow** (Processing → Detection): dữ liệu network flow đã chuẩn hóa, gửi theo từng flow record (43 đặc trưng).
 - **detection.results** (Detection → Reaction & Dashboard): kết quả phát hiện từ tất cả use case, sử dụng schema alert thống nhất.
 - **reaction.results** (Reaction → Dashboard): kết quả và hành động phản ứng tự động (như chặn IP, giới hạn tốc độ), dùng để hiển thị thời gian thực trên Dashboard.
 
@@ -160,7 +160,7 @@ Hệ thống xử lý hai tầng dữ liệu song song: tầng HTTP access log (
 
 ## Phát hiện tấn công DDoS
 
-- Input: vector đặc trưng flow từ CICFlowMeter (~80 đặc trưng gốc, giảm xuống chính xác 45 đặc trưng sau tiền xử lý). Các đặc trưng bao gồm: Total Length of Fwd Packets, Total Bwd Packets, Flow Bytes/s, Flow Packets/s, Flow IAT Mean/Std/Min, Fwd/Bwd Packet Length Mean/Max/Min, và các đặc trưng flag/header. (Flow Duration được loại bỏ do tính tương quan thấp sau xử lý).
+- Input: vector đặc trưng flow từ CICFlowMeter (~80 đặc trưng gốc, giảm xuống chính xác 43 đặc trưng sau tiền xử lý). Các đặc trưng bao gồm: Total Length of Fwd Packets, Total Bwd Packets, Flow Bytes/s, Flow Packets/s, Flow IAT Mean/Std/Min, Fwd/Bwd Packet Length Mean/Max/Min, và các đặc trưng flag/header. (Flow Duration được loại bỏ do tính tương quan thấp sau xử lý).
 
 - XGBoost: Phân loại nhị phân có giám sát (Benign / DDoS). Huấn luyện trên Monday benign + Friday DDoS với nhãn được cung cấp sẵn.
 

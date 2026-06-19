@@ -1,5 +1,6 @@
 package com.nvh12.reaction.infrastructure.service.impl;
 
+import com.nvh12.reaction.service.WhitelistService;
 import com.nvh12.reaction.service.dto.Severity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -8,7 +9,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.script.RedisScript;
 
 import java.util.List;
@@ -21,24 +21,22 @@ import static org.mockito.Mockito.*;
 class RedisRateLimitServiceTest {
 
     @Mock RedisTemplate<String, String> redisTemplate;
-    @Mock SetOperations<String, String> setOps;
+    @Mock WhitelistService whitelistService;
 
     RedisRateLimitService service;
 
-    private static final String WHITELIST_IPS    = "whitelist:ips";
     private static final String COUNTER_PREFIX   = "ratelimit:ip:";
     private static final String LIMIT_SUFFIX     = ":limit";
     private static final String WINDOW_END_SUFFIX = ":window_end";
 
     @BeforeEach
     void setUp() {
-        service = new RedisRateLimitService(redisTemplate);
+        service = new RedisRateLimitService(redisTemplate, whitelistService);
     }
 
     @Test
     void limit_whenWhitelisted_skips() {
-        when(redisTemplate.opsForSet()).thenReturn(setOps);
-        when(setOps.isMember(WHITELIST_IPS, "1.2.3.4")).thenReturn(true);
+        when(whitelistService.isWhitelisted("1.2.3.4")).thenReturn(true);
 
         service.limit("1.2.3.4", Severity.MEDIUM);
 
@@ -47,8 +45,7 @@ class RedisRateLimitServiceTest {
 
     @Test
     void limit_setsRateLimitAtomically() {
-        when(redisTemplate.opsForSet()).thenReturn(setOps);
-        when(setOps.isMember(WHITELIST_IPS, "1.2.3.4")).thenReturn(false);
+        when(whitelistService.isWhitelisted("1.2.3.4")).thenReturn(false);
 
         service.limit("1.2.3.4", Severity.MEDIUM);
 
@@ -62,8 +59,6 @@ class RedisRateLimitServiceTest {
 
     @Test
     void limit_requestsPerMinute_variesBySeverity() {
-        when(redisTemplate.opsForSet()).thenReturn(setOps);
-
         service.limit("a", Severity.LOW);
         service.limit("b", Severity.HIGH);
         service.limit("c", Severity.CRITICAL);

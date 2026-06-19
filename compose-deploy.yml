@@ -215,6 +215,8 @@ services:
       ALERT_MAIL_FROM: ${ALERT_MAIL_FROM:-}
       ALERT_MAIL_TO: ${ALERT_MAIL_TO:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
+      SIMULATION_URL: http://simulation:8001
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -273,6 +275,8 @@ services:
       RABBITMQ_MANAGEMENT_URL: http://rabbitmq:15672
       DETECTION_METRICS_URL: http://log-analysis:8000/metrics
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      SIMULATION_URL: http://simulation:8001
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
     depends_on:
       rabbitmq:
         condition: service_healthy

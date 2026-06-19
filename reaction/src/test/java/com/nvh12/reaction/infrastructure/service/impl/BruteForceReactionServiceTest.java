@@ -14,7 +14,7 @@ class BruteForceReactionServiceTest extends EscalatingIpReactionServiceTestBase 
 
     @BeforeEach
     void setUp() {
-        service = new BruteForceReactionService(alertService, reactionLogService, ipBlockService, rateLimitService, redisTemplate);
+        service = new BruteForceReactionService(alertService, reactionLogService, ipBlockService, rateLimitService, redisTemplate, whitelistService);
     }
 
     @Override

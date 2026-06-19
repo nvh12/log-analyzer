@@ -151,7 +151,7 @@ Map of HTTP header name → value. Always `{}` in practice (headers are not capt
   "Fwd Packet Length Max": 512.0
 }
 ```
-Exactly 45 CICFlowMeter feature keys (defined in `flow_feature_cols.json` / `ddos_feature_cols`). All NaN and Infinity values sanitized to `0.0` before insert. NOT NULL.
+Exactly 43 CICFlowMeter feature keys (defined in `flow_feature_cols.json` / `ddos_feature_cols`). All NaN and Infinity values sanitized to `0.0` before insert. NOT NULL.
 
 ### `detection_results.method_flags`
 ```json
@@ -194,7 +194,7 @@ Stores every network flow record that successfully passed parsing by the log-pro
 | `dest_ip` | VARCHAR(64) | Yes | — | Destination IP address; empty string `""` if missing |
 | `source_port` | INT | Yes | — | Source port; 0 if missing |
 | `dest_port` | INT | Yes | — | Destination port; 0 if missing |
-| `features` | JSONB | No | — | 45-feature CICFlowMeter vector as `{name: float}`; NaN/Infinity sanitized to 0.0 |
+| `features` | JSONB | No | — | 43-feature CICFlowMeter vector as `{name: float}`; NaN/Infinity sanitized to 0.0 |
 | `processed_at` | TIMESTAMPTZ | No | NOW() | Server-side insert timestamp |
 
 ### 5.3 `log_processing.drop_audit`

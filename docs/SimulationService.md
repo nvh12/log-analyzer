@@ -70,19 +70,28 @@ simulation/
 -   **Poisson Traffic Generator**: Simulates normal background traffic patterns using Poisson distribution models to simulate realistic inter-arrival times between benign requests.
 -   **Spike/Web Attack Generator**: Generates synthetic malicious HTTP CLF records containing SQLi, XSS, and Path Traversal signatures.
 -   **Flow Replayer**: Replays structured network flow records from the CICIDS2017 dataset on scheduled tick intervals.
+-   **Distributed Simulation Lock**: A Redis lock (key `{namespace}:lock`, TTL 300s, refreshed every 60s) acquired via `SETNX` prevents concurrent scenario runs across workers. Released in a `finally` block on stop; startup no longer force-clears a stale lock (to avoid a TOCTOU race against a live worker) — `start()`/`replay()` rely solely on the atomic `SETNX` and surface a `RuntimeError` if the lock is already held.
 
 ### 2.2 Dynamic Scaling Engine (`infrastructure/scaler.py`)
 -   Acts as the execution target for scale actions triggered by the **Reaction Service**.
 -   **Process Configuration**:
     -   Reads current worker status from Redis.
     -   Communicates with the Gunicorn parent process using signal traps:
-        -   `SIGUSR1`: Spawns an additional Uvicorn worker process.
-        -   `SIGUSR2`: Terminates one Uvicorn worker process.
+        -   `SIGTTIN`: Spawns an additional Uvicorn worker process (scale up).
+        -   `SIGTTOU`: Terminates one Uvicorn worker process (scale down).
+    -   Only one worker holds the Redis scaler lock (`scale:scaler_lock`) at a time; others wait and retry each poll interval.
 
 ### 2.3 Access Control Middleware (`infrastructure/middleware/access_control.py`)
 -   Intercepts simulated target requests.
 -   Checks incoming IP against blacklists and rate-limiting counters stored in Redis.
 -   Returns `403 Forbidden` for blocked IPs or `429 Too Many Requests` for throttled IPs.
+
+### 2.4 Whitelist Administration (`presentation/routers/access_control_router.py`)
+-   Simulation owns the IP whitelist (`whitelist:ips` Redis set) exclusively; no other service writes to this key.
+-   Exposes `GET/POST/DELETE/PUT /admin/whitelist`, gated by the `X-Admin-Key` header (`ADMIN_API_KEY`):
+    -   `GET` lists the current whitelist; `POST {ip}` / `DELETE {ip}` add/remove a single IP; `PUT [ips]` atomically replaces the whole set (`DEL` + `SADD` in one Redis pipeline).
+-   The dashboard-fe frontend calls these endpoints directly through the `/simulate` Vite proxy (not through the dashboard backend).
+-   The **Reaction service** has no direct access to this Redis key — it checks whitelist status via an HTTP call to `GET /admin/whitelist` (`SimulationWhitelistClient`), failing open (treats the IP as not whitelisted) if Simulation is unreachable.
 
 ---
 
@@ -93,8 +102,9 @@ simulation/
     {
       "id": "uuid",
       "source": "HTTP|FLOW",
-      "raw_message": "...",
-      "timestamp": 12345.67
+      "rawMessage": "...",
+      "receivedAt": "2025-01-01T00:00:00Z",
+      "headers": {}
     }
     ```
 -   **Redis Cache**: Shared state storage for:

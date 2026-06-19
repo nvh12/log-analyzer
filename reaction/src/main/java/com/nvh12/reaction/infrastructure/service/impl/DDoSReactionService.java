@@ -4,6 +4,7 @@ import com.nvh12.reaction.service.AlertService;
 import com.nvh12.reaction.service.IpBlockService;
 import com.nvh12.reaction.service.RateLimitService;
 import com.nvh12.reaction.service.ReactionLogService;
+import com.nvh12.reaction.service.WhitelistService;
 import com.nvh12.reaction.service.dto.DDoSInput;
 import com.nvh12.reaction.service.dto.DetectionType;
 import com.nvh12.reaction.service.dto.ReactionInput;
@@ -17,9 +18,9 @@ public class DDoSReactionService extends EscalatingIpReactionService {
 
     public DDoSReactionService(AlertService alertService, ReactionLogService reactionLogService,
                                IpBlockService ipBlockService, RateLimitService rateLimitService,
-                               RedisTemplate<String, String> redisTemplate) {
+                               RedisTemplate<String, String> redisTemplate, WhitelistService whitelistService) {
         super(DetectionType.DDOS, alertService, reactionLogService,
-                ipBlockService, rateLimitService, redisTemplate);
+                ipBlockService, rateLimitService, redisTemplate, whitelistService);
     }
 
     @Override

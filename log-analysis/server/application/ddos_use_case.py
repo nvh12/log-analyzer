@@ -6,7 +6,7 @@ from domain.models.input import DDoSInput
 
 
 class DDoSUseCase:
-    """Detects DDoS attacks using XGBoost on 45-feature flow vectors (UC2)."""
+    """Detects DDoS attacks using XGBoost on 43-feature flow vectors (UC2)."""
 
     def __init__(self, repository: ModelRepository, publisher: PublisherPort, result_repository: ResultRepositoryPort):
         self._repository = repository

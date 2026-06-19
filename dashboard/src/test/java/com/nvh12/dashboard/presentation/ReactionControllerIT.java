@@ -1,6 +1,7 @@
 package com.nvh12.dashboard.presentation;
 
 import com.nvh12.dashboard.AbstractContainerIT;
+import com.nvh12.dashboard.application.port.WhitelistPort;
 import com.nvh12.dashboard.domain.DetectionType;
 import com.nvh12.dashboard.domain.NetworkLayer;
 import com.nvh12.dashboard.domain.ReactionAction;
@@ -10,6 +11,7 @@ import com.nvh12.dashboard.infrastructure.persistence.repository.jpa.JpaReaction
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -17,6 +19,9 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -26,6 +31,7 @@ class ReactionControllerIT extends AbstractContainerIT {
 
     @Autowired JpaReactionLogRepository jpaReactionLogRepository;
     @Autowired RedisTemplate<String, String> redisTemplate;
+    @MockitoBean WhitelistPort whitelistPort;
 
     // ── GET /api/reactions ──────────────────────────────────────────────────
 
@@ -147,68 +153,44 @@ class ReactionControllerIT extends AbstractContainerIT {
                 .andExpect(status().isOk());
     }
 
-    // ── GET/PUT /api/reactions/whitelist  |  POST /api/reactions/blocks/lift ─
+    // ── POST /api/reactions/blocks/lift ─────────────────────────────────────
 
     @Test
-    void listWhitelist_noEntries_returnsEmpty() throws Exception {
-        mockMvc.perform(get("/api/reactions/whitelist"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
-    }
-
-    @Test
-    void listWhitelist_withEntries_returnsIps() throws Exception {
-        redisTemplate.opsForSet().add("whitelist:ips", "10.0.0.1");
-
-        mockMvc.perform(get("/api/reactions/whitelist"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0]").value("10.0.0.1"));
-    }
-
-    @Test
-    void replaceWhitelist_setsNewIps() throws Exception {
-        redisTemplate.opsForSet().add("whitelist:ips", "10.0.0.1");
-
-        mockMvc.perform(put("/api/reactions/whitelist")
-                        .contentType("application/json")
-                        .content("[\"10.0.0.2\",\"10.0.0.3\"]"))
-                .andExpect(status().isOk());
-
-        assertThat(redisTemplate.opsForSet().isMember("whitelist:ips", "10.0.0.1")).isFalse();
-        assertThat(redisTemplate.opsForSet().isMember("whitelist:ips", "10.0.0.2")).isTrue();
-        assertThat(redisTemplate.opsForSet().isMember("whitelist:ips", "10.0.0.3")).isTrue();
-    }
-
-    @Test
-    void replaceWhitelist_emptyBody_clearsWhitelist() throws Exception {
-        redisTemplate.opsForSet().add("whitelist:ips", "10.0.0.5");
-
-        mockMvc.perform(put("/api/reactions/whitelist")
-                        .contentType("application/json")
-                        .content("[]"))
-                .andExpect(status().isOk());
-
-        assertThat(redisTemplate.opsForSet().size("whitelist:ips")).isEqualTo(0L);
-    }
-
-    @Test
-    void liftBlocks_removesRedisKeysForEachIp() throws Exception {
-        for (String ip : List.of("10.0.0.6", "10.0.0.7")) {
-            redisTemplate.opsForSet().add("blocklist:ips", ip);
-            redisTemplate.opsForValue().set("blocklist:ip:" + ip, "severity=HIGH");
-            redisTemplate.expire("blocklist:ip:" + ip, Duration.ofMinutes(30));
-        }
+    void liftBlocks_existingBlockedIps_removesRedisKeys() throws Exception {
+        String ip1 = "10.0.0.11";
+        String ip2 = "10.0.0.12";
+        redisTemplate.opsForSet().add("blocklist:ips", ip1, ip2);
+        redisTemplate.opsForValue().set("blocklist:ip:" + ip1, "severity=HIGH");
+        redisTemplate.opsForValue().set("blocklist:ip:" + ip2, "severity=LOW");
 
         mockMvc.perform(post("/api/reactions/blocks/lift")
                         .contentType("application/json")
-                        .content("[\"10.0.0.6\",\"10.0.0.7\"]"))
+                        .content("[\"" + ip1 + "\",\"" + ip2 + "\"]"))
                 .andExpect(status().isOk());
 
-        for (String ip : List.of("10.0.0.6", "10.0.0.7")) {
-            assertThat(redisTemplate.opsForValue().get("blocklist:ip:" + ip)).isNull();
-            assertThat(redisTemplate.opsForSet().isMember("blocklist:ips", ip)).isFalse();
-        }
+        assertThat(redisTemplate.opsForSet().members("blocklist:ips")).isEmpty();
+    }
+
+    // ── GET/PUT /api/reactions/whitelist ────────────────────────────────────
+
+    @Test
+    void listWhitelist_returnsIpsFromPort() throws Exception {
+        when(whitelistPort.listWhitelistedIps()).thenReturn(List.of("1.1.1.1", "2.2.2.2"));
+
+        mockMvc.perform(get("/api/reactions/whitelist"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0]").value("1.1.1.1"));
+    }
+
+    @Test
+    void replaceWhitelist_delegatesToPort() throws Exception {
+        mockMvc.perform(put("/api/reactions/whitelist")
+                        .contentType("application/json")
+                        .content("[\"3.3.3.3\",\"4.4.4.4\"]"))
+                .andExpect(status().isOk());
+
+        verify(whitelistPort).replaceWhitelist(eq(List.of("3.3.3.3", "4.4.4.4")));
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────

@@ -35,7 +35,7 @@ public class ReactionResultPublisher implements ReactionEventPort {
     }
 
     private long ttlSeconds(ReactionAction action, Severity severity) {
-        if (action == ReactionAction.SCALE_UP) return 0L;
+        if (action == ReactionAction.SCALE_UP || action == ReactionAction.WHITELISTED) return 0L;
         return switch (severity) {
             case NONE -> throw new IllegalStateException("NONE severity should not reach reaction publisher");
             case LOW -> 5 * 60L;

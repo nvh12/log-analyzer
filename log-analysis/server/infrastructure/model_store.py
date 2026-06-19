@@ -25,8 +25,11 @@ MODEL_OBJECT_KEYS: dict[str, str] = {
     "brute_force_xgb": "flow/bruteforce/xgboost.pkl",
     "ddos_feature_cols": "flow/feature_cols.json",
 
-    "web_if": "webattack/isolation_forest.pkl",
-    "web_svm": "webattack/one_class_svm.pkl",
+    # web_if/web_svm (Isolation Forest / One-Class SVM) were evaluated as extra
+    # unsupervised layers ahead of XGBoost but dropped — they didn't improve cascade
+    # F1. Left commented out rather than deleted in case that experiment is revisited.
+    # "web_if": "webattack/isolation_forest.pkl",
+    # "web_svm": "webattack/one_class_svm.pkl",
     "web_xgb": "webattack/xgboost.pkl",
     "web_vocab": "webattack/vocab.json",
 

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def detect(inp: DDoSInput, repo: ModelRepository) -> DDoSResult:
-    """Binary XGBoost classifier on the 45-feature flow vector (UC2)."""
+    """Binary XGBoost classifier on the 43-feature flow vector (UC2)."""
 
     model = repo.get(DDOS_MODEL)
     feature_cols: list[str] | None = repo.get(DDOS_FEATURE_COLS)

@@ -6,8 +6,10 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-# The 45 CIC-IDS-2017 feature columns expected by the DDoS and Brute Force XGBoost models.
-# Source: log-analysis/training/ddos/data/uc2_feature_cols.json
+# CIC-IDS-2017 feature columns used to build synthetic flow records for E2E tests.
+# The trained DDoS/Brute Force XGBoost models only use 43 of these (see
+# log-analysis/training/ddos/data/flow_feature_cols.json); "Source Port" and
+# "Destination Port" below are extra and ignored by the models.
 UC2_FEATURE_COLS = [
     "Source Port", "Destination Port", "Protocol",
     "Total Backward Packets", "Total Length of Fwd Packets",

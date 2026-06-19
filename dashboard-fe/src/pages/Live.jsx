@@ -418,7 +418,7 @@ export default function Live() {
         <Card title={<PreviewHeader title="Recent reactions" to="/reactions" />}>
           <div className="flex gap-3 flex-wrap items-end px-4 pt-2 pb-2 border-b border-gray-800/50">
             <FilterSelect label="Action" value={reactActionFilter} onChange={setReactActionFilter}
-              options={['BLOCK', 'RATE_LIMIT', 'SCALE_UP']} />
+              options={['BLOCK', 'RATE_LIMIT', 'SCALE_UP', 'WHITELISTED']} />
           </div>
           <PreviewTable
             loading={reactLoading} error={reactError}

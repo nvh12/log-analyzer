@@ -225,6 +225,8 @@ services:
       ALERT_PROVIDER: discord
       # No ALERT_DISCORD_WEBHOOK_URL → DiscordAlertService not registered
       # → CompositeAlertService has no channels, logs a warning, otherwise works fine
+      SIMULATION_URL: http://simulation:8001
+      ADMIN_API_KEY: test-admin-key
     depends_on:
       rabbitmq:
         condition: service_healthy

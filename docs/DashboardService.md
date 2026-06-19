@@ -74,7 +74,7 @@ dashboard/
 -   **Thread-Safety**: Manages client connections inside a thread-safe concurrent collection.
 
 ### 2.2 Throughput Calculator
--   Runs database count aggregation queries on PostgreSQL tables (`http_log` and `flow_record`) every 2 seconds.
+-   Runs database count aggregation queries on PostgreSQL tables (`normalized_http` and `normalized_flow`) every 2 seconds.
 -   Calculates active rates and broadcasts throughput metrics (`log_throughput` event) to feed the live dashboard charts.
 
 ### 2.3 Historical REST endpoints

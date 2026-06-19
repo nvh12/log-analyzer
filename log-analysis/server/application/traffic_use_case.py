@@ -15,6 +15,10 @@ class TrafficUseCase:
     async def execute(self, input_data: TrafficInput, seasonal_summaries: list[tuple[float, float]] | None = None) -> None:
         """Runs traffic spike detection and publishes results."""
         result = detect(input_data, self._thresholds, seasonal_summaries=seasonal_summaries or [])
-        if result.anomaly and result.scored:
+        current_count = input_data.req_counts[-1] if input_data.req_counts else 0.0
+        # Belt-and-suspenders: re-check the floor here so a publish can never
+        # happen on a low-volume window even if detect()'s internal guard is
+        # ever loosened or thresholds come from an untrusted calibration artifact.
+        if result.anomaly and result.scored and current_count >= self._thresholds.absolute_min_floor:
             await self._result_repository.save(result)
             await self._publisher.publish(result)

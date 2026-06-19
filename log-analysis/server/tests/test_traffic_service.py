@@ -274,6 +274,20 @@ def test_absolute_min_floor_blocks_anomalies(thresholds):
     assert result.anomaly is False
 
 
+def test_single_request_in_idle_window_does_not_alert(thresholds):
+    # Regression for a reported false positive: a window with current_count=1
+    # in an otherwise idle stream must not fire z_score/iqr/ema/anomaly, even
+    # though 1 is a relative outlier against near-zero history.
+    idle_history = [0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
+    window = make_window(idle_history + [1.0])
+
+    result = traffic_service.detect(window, thresholds, seasonal_summaries=SEASONAL_BUCKET)
+
+    assert result.anomaly is False
+    assert result.method_flags == {"z_score": False, "iqr": False, "ema": False, "seasonal": False}
+    assert result.severity == Severity.NONE
+
+
 def test_variance_min_floor_stifles_small_variations(thresholds):
     # Flat history [20.0] * 9, current value = 21.0
     # absolute_min_floor is 15, so 21.0 is allowed.

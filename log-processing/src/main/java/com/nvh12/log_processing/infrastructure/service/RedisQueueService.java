@@ -52,11 +52,6 @@ public class RedisQueueService implements QueueService {
 
     @Override
     public boolean enqueue(RawLog rawLog) {
-        if (rawLog.getReceivedAt() == null) {
-            log.warn("Rejecting log id={} — null receivedAt", rawLog.getId());
-            return false;
-        }
-
         try {
             double score = rawLog.getReceivedAt().toEpochMilli();
             String value = objectMapper.writeValueAsString(rawLog);

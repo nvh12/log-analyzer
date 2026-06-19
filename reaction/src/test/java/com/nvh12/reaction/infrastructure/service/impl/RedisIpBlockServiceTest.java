@@ -1,5 +1,6 @@
 package com.nvh12.reaction.infrastructure.service.impl;
 
+import com.nvh12.reaction.service.WhitelistService;
 import com.nvh12.reaction.service.dto.Severity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,22 +25,21 @@ class RedisIpBlockServiceTest {
     @Mock RedisTemplate<String, String> redisTemplate;
     @Mock SetOperations<String, String> setOps;
     @Mock ValueOperations<String, String> valueOps;
+    @Mock WhitelistService whitelistService;
 
     RedisIpBlockService service;
 
-    private static final String WHITELIST_IPS        = "whitelist:ips";
     private static final String BLOCKLIST_IPS        = "blocklist:ips";
     private static final String BLOCKLIST_IP_PREFIX  = "blocklist:ip:";
 
     @BeforeEach
     void setUp() {
-        service = new RedisIpBlockService(redisTemplate);
+        service = new RedisIpBlockService(redisTemplate, whitelistService);
     }
 
     @Test
     void block_whenWhitelisted_skips() {
-        when(redisTemplate.opsForSet()).thenReturn(setOps);
-        when(setOps.isMember(WHITELIST_IPS, "1.2.3.4")).thenReturn(true);
+        when(whitelistService.isWhitelisted("1.2.3.4")).thenReturn(true);
 
         service.block("1.2.3.4", Severity.HIGH);
 
@@ -51,7 +51,7 @@ class RedisIpBlockServiceTest {
     void block_whenNotWhitelisted_addsToSetAndSetsMetadataWithTtl() {
         when(redisTemplate.opsForSet()).thenReturn(setOps);
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        when(setOps.isMember(WHITELIST_IPS, "1.2.3.4")).thenReturn(false);
+        when(whitelistService.isWhitelisted("1.2.3.4")).thenReturn(false);
 
         service.block("1.2.3.4", Severity.HIGH);
 
@@ -67,7 +67,7 @@ class RedisIpBlockServiceTest {
     void block_ttl_variesBySeverity() {
         when(redisTemplate.opsForSet()).thenReturn(setOps);
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        when(setOps.isMember(WHITELIST_IPS, "1.2.3.4")).thenReturn(false);
+        when(whitelistService.isWhitelisted("1.2.3.4")).thenReturn(false);
 
         service.block("1.2.3.4", Severity.LOW);
         service.block("1.2.3.4", Severity.MEDIUM);
@@ -100,5 +100,15 @@ class RedisIpBlockServiceTest {
         when(redisTemplate.hasKey(any())).thenThrow(new QueryTimeoutException("timeout"));
 
         assertThat(service.isBlocked("1.2.3.4")).isFalse();
+    }
+
+    @Test
+    void liftBlock_removesMetadataKeyAndSetMembership() {
+        when(redisTemplate.opsForSet()).thenReturn(setOps);
+
+        service.liftBlock("1.2.3.4");
+
+        verify(redisTemplate).delete(BLOCKLIST_IP_PREFIX + "1.2.3.4");
+        verify(setOps).remove(BLOCKLIST_IPS, "1.2.3.4");
     }
 }

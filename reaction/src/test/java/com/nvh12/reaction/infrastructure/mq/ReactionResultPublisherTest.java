@@ -37,6 +37,9 @@ class ReactionResultPublisherTest {
     private Map<String, Object> capturePayload() {
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
         verify(rabbitTemplate).convertAndSend(eq(RabbitMqConfig.EXCHANGE_REACTION_RESULTS), eq(""), captor.capture());
+        // Clear so repeated calls to this helper within one test (e.g. publish_ttlSecondsBySeverity,
+        // which calls publish() multiple times against the same mock) only verify newly-seen invocations.
+        org.mockito.Mockito.clearInvocations(rabbitTemplate);
         return captor.getValue();
     }
 

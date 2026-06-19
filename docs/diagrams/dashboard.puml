@@ -48,7 +48,6 @@ together {
     interface FlowLogRepository
     interface ReactionRepository
     interface IpBlockPort
-    interface WhitelistPort
     interface BroadcastPort
     interface SseRegistrar
 
@@ -56,8 +55,7 @@ together {
     HttpLogRepository -[hidden]down- FlowLogRepository
     FlowLogRepository -[hidden]down- ReactionRepository
     ReactionRepository -[hidden]down- IpBlockPort
-    IpBlockPort -[hidden]down- WhitelistPort
-    WhitelistPort -[hidden]down- BroadcastPort
+    IpBlockPort -[hidden]down- BroadcastPort
     BroadcastPort -[hidden]down- SseRegistrar
   }
 }
@@ -96,11 +94,9 @@ together {
 
   package "infrastructure.redis" {
     class IpBlockStore
-    class WhitelistStore
     class RedisConfig
 
-    IpBlockStore -[hidden]down- WhitelistStore
-    WhitelistStore -[hidden]down- RedisConfig
+    IpBlockStore -[hidden]down- RedisConfig
   }
 
   package "infrastructure.sse" {
@@ -192,7 +188,6 @@ LogController --> HttpLogRepository
 LogController --> FlowLogRepository
 ReactionController --> ReactionRepository
 ReactionController --> IpBlockPort
-ReactionController --> WhitelistPort
 SseController --> SseRegistrar
 SystemController --> DashboardProperties
 
@@ -214,7 +209,6 @@ ReactionResultListener --> BroadcastPort
 
 ' ---- infrastructure.redis ----
 IpBlockStore ..|> IpBlockPort
-WhitelistStore ..|> WhitelistPort
 
 ' ---- infrastructure.sse ----
 SseEmitterRegistry ..|> BroadcastPort

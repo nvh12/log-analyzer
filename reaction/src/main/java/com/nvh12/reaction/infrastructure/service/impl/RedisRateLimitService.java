@@ -1,6 +1,7 @@
 package com.nvh12.reaction.infrastructure.service.impl;
 
 import com.nvh12.reaction.service.RateLimitService;
+import com.nvh12.reaction.service.WhitelistService;
 import com.nvh12.reaction.service.dto.Severity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +18,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RedisRateLimitService implements RateLimitService {
 
-    static final String WHITELIST_IPS = "whitelist:ips";
     static final String COUNTER_PREFIX = "ratelimit:ip:";
     static final String LIMIT_SUFFIX = ":limit";
     static final String WINDOW_END_SUFFIX = ":window_end";
@@ -39,11 +39,12 @@ public class RedisRateLimitService implements RateLimitService {
     );
 
     private final RedisTemplate<String, String> redisTemplate;
+    private final WhitelistService whitelistService;
 
     @Override
     public void limit(String ip, Severity severity) {
         Retry.run(3, 200, DataAccessException.class, () -> {
-            if (Boolean.TRUE.equals(redisTemplate.opsForSet().isMember(WHITELIST_IPS, ip))) {
+            if (whitelistService.isWhitelisted(ip)) {
                 log.info("Skipping rate limit for whitelisted IP {}", ip);
                 return;
             }

@@ -4,6 +4,7 @@ import com.nvh12.reaction.service.AlertService;
 import com.nvh12.reaction.service.IpBlockService;
 import com.nvh12.reaction.service.ReactionLogService;
 import com.nvh12.reaction.service.ReactionService;
+import com.nvh12.reaction.service.WhitelistService;
 import com.nvh12.reaction.service.dto.DetectionType;
 import com.nvh12.reaction.service.dto.ReactionAction;
 import com.nvh12.reaction.service.dto.ReactionInput;
@@ -18,11 +19,13 @@ import org.springframework.stereotype.Service;
 public class WebAttackReactionService extends ReactionService {
 
     private final IpBlockService ipBlockService;
+    private final WhitelistService whitelistService;
 
     public WebAttackReactionService(AlertService alertService, ReactionLogService reactionLogService,
-                                    IpBlockService ipBlockService) {
+                                    IpBlockService ipBlockService, WhitelistService whitelistService) {
         super(DetectionType.WEB_ATTACK, alertService, reactionLogService);
         this.ipBlockService = ipBlockService;
+        this.whitelistService = whitelistService;
     }
 
     @Override
@@ -41,7 +44,12 @@ public class WebAttackReactionService extends ReactionService {
 
     @Override
     protected ReactionAction doHandle(ReactionInput input) {
-        ipBlockService.block(input.getSourceIp(), input.getSeverity());
+        String ip = input.getSourceIp();
+        if (whitelistService.isWhitelisted(ip)) {
+            log.info("{} from {} — IP whitelisted, skipping block", getType(), ip);
+            return ReactionAction.WHITELISTED;
+        }
+        ipBlockService.block(ip, input.getSeverity());
         return ReactionAction.BLOCK;
     }
 }

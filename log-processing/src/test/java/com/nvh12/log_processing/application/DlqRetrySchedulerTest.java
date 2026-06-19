@@ -125,17 +125,19 @@ class DlqRetrySchedulerTest {
     }
 
     @Test
-    void exhaustedRetryAuditFailureDoesNotPropagate() {
+    void exhaustedRetryAuditFailureDoesNotPropagateAndRequeuesToDlq() {
         RawLog rawLog = makeRawLog("id-maxed-audit-fail");
+        FailedLogEntry entry = failedEntry(rawLog, maxRetries);
 
         when(failedLogRepository.getFailedLogEntries(anyInt()))
-                .thenReturn(List.of(failedEntry(rawLog, maxRetries)));
+                .thenReturn(List.of(entry));
         doThrow(new RuntimeException("audit store down"))
                 .when(dropAuditRepository).record(any(FailedLogEntry.class), eq(DropReason.RETRY_EXHAUSTED));
 
         assertThatNoException().isThrownBy(() -> scheduler.retryFailedLogs());
 
         verify(logProcessingService, never()).process(any());
+        verify(failedLogRepository).saveEntry(entry);
     }
 
     @Test

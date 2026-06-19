@@ -14,7 +14,7 @@ By utilizing **XGBoost** (Extreme Gradient Boosting), we can perform high-precis
 
 # 2. Feature Engineering
 
-The system processes flow records extracted by **CICFlowMeter**, which initially provides ~80 features. Through preprocessing (removing constants, handling NaN/Infinity, and correlation analysis), the feature space is reduced to exactly **45 critical features** (ensuring feature parity with UC4), including:
+The system processes flow records extracted by **CICFlowMeter**, which initially provides ~80 features. Through preprocessing (removing constants, handling NaN/Infinity, and correlation analysis), the feature space is reduced to exactly **43 critical features** (ensuring feature parity with UC4), including:
 
 | Feature | Description |
 | :--- | :--- |

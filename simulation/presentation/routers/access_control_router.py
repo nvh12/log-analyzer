@@ -92,6 +92,17 @@ async def remove_from_whitelist(ip: str) -> dict:
     return {"ip": ip, "removed": True}
 
 
+@router.put("/whitelist")
+async def replace_whitelist(ips: list[str]) -> dict:
+    async with redis_client.pipeline() as pipe:
+        pipe.delete(_WHITELIST_KEY)
+        if ips:
+            parsed_ips = [_parse_ip(ip) for ip in ips]
+            pipe.sadd(_WHITELIST_KEY, *parsed_ips)
+        await pipe.execute()
+    return {"replaced": True, "count": len(ips)}
+
+
 # --- ratelimit ---
 
 @router.get("/ratelimit")

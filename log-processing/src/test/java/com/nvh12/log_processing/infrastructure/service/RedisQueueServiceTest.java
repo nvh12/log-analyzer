@@ -108,12 +108,13 @@ class RedisQueueServiceTest {
     }
 
     @Test
-    void enqueueReturnsFalseWhenReceivedAtIsNull() {
+    void enqueueWrapsFailureWhenReceivedAtIsNull() {
+        // Contract: callers (RawLogConsumer) must default receivedAt before calling enqueue.
         RawLog log = RawLog.builder().id("id-null").rawMessage("x").source(LogSource.HTTP).build();
 
-        boolean result = service.enqueue(log);
-
-        assertThat(result).isFalse();
+        assertThatThrownBy(() -> service.enqueue(log))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Failed to enqueue log id=id-null");
         verifyNoInteractions(zSetOps);
     }
 

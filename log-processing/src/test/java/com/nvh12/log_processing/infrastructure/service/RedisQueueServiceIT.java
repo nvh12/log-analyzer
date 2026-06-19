@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RedisQueueServiceIT extends AbstractContainerIT {
 
@@ -94,16 +95,16 @@ class RedisQueueServiceIT extends AbstractContainerIT {
     }
 
     @Test
-    void enqueueLogWithNullReceivedAt_returnsFalse() {
+    void enqueueLogWithNullReceivedAt_throws() {
+        // Contract: callers (RawLogConsumer) must default receivedAt before calling enqueue.
         RawLog rawLog = RawLog.builder()
                 .id("id-1")
                 .source(LogSource.HTTP)
                 .rawMessage("message")
                 .receivedAt(null)
                 .build();
-        boolean accepted = redisQueueService.enqueue(rawLog);
-        
-        assertThat(accepted).isFalse();
+
+        assertThatThrownBy(() -> redisQueueService.enqueue(rawLog)).isInstanceOf(RuntimeException.class);
         assertThat(redisTemplate.opsForZSet().zCard(RedisQueueService.QUEUE_KEY)).isEqualTo(0L);
     }
 

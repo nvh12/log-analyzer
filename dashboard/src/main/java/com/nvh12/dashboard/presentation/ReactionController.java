@@ -54,6 +54,12 @@ public class ReactionController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @PostMapping("/blocks/lift")
+    public ResponseEntity<?> liftBlocks(@RequestBody List<String> ips) {
+        ips.forEach(ipBlockPort::liftBlock);
+        return ResponseEntity.ok().build();
+    }
+
     @GetMapping("/whitelist")
     public List<String> listWhitelist() {
         return whitelistPort.listWhitelistedIps();
@@ -62,12 +68,6 @@ public class ReactionController {
     @PutMapping("/whitelist")
     public ResponseEntity<?> replaceWhitelist(@RequestBody List<String> ips) {
         whitelistPort.replaceWhitelist(ips);
-        return ResponseEntity.ok().build();
-    }
-
-    @PostMapping("/blocks/lift")
-    public ResponseEntity<?> liftBlocks(@RequestBody List<String> ips) {
-        ips.forEach(ipBlockPort::liftBlock);
         return ResponseEntity.ok().build();
     }
 }

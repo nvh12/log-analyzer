@@ -1,19 +1,22 @@
 package com.nvh12.reaction.infrastructure.service.impl;
 
 import com.nvh12.reaction.AbstractContainerIT;
+import com.nvh12.reaction.service.WhitelistService;
 import com.nvh12.reaction.service.dto.Severity;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 
 class RedisIpBlockServiceIT extends AbstractContainerIT {
 
     @Autowired RedisIpBlockService service;
     @Autowired StringRedisTemplate redisTemplate;
+    @MockitoBean WhitelistService whitelistService;
 
-    private static final String WHITELIST_IPS        = "whitelist:ips";
     private static final String BLOCKLIST_IPS        = "blocklist:ips";
     private static final String BLOCKLIST_IP_PREFIX  = "blocklist:ip:";
 
@@ -35,7 +38,7 @@ class RedisIpBlockServiceIT extends AbstractContainerIT {
 
     @Test
     void block_whenWhitelisted_writesNothing() {
-        redisTemplate.opsForSet().add(WHITELIST_IPS, "1.2.3.4");
+        when(whitelistService.isWhitelisted("1.2.3.4")).thenReturn(true);
 
         service.block("1.2.3.4", Severity.HIGH);
 

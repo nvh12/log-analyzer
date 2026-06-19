@@ -226,7 +226,9 @@ def detect(req: WebAttackInput, repo: ModelRepository, window_start: Optional[da
 
     # Layer 2: XGBoost (ML-based classification)
     xgb_art = repo.get(WEB_MODEL)
-    if isinstance(xgb_art, dict) and "model" in xgb_art:
+    if not (isinstance(xgb_art, dict) and "model" in xgb_art):
+        logger.warning("%s not loaded — skipping ML layer", WEB_MODEL)
+    else:
         struct_feats = _extract_structural_features(req)
 
         # Vocabulary resolution: external list (repo) takes priority over artifact-embedded object.

@@ -255,7 +255,7 @@ export default function Reactions() {
       <Card title="Reaction timeline">
         <div className="px-4 pt-3 flex gap-4 flex-wrap items-end border-b border-gray-800 pb-3">
           <FilterSelect label="Action" value={action} onChange={v => { setAction(v); setPage(0) }}
-            options={['BLOCK', 'RATE_LIMIT', 'SCALE_UP']} />
+            options={['BLOCK', 'RATE_LIMIT', 'SCALE_UP', 'WHITELISTED']} />
           <FilterDateRange
             fromValue={from} toValue={to}
             onFromChange={v => { setFrom(v); setPage(0) }}

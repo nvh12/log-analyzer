@@ -63,18 +63,20 @@ reaction/
 ## 2. Core Components & Responsibilities
 
 ### 2.1 Escalating IP Reaction Logic (`service/impl/EscalatingIpReactionService.java`)
--   Subclasses: `BruteForceReactionService`, `DDoSReactionService`, `WebAttackReactionService`.
+-   Subclasses: `BruteForceReactionService`, `DDoSReactionService`. `WebAttackReactionService` blocks immediately without escalation (extends `ReactionService` directly).
+-   **Whitelist Short-Circuit**: `WhitelistService.isWhitelisted(ip)` is checked first, for every IP-targeted reaction (DDoS, Brute Force, Web Attack — not Traffic, which isn't IP-targeted). The check is an HTTP call to the simulation service's `GET /admin/whitelist` (`infrastructure/service/impl/SimulationWhitelistClient.java`) — reaction holds no whitelist storage of its own and fails open (treats the IP as not whitelisted) if simulation is unreachable. A whitelisted IP skips the attempt counter, the Redis block/rate-limit write, and the alert entirely; only a `WHITELISTED` reaction log is saved for audit.
 -   **Redis Attempt Counter**: Tracks violation events from source IPs over a 10-minute sliding window using an atomic Redis Lua script (`INCR_WITH_EXPIRE`).
 -   **Escalation Policy**:
     -   `attempts < 3`: Triggers `RATE_LIMIT` action. Updates Redis to throttle traffic.
     -   `attempts >= 3`: Escalates to `BLOCK` action. Blacklists the IP in Redis.
+-   **Whitelist Management**: Whitelist storage and the `GET/POST/DELETE/PUT /admin/whitelist` endpoints live in the simulation service (`presentation/routers/access_control_router.py`), gated by `X-Admin-Key`; the dashboard frontend calls them directly (via the `/simulate` Vite proxy). Reaction only reads the list to honor the short-circuit above.
 
 ### 2.2 Alert Dispatch Engine
 -   Implements `CompositeAlertService` to manage notifications.
 -   **Supported Channels**:
-    -   `smtp`: Standard mail alerts via JavaMail.
-    -   `resend`: HTTP client dispatching through Resend Email API.
-    -   `discord`: Sends webhooks containing formatted embed alerts to Discord channels.
+    -   `smtp`: Standard mail alerts via JavaMail. Active when `alert.provider=smtp` (default).
+    -   `resend`: HTTP client dispatching through Resend Email API. Active when `alert.provider=resend`.
+    -   `discord`: Sends webhooks containing formatted embed alerts to Discord channels. Active independently whenever `ALERT_DISCORD_WEBHOOK_URL` is set, regardless of `alert.provider` — it is not a third mutually-exclusive provider choice and can run alongside SMTP or Resend.
 
 ---
 

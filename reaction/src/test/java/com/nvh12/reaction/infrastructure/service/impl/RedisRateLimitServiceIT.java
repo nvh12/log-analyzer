@@ -1,19 +1,22 @@
 package com.nvh12.reaction.infrastructure.service.impl;
 
 import com.nvh12.reaction.AbstractContainerIT;
+import com.nvh12.reaction.service.WhitelistService;
 import com.nvh12.reaction.service.dto.Severity;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 
 class RedisRateLimitServiceIT extends AbstractContainerIT {
 
     @Autowired RedisRateLimitService service;
     @Autowired StringRedisTemplate redisTemplate;
+    @MockitoBean WhitelistService whitelistService;
 
-    private static final String WHITELIST_IPS   = "whitelist:ips";
     private static final String COUNTER_PREFIX  = "ratelimit:ip:";
     private static final String LIMIT_SUFFIX    = ":limit";
 
@@ -32,7 +35,7 @@ class RedisRateLimitServiceIT extends AbstractContainerIT {
 
     @Test
     void limit_whenWhitelisted_writesNothing() {
-        redisTemplate.opsForSet().add(WHITELIST_IPS, "1.2.3.4");
+        when(whitelistService.isWhitelisted("1.2.3.4")).thenReturn(true);
 
         service.limit("1.2.3.4", Severity.HIGH);
 

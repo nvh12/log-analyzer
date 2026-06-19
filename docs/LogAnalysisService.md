@@ -94,7 +94,7 @@ log-analysis/
 
 ### 3.2 Flow Analysis Track (UC2, UC4)
 -   Consumes flow records from `log.normalized.flow`.
--   Executes parallel XGBoost inference processes for DDoS (UC2) and Brute Force (UC4) on a aligned **45-feature vector** (ensuring feature parity).
+-   Executes parallel XGBoost inference processes for DDoS (UC2) and Brute Force (UC4) on a aligned **43-feature vector** (ensuring feature parity).
 
 ---
 

@@ -9,6 +9,8 @@ import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
+
 @Component
 @AllArgsConstructor
 @Slf4j
@@ -19,8 +21,14 @@ public class RawLogConsumer {
     @RabbitListener(queues = RabbitMqConfig.QUEUE_RAW)
     public void onMessage(RawLog rawLog) {
         if (rawLog.getReceivedAt() == null) {
-            log.warn("Rejecting log id={} — null receivedAt, acking silently", rawLog.getId());
-            return;
+            log.warn("Log id={} missing receivedAt — defaulting to now", rawLog.getId());
+            rawLog = RawLog.builder()
+                    .id(rawLog.getId())
+                    .rawMessage(rawLog.getRawMessage())
+                    .source(rawLog.getSource())
+                    .receivedAt(Instant.now())
+                    .headers(rawLog.getHeaders())
+                    .build();
         }
         boolean accepted;
         try {

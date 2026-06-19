@@ -6,7 +6,7 @@ from domain.models.input import BruteForceInput
 
 
 class BruteForceUseCase:
-    """Detects Brute Force attacks using XGBoost on 45-feature flow vectors (UC4)."""
+    """Detects Brute Force attacks using XGBoost on 43-feature flow vectors (UC4)."""
 
     def __init__(self, repository: ModelRepository, publisher: PublisherPort, result_repository: ResultRepositoryPort):
         self._repository = repository

@@ -14,7 +14,7 @@ class DDoSReactionServiceTest extends EscalatingIpReactionServiceTestBase {
 
     @BeforeEach
     void setUp() {
-        service = new DDoSReactionService(alertService, reactionLogService, ipBlockService, rateLimitService, redisTemplate);
+        service = new DDoSReactionService(alertService, reactionLogService, ipBlockService, rateLimitService, redisTemplate, whitelistService);
     }
 
     @Override

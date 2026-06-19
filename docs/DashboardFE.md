@@ -85,7 +85,7 @@ dashboard-fe/
 -   Displays active rate limits, blocked IPs, and the IP whitelist.
 -   **Blocklist card**: Each blocked IP row has a **Lift** checkbox and a **WL** (whitelist) checkbox. Checking "Lift" queues that IP for block removal; checking "WL" adds it to the pending whitelist state.
 -   **Whitelist card**: Shows the effective (pending) whitelist. IPs can be added manually via a text input or via the blocklist's "WL" checkbox. Each listed IP has a Remove button. Pending additions are shown in italic until applied.
--   **Apply changes button**: Appears when any pending changes exist. On click it fires exactly two API calls in parallel — `PUT /reactions/whitelist` (replace the entire whitelist) and `POST /reactions/blocks/lift` (lift all checked IPs) — then resets pending state and reloads live data.
+-   **Apply changes button**: Appears when any pending changes exist. On click it fires exactly two API calls in parallel — `PUT /simulate/admin/whitelist` (replace the entire whitelist, served by the Simulation service) and `POST /reactions/blocks/lift` (lift all checked IPs) — then resets pending state and reloads live data.
 -   **Reaction timeline**: Individual "Lift block" buttons per BLOCK row remain for single-IP overrides from the historical view, calling `POST /reactions/{id}/lift`.
 
 ---
@@ -95,4 +95,4 @@ dashboard-fe/
 -   **Runtime/Builder**: Vite 8 + React 19.
 -   **Styling**: Tailwind CSS (dark mode by default, monospace layouts for IPs, ports, and timestamps).
 -   **Graphics**: Recharts.
--   **HTTP Client**: Fetch API / REST client wrappers.
+-   **HTTP Client**: Axios.

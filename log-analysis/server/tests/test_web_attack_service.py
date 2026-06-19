@@ -287,6 +287,19 @@ class TestXGBoostLayer:
         assert result.layer_triggered is None
         assert result.severity == Severity.NONE
 
+    def test_no_model_logs_warning(self, caplog):
+        with caplog.at_level(logging.WARNING, logger="domain.services.web_attack_service"):
+            web_attack_service.detect(_req(url="/safe", query_string="x=1"), _MockRepo(artifact=None))
+        assert "not loaded" in caplog.text
+
+    def test_malformed_artifact_logs_warning(self, caplog):
+        # Artifact present but missing the "model" key — same skip-with-warning path.
+        repo = _MockRepo(artifact={"scaler": _mock_scaler()})
+        with caplog.at_level(logging.WARNING, logger="domain.services.web_attack_service"):
+            result = web_attack_service.detect(_req(url="/safe", query_string="x=1"), repo)
+        assert result.anomaly is False
+        assert "not loaded" in caplog.text
+
     def test_parameterless_request_skips_xgboost(self):
         # Requests with no query string and no body must not reach XGBoost regardless
         # of what the model would return — this prevents false positives on CLF-sourced

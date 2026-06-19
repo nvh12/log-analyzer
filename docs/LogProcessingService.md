@@ -73,18 +73,18 @@ log-processing/
 
 ### 2.2 Ingestion Pipeline & Pipeline Safety
 -   Follows the **Persist-then-Publish** pattern.
--   **PostgreSQL Persistence**: Saves incoming raw logs and parsed logs directly to database tables (`http_log` and `flow_record`) using Spring Data JPA.
+-   **PostgreSQL Persistence**: Saves incoming raw logs and parsed logs directly to database tables (`normalized_http` and `normalized_flow`) using Spring Data JPA.
 -   **RabbitMQ Distribution**: Publishes parsed logs to down-stream queues (`log.normalized.http` and `log.normalized.flow`).
 
 ### 2.3 Error Handling & Dual-Path Failure Routing
 The service implements two independent error paths to maximize system reliability under different types of failures:
--   **Transient/DB Failures (DB-backed Retry - `application/DlqRetryScheduler.java`)**: If log processing fails due to transient database or connectivity issues, the transaction is rolls back, the raw payload is saved in the `failed_log_entry` table in PostgreSQL, and the scheduler retries them periodically with backoff and jitter. Exceeding `maxRetries` (default: 3) pushes them to a `drop_audit` table.
+-   **Transient/DB Failures (Redis-backed Retry - `application/DlqRetryScheduler.java`)**: If log processing fails due to transient database or connectivity issues, the transaction rolls back and the raw payload is saved as a `FailedLogEntry` in a Redis list DLQ (key `failed-log-queue`, via `RedisDlqRepository`), and the scheduler retries them periodically with backoff and jitter. Exceeding `maxRetries` (default: 3) persists the entry to the Postgres `drop_audit` table; a failure persisting to `drop_audit` itself re-queues the entry to the Redis DLQ rather than dropping it.
 -   **Fatal Parsing/Conversion Failures (RabbitMQ DLX - `presentation/DeadLetterConsumer.java`)**: Fatal payload issues or JSON conversion exceptions cause RabbitMQ to route the rejected message through the Dead Letter Exchange (`log.dlx`) into the `log.raw.dlq` queue. The `DeadLetterConsumer` consumes this queue using a dedicated non-converting factory (`dlqContainerFactory`) and writes the message and its `x-death` metadata directly to the `drop_audit` store.
 
 ---
 
 ## 3. Technology Stack Configurations
 
--   **Spring AMQP**: Handles message consumption on `log.raw` with a concurrent listener pool (5 to 20 threads).
+-   **Spring AMQP**: The `log.raw` listener (`RawLogConsumer`) only enqueues into a Redis sorted set; actual processing concurrency comes from a separate `ThreadPoolTaskExecutor` (core: 4, max: 12) driven by `LogProcessingPoller`.
 -   **HikariCP Connection Pool**: Maintained at a maximum of 10 connections.
 -   **Flyway**: Manages schema generation (`log_processing` schema).

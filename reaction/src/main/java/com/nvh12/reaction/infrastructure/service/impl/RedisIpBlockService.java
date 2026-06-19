@@ -1,12 +1,14 @@
 package com.nvh12.reaction.infrastructure.service.impl;
 
 import com.nvh12.reaction.service.IpBlockService;
+import com.nvh12.reaction.service.WhitelistService;
 import com.nvh12.reaction.service.dto.Severity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -14,18 +16,19 @@ import java.time.Instant;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class RedisIpBlockService implements IpBlockService {
 
-    static final String WHITELIST_IPS = "whitelist:ips";
     static final String BLOCKLIST_IPS = "blocklist:ips";
     static final String BLOCKLIST_IP_PREFIX = "blocklist:ip:";
 
     private final RedisTemplate<String, String> redisTemplate;
+    private final WhitelistService whitelistService;
 
     @Override
     public void block(String ip, Severity severity) {
         Retry.run(3, 200, DataAccessException.class, () -> {
-            if (Boolean.TRUE.equals(redisTemplate.opsForSet().isMember(WHITELIST_IPS, ip))) {
+            if (whitelistService.isWhitelisted(ip)) {
                 log.info("Skipping block for whitelisted IP {}", ip);
                 return;
             }
@@ -35,6 +38,13 @@ public class RedisIpBlockService implements IpBlockService {
             redisTemplate.opsForSet().add(BLOCKLIST_IPS, ip);
             log.info("Blocked IP {} for {} ({})", ip, ttl, severity);
         }, e -> log.error("IP block failed after retries [ip={} severity={}]: {}", ip, severity, e.getMessage()));
+    }
+
+    @Override
+    public void liftBlock(String ip) {
+        redisTemplate.delete(BLOCKLIST_IP_PREFIX + ip);
+        redisTemplate.opsForSet().remove(BLOCKLIST_IPS, ip);
+        log.info("Lifted IP block for {}", ip);
     }
 
     @Override

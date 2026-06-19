@@ -44,14 +44,12 @@ async def test_unparseable_message_lands_in_drop_audit(rmq_connection, pg_conn):
 
 
 @pytest.mark.asyncio
-async def test_null_received_at_rejected_before_queue(rmq_connection, pg_conn):
+async def test_null_received_at_defaults_to_now_and_processes(rmq_connection, pg_conn):
     """
-    A RawLog with receivedAt=null is silently rejected by RedisQueueService
-    (it logs a warning and returns false without enqueuing).
-    No normalized records or drop_audit entries should result.
+    A RawLog with receivedAt=null is not dropped: RawLogConsumer defaults
+    receivedAt to Instant.now() and enqueues it normally, so the log is
+    processed like any other — no drop_audit entry should result.
     """
-    import json
-
     channel = await rmq_connection.channel()
 
     payload = json.dumps({
@@ -71,12 +69,13 @@ async def test_null_received_at_rejected_before_queue(rmq_connection, pg_conn):
         routing_key="log.raw",
     )
 
-    # Give the service a moment to process and reject the message.
-    await asyncio.sleep(3)
+    async def normalized_http_has_entry():
+        n = await pg_conn.fetchval("SELECT COUNT(*) FROM normalized_http")
+        return n >= 1
 
-    n_http  = await pg_conn.fetchval("SELECT COUNT(*) FROM normalized_http")
+    await poll_until(normalized_http_has_entry, timeout=15)
+
     n_flow  = await pg_conn.fetchval("SELECT COUNT(*) FROM normalized_flow")
     n_audit = await pg_conn.fetchval("SELECT COUNT(*) FROM drop_audit")
-    assert n_http == 0
     assert n_flow == 0
     assert n_audit == 0

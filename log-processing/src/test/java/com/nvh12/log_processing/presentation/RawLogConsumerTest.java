@@ -5,6 +5,7 @@ import com.nvh12.log_processing.domain.model.RawLog;
 import com.nvh12.log_processing.domain.service.QueueService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -12,9 +13,9 @@ import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 
 import java.time.Instant;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -66,15 +67,22 @@ class RawLogConsumerTest {
     }
 
     @Test
-    void silentlyDropsMessageWithNullReceivedAt() {
+    void defaultsReceivedAtToNowWhenNull() {
         RawLog rawLog = RawLog.builder()
                 .id("no-received-at")
                 .rawMessage("x")
                 .source(LogSource.HTTP)
                 .build();
+        when(queueService.enqueue(any())).thenReturn(true);
 
+        Instant before = Instant.now();
         rawLogConsumer.onMessage(rawLog);
+        Instant after = Instant.now();
 
-        verify(queueService, never()).enqueue(any());
+        ArgumentCaptor<RawLog> captor = ArgumentCaptor.forClass(RawLog.class);
+        verify(queueService).enqueue(captor.capture());
+        RawLog enqueued = captor.getValue();
+        assertThat(enqueued.getId()).isEqualTo("no-received-at");
+        assertThat(enqueued.getReceivedAt()).isBetween(before, after);
     }
 }

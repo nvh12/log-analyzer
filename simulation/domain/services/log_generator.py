@@ -190,7 +190,7 @@ def _sample_feat(cls_stats: dict, feat: str) -> float:
 def _flow_features_from_stats(
     scenario: SimulationScenario, source_port: int, dest_port: int
 ) -> dict[str, float]:
-    """Generate a 45-feature flow vector from the CICIDS2017 per-class statistics.
+    """Generate a 43-feature flow vector from the CICIDS2017 per-class statistics.
 
     Prefers picking an actual training row from the 'samples' list when present —
     this preserves the full correlation structure and guarantees the vector falls

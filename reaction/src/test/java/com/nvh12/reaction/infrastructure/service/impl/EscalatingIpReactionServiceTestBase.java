@@ -4,6 +4,7 @@ import com.nvh12.reaction.service.AlertService;
 import com.nvh12.reaction.service.IpBlockService;
 import com.nvh12.reaction.service.RateLimitService;
 import com.nvh12.reaction.service.ReactionLogService;
+import com.nvh12.reaction.service.WhitelistService;
 import com.nvh12.reaction.service.dto.ReactionAction;
 import com.nvh12.reaction.service.dto.ReactionInput;
 import com.nvh12.reaction.service.dto.Severity;
@@ -41,6 +42,7 @@ abstract class EscalatingIpReactionServiceTestBase {
     @Mock IpBlockService ipBlockService;
     @Mock RateLimitService rateLimitService;
     @Mock RedisTemplate<String, String> redisTemplate;
+    @Mock WhitelistService whitelistService;
 
     abstract EscalatingIpReactionService service();
 
@@ -115,5 +117,19 @@ abstract class EscalatingIpReactionServiceTestBase {
         verify(rateLimitService).limit(IP, Severity.MEDIUM);
         verify(ipBlockService, never()).block(any(), any());
         verify(reactionLogService).save(input, ReactionAction.RATE_LIMIT);
+    }
+
+    @Test
+    void handle_whenWhitelisted_skipsEscalationAndAlert() {
+        when(whitelistService.isWhitelisted(IP)).thenReturn(true);
+        ReactionInput input = input(Severity.HIGH);
+
+        service().handle(input);
+
+        verify(redisTemplate, never()).execute(any(RedisScript.class), anyList(), any());
+        verify(ipBlockService, never()).block(any(), any());
+        verify(rateLimitService, never()).limit(any(), any());
+        verify(alertService, never()).enqueue(any());
+        verify(reactionLogService).save(input, ReactionAction.WHITELISTED);
     }
 }

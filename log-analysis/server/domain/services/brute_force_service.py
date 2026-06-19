@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def detect(inp: BruteForceInput, repo: ModelRepository) -> BruteForceResult:
-    """Binary XGBoost classifier on the 45-feature flow vector (UC4).
+    """Binary XGBoost classifier on the 43-feature flow vector (UC4).
 
     Uses the same feature set as UC2 (ddos_feature_cols) so both models run
     from a single feature extraction pass over the incoming flow record.

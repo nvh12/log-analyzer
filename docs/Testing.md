@@ -13,7 +13,7 @@ Các kỹ thuật kiểm thử áp dụng:
 | **Kiểm thử chuyển trạng thái** (State Transition Testing) | Vòng đời IP: chưa chặn → bị chặn → hết TTL → bị loại khỏi tập hợp |
 | **Kiểm thử hộp trắng** (White-box / Mock Verification) | Xác minh đúng phương thức Redis được gọi với đúng tham số trong unit test |
 | **Kiểm thử fail-open** | Xác minh hệ thống không chặn hợp lệ khi Redis ném ngoại lệ timeout |
-| **Kiểm thử đường lỗi** (Error Path Testing) | Payload không hợp lệ → DLQ; `receivedAt = null` → từ chối trước khi vào hàng đợi |
+| **Kiểm thử đường lỗi** (Error Path Testing) | Payload không hợp lệ → DLQ; `receivedAt = null` → tự gán `now()` và xử lý bình thường |
 | **Kiểm thử hệ thống tích hợp container** | Testcontainers khởi động PostgreSQL 17.5, RabbitMQ 4.2.4, Redis 7.4 thực |
 | **Kiểm thử đầu cuối bất đồng bộ** | pytest-asyncio + polling có timeout trên toàn bộ pipeline 5 service |
 
@@ -60,7 +60,7 @@ Các kỹ thuật kiểm thử áp dụng:
 | RX-03 | Đúng ngưỡng leo thang (lần 3) → `BLOCK` | Script Redis trả về `3L` | `ipBlockService.block()` được gọi; `rateLimitService.limit()` không được gọi; ghi log `BLOCK` | Đạt |
 | RX-04 | Vượt ngưỡng (lần 10) → `BLOCK` | Script Redis trả về `10L` | `ipBlockService.block()` được gọi | Đạt |
 | RX-05 | Script Redis trả về `null` → xử lý như lần đầu | Script trả về `null` | `rateLimitService.limit()` được gọi (không bị NullPointerException) | Đạt |
-| RX-06 | IP trong whitelist → bỏ qua chặn | Redis xác nhận IP có trong `whitelist:ips` | Không ghi vào `blocklist:ips`; không tạo metadata key | Đạt |
+| RX-06 | IP trong whitelist → bỏ qua chặn | Mock `WhitelistService.isWhitelisted()` trả về `true` | Không ghi vào `blocklist:ips`; không tạo metadata key | Đạt |
 | RX-07 | TTL chặn theo mức độ nghiêm trọng | `LOW` / `MEDIUM` / `CRITICAL` | TTL lần lượt là 5 phút / 30 phút / 24 giờ | Đạt |
 | RX-08 | Redis ném `QueryTimeoutException` khi kiểm tra trạng thái chặn | `hasKey()` ném timeout | `isBlocked()` trả về `false` (fail-open) | Đạt |
 | RX-09 | Metadata key hết hạn TTL → tự dọn | `blocklist:ips` có IP nhưng `blocklist:ip:{ip}` không tồn tại | `isBlocked()` trả về `false` và xoá IP khỏi `blocklist:ips` | Đạt |
@@ -70,42 +70,42 @@ Các kỹ thuật kiểm thử áp dụng:
 | TC# | Mô tả | Kết quả mong đợi | Kết quả thực tế |
 |---|---|---|---|
 | RX-IT-01 | `block()` → IP tồn tại trong cả set và metadata key | `isMember("blocklist:ips")=true`; `hasKey("blocklist:ip:{ip}")=true` | Đạt |
-| RX-IT-02 | `block()` với IP được whitelist → không ghi gì vào Redis | Không có key nào được tạo | Đạt |
+| RX-IT-02 | `block()` với IP được whitelist → không ghi gì vào Redis | Mock `WhitelistService` (`@MockitoBean`) trả về `true`; không có key nào được tạo | Đạt |
 | RX-IT-03 | Mô phỏng TTL hết hạn thủ công → `isBlocked()` dọn dẹp set | Trả về `false`; `isMember` sau đó cũng `false` | Đạt |
 | RX-IT-04 | `DetectionResultConsumerIT`: DDoS lần 3 → BLOCK trong Redis | Key `blocklist:ip:{ip}` tồn tại sau đủ 3 lần phát hiện | Đạt |
-| RX-IT-05 | IP whitelist không bị chặn dù phát hiện CRITICAL | Không có key blocklist nào được tạo | Đạt |
+| RX-IT-05 | IP whitelist không bị chặn dù phát hiện CRITICAL | Mock `WhitelistService` (`@MockitoBean`) trả về `true`; không có key blocklist nào được tạo | Đạt |
 
 ---
 
-## 3.3 Quản Lý Whitelist và Gỡ Chặn IP (Dashboard)
+## 3.3 Quản Lý Whitelist (Simulation) và Gỡ Chặn IP (Dashboard)
 
-Dashboard cung cấp API cho quản trị viên xem/thay thế danh sách IP whitelist (`whitelist:ips` trong Redis) và gỡ chặn (lift) hàng loạt các IP đang nằm trong `blocklist:ips`.
+Whitelist không còn do Dashboard/Reaction lưu trữ trực tiếp trong Redis của riêng chúng — quyền sở hữu `whitelist:ips` đã chuyển sang **Simulation service** (`presentation/routers/access_control_router.py`), nơi expose `GET/POST/DELETE/PUT /admin/whitelist` (gated bởi header `X-Admin-Key`) và dashboard-fe gọi trực tiếp các endpoint này qua Vite proxy `/simulate`. Reaction service không còn lưu whitelist nào cả; trước mỗi hành động chặn/giới hạn tốc độ trên một IP, nó gọi `WhitelistService.isWhitelisted(ip)`, được hiện thực bởi `SimulationWhitelistClient` — một lệnh gọi HTTP `GET /admin/whitelist` tới Simulation, fail-open (coi như không whitelist) nếu Simulation không phản hồi. Dashboard chỉ còn API gỡ chặn (`POST /api/reactions/blocks/lift`) cho các IP đang nằm trong `blocklist:ips`.
 
-**Kỹ thuật sử dụng:** Kiểm thử hộp trắng (Mockito cho `WhitelistStore`), Kiểm thử tích hợp container (`ReactionControllerIT` với Redis thực).
+**Kỹ thuật sử dụng:** Kiểm thử hộp trắng (Mockito cho `SimulationWhitelistClient` qua `MockRestServiceServer`, cho `RedisIpBlockService`/`RedisRateLimitService` với `WhitelistService` mock), Kiểm thử tích hợp container (`ReactionControllerIT` với Redis thực cho lift-block), kiểm thử FastAPI (`test_access_control_router.py`) cho các endpoint whitelist của Simulation.
 
-**Phương thức được kiểm thử:** `WhitelistStore.listWhitelistedIps()` / `replaceWhitelist(List<String>)`; `ReactionController` — `GET/PUT /api/reactions/whitelist`, `POST /api/reactions/blocks/lift`.
+**Phương thức được kiểm thử:** `SimulationWhitelistClient.isWhitelisted(String)`; `RedisIpBlockService.block()` / `RedisRateLimitService.limit()` (khi IP whitelist); Simulation's `GET/POST/DELETE/PUT /admin/whitelist`; `ReactionController` — `POST /api/reactions/blocks/lift`.
 
 ### 3.3.1 Kiểm Thử Đơn Vị (Mockito)
 
 | TC# | Mô tả | Điều kiện tiên quyết | Kết quả mong đợi | Kết quả thực tế |
 |---|---|---|---|---|
-| WL-01 | `listWhitelistedIps()` khi set rỗng (`null`) | `members()` trả về `null` | Trả về danh sách rỗng | Đạt |
-| WL-02 | `listWhitelistedIps()` trả về đúng các IP | `members()` trả về `{1.2.3.4, 5.6.7.8}` | Danh sách chứa đúng 2 IP | Đạt |
-| WL-03 | `replaceWhitelist()` xóa và ghi lại toàn bộ | Danh sách mới `{1.2.3.4, 5.6.7.8}` | Gọi `delete()` rồi `add()` với cả 2 IP | Đạt |
-| WL-04 | `replaceWhitelist()` với danh sách rỗng | Danh sách mới rỗng | Chỉ gọi `delete()`, không gọi `add()` | Đạt |
-| WL-05 | `listWhitelistedIps()` trả về danh sách bất biến | `members()` trả về `{1.2.3.4}` | Gọi `add()` trên kết quả ném `UnsupportedOperationException` | Đạt |
+| WL-01 | `isWhitelisted()` khi IP có trong response | Simulation trả về `{"ips":["1.2.3.4"]}` | Trả về `true` | Đạt |
+| WL-02 | `isWhitelisted()` khi IP không có trong response | Simulation trả về `{"ips":["5.6.7.8"]}` | Trả về `false` | Đạt |
+| WL-03 | `isWhitelisted()` khi Simulation không thể truy cập | Simulation trả về lỗi server | Fail-open: trả về `false`, không ném exception | Đạt |
+| WL-04 | `RedisIpBlockService.block()` khi IP whitelist | Mock `WhitelistService.isWhitelisted()` trả về `true` | Không gọi `setOps.add()` / `valueOps.set()` | Đạt |
+| WL-05 | `RedisRateLimitService.limit()` khi IP whitelist | Mock `WhitelistService.isWhitelisted()` trả về `true` | Không ghi gì vào Redis | Đạt |
 
-### 3.3.2 Kiểm Thử Tích Hợp (Testcontainers + Redis thực)
+### 3.3.2 Kiểm Thử Tích Hợp
 
 | TC# | Mô tả | Kết quả mong đợi | Kết quả thực tế |
 |---|---|---|---|
-| WL-IT-01 | `GET /api/reactions/whitelist` khi chưa có entry | Trả về mảng rỗng | Đạt |
-| WL-IT-02 | `GET /api/reactions/whitelist` khi có IP trong `whitelist:ips` | Trả về mảng chứa đúng IP | Đạt |
-| WL-IT-03 | `PUT /api/reactions/whitelist` với danh sách IP mới | Whitelist cũ bị thay thế hoàn toàn bởi danh sách mới | Đạt |
-| WL-IT-04 | `PUT /api/reactions/whitelist` với body rỗng | `whitelist:ips` bị xóa sạch | Đạt |
+| WL-IT-01 | Simulation `GET /admin/whitelist` khi chưa có entry | Trả về `{"ips": []}` | Đạt |
+| WL-IT-02 | Simulation `POST /admin/whitelist` thêm IP | IP được `sadd` vào `whitelist:ips` | Đạt |
+| WL-IT-03 | Simulation `DELETE /admin/whitelist/{ip}` xóa IP | IP được `srem` khỏi `whitelist:ips` | Đạt |
+| WL-IT-04 | Simulation `PUT /admin/whitelist` thay thế toàn bộ danh sách | `delete` rồi `sadd` toàn bộ IP mới trong một pipeline | Đạt |
 | WL-IT-05 | `POST /api/reactions/blocks/lift` với danh sách IP | Khóa `blocklist:ip:{ip}` và thành viên trong `blocklist:ips` bị xóa cho từng IP | Đạt |
 
-**Thống kê:** 14 trường hợp kiểm thử đơn vị (9 cho leo thang phản ứng RX-01–RX-09 + 5 cho quản lý whitelist WL-01–WL-05) và 10 trường hợp kiểm thử tích hợp (5 RX-IT-01–RX-IT-05 + 5 WL-IT-01–WL-IT-05) = **24 trường hợp**, tất cả đạt.
+**Thống kê:** 14 trường hợp kiểm thử đơn vị (9 cho leo thang phản ứng RX-01–RX-09 + 5 cho whitelist WL-01–WL-05) và 10 trường hợp kiểm thử tích hợp (5 RX-IT-01–RX-IT-05 + 5 WL-IT-01–WL-IT-05) = **24 trường hợp**.
 
 ---
 
@@ -124,7 +124,7 @@ Kiểm thử đầu cuối xác nhận toàn bộ dòng chảy dữ liệu: Simu
 | E2E-03 | **Web attack → chặn ngay** | 20 HTTP log có payload SQLi/XSS qua Simulation API (`WEB_ATTACK` scenario) | (1) ≥20 bản ghi `normalized_http` · (2) ≥1 `detection_results` loại `WEB_ATTACK` · (3) Key `blocklist:ip:{ip}` tồn tại · (4) Bản ghi `BLOCK` trong `reaction_logs` | Đạt |
 | E2E-04 | **Traffic spike → scale up** | 200 HTTP request tốc độ cao (với lịch sử baseline được seed sẵn) | (1) Detection_type=`TRAFFIC` trong `detection_results` · (2) `reaction_logs` có `SCALE_UP` · (3) `scale:state = "scaled_up"` trong Redis | Đạt |
 | E2E-05 | **Payload không hợp lệ → DLQ** | Chuỗi không phải JSON gửi vào `log.raw` | (1) Không có bản ghi trong `normalized_http`/`normalized_flow` · (2) Bản ghi trong `drop_audit` với `reason="DEAD_LETTERED"` | Đạt |
-| E2E-06 | **`receivedAt=null` → từ chối trước hàng đợi** | `RawLog` với `receivedAt=null` | Không có bản ghi trong `normalized_*`; không có bản ghi trong `drop_audit` | Đạt |
+| E2E-06 | **`receivedAt=null` → tự gán `now()` và xử lý bình thường** | `RawLog` với `receivedAt=null` | Có bản ghi trong `normalized_http`; không có bản ghi trong `drop_audit` | Đạt |
 
 *Lưu ý triển khai:* E2E-01 và E2E-02 trước đây là hai file riêng (`test_ddos.py`, `test_brute_force.py`) với hai hàm test gần như trùng lặp; nay đã gộp thành một hàm tham số hóa `test_flow_attack_detected_and_ip_blocked` (tham số `source_ip/dest_ip/dest_port/features/n_records/detection_type`, các case `[ddos]`/`[brute_force]`) trong `tests/e2e/test_flow_attacks.py` — cùng các bước xác nhận, không thay đổi phạm vi kiểm thử.
 
@@ -150,7 +150,7 @@ Khi một bản ghi log không thể xử lý (payload hỏng, hết số lần 
 | RES-06 | `DeadLetterConsumer`: `dropAuditRepository.recordDeadLetter()` ném lỗi | Mock ném `RuntimeException("audit down")` | Không lan truyền ngoại lệ ra ngoài `onDeadLetter()` | Đạt |
 | RES-07 | `DlqRetryScheduler`: ghi audit `RETRY_EXHAUSTED` ném lỗi khi đã hết số lần thử | `dropAuditRepository.record(..., RETRY_EXHAUSTED)` ném `RuntimeException` | `retryFailedLogs()` không ném lỗi; `logProcessingService.process()` không được gọi cho bản ghi đó | Đạt |
 | RES-08 | `RawLogConsumer`: `queueService.enqueue()` ném lỗi | Mock ném `RuntimeException("redis down")` | Ném `AmqpRejectAndDontRequeueException` với `cause` là `RuntimeException` gốc → message vào DLQ | Đạt |
-| RES-09 | `RawLogConsumer`: `receivedAt = null` | `RawLog` không có `receivedAt` | `enqueue()` **không** được gọi; message bị bỏ qua âm thầm (không vào DLQ) | Đạt |
+| RES-09 | `RawLogConsumer`: `receivedAt = null` | `RawLog` không có `receivedAt` | `receivedAt` được tự gán `Instant.now()`; `enqueue()` được gọi với bản ghi đã cập nhật | Đạt |
 | RES-10 | `RedisQueueService`: script Redis trả `null` | `redisTemplate.execute(...)` → `null` | `enqueue()` trả về `false` | Đạt |
 | RES-11 | `RedisQueueService`: Redis ném lỗi khi enqueue | `redisTemplate.execute(...)` ném `RuntimeException("redis down")` | Ném `RuntimeException` mới với thông điệp chứa `"Failed to enqueue log id=..."` | Đạt |
 | RES-12 | `LogProcessingPoller`: hàng đợi executor vượt ngưỡng backpressure | `corePoolSize=2`, `backpressureThreshold=5`; lấp đầy 8 tác vụ chặn (2 luồng + 6 hàng đợi > 5) | `queueService.dequeueBatch()` **không** được gọi trong 200ms tiếp theo | Đạt |
@@ -247,7 +247,7 @@ Tất cả **540/540 trường hợp kiểm thử đều đạt** (passed).
 
 Các bổ sung kiểm thử trong vòng rà soát gần nhất, theo từng dịch vụ:
 
-- **log-processing**: thêm 12 trường hợp biên cho `LogProcessingService` (mã trạng thái HTTP 100/99/599/600, độ dài URL/IP/User-Agent tối đa và vượt ngưỡng, phương thức HTTP không xác định, referer rỗng vs `null`, sanitize giá trị Flow feature tràn số `Infinity`/`-Infinity` về `0.0`); 1 trường hợp cho `DlqRetryScheduler` (lỗi audit khi retry đã hết hạn không lan truyền); 2 trường hợp cho `RedisQueueService` (script Redis trả `null`, Redis ném lỗi khi enqueue); 2 trường hợp cho `RawLogConsumer` (enqueue ném lỗi → DLQ, `receivedAt=null` → bỏ qua âm thầm); 1 trường hợp cho `LogProcessingPoller` (bỏ qua dequeue khi hàng đợi executor vượt ngưỡng backpressure); và file mới `DeadLetterConsumerTest` (6 trường hợp cho việc trích xuất lý do/log id từ message DLQ). Đồng thời gỡ bỏ `EventServiceImplTest` (trùng lặp hoàn toàn với `EventServiceImplIT` chạy trên RabbitMQ thực).
+- **log-processing**: thêm 12 trường hợp biên cho `LogProcessingService` (mã trạng thái HTTP 100/99/599/600, độ dài URL/IP/User-Agent tối đa và vượt ngưỡng, phương thức HTTP không xác định, referer rỗng vs `null`, sanitize giá trị Flow feature tràn số `Infinity`/`-Infinity` về `0.0`); 1 trường hợp cho `DlqRetryScheduler` (lỗi audit khi retry đã hết hạn không lan truyền); 2 trường hợp cho `RedisQueueService` (script Redis trả `null`, Redis ném lỗi khi enqueue); 2 trường hợp cho `RawLogConsumer` (enqueue ném lỗi → DLQ, `receivedAt=null` → tự gán `now()` và xử lý bình thường); 1 trường hợp cho `LogProcessingPoller` (bỏ qua dequeue khi hàng đợi executor vượt ngưỡng backpressure); và file mới `DeadLetterConsumerTest` (6 trường hợp cho việc trích xuất lý do/log id từ message DLQ). Đồng thời gỡ bỏ `EventServiceImplTest` (trùng lặp hoàn toàn với `EventServiceImplIT` chạy trên RabbitMQ thực).
 - **dashboard**: thêm file mới `DetectionMapperTest` (4 trường hợp) bao phủ ánh xạ `DetectionResultEntity` → `DetectionSummaryView`/`DetectionDetailView`, bao gồm logic `method_flags` chỉ áp dụng cho `DetectionType.TRAFFIC`.
 - **log-analysis**: thêm file mới `test_detection_job_runner.py` (11 trường hợp) bao phủ `DetectionJobRunner` — chạy job traffic (rỗng, bình thường, chuyển giờ với/không đủ mẫu lịch sử theo mùa), chạy job web-attack (không có log mới, có log mới, một request lỗi không chặn các request khác), phân tích biểu thức cron (5/6 trường, không hợp lệ), và bản sao độc lập của `job_status()`.
 - **simulation**: thêm file mới `test_simulation_router.py` (11 trường hợp) bao phủ toàn bộ endpoint của `simulation_router` — `/start` (202, log_type tự suy ra từ scenario, 409 khi đang chạy), `/stop`, `/status`, `/replay` (202, 503 khi MinIO chưa cấu hình, 404 khi không tìm thấy nguồn, 422 khi CSV rỗng, 409 khi đang chạy), và `/baseline`, `/baseline/stop`.

@@ -58,6 +58,7 @@ together {
     interface ScaleService
     interface ReactionEventPort
     interface AlertChannel
+    interface WhitelistService
 
     ReactionService -[hidden]down- AlertService
     AlertService -[hidden]down- ReactionLogService
@@ -66,6 +67,7 @@ together {
     RateLimitService -[hidden]down- ScaleService
     ScaleService -[hidden]down- ReactionEventPort
     ReactionEventPort -[hidden]down- AlertChannel
+    AlertChannel -[hidden]down- WhitelistService
   }
 }
 
@@ -92,6 +94,7 @@ together {
     class RedisScaleService
     class JpaReactionLogService
     class Retry
+    class SimulationWhitelistClient
 
     EscalatingIpReactionService -[hidden]down- BruteForceReactionService
     BruteForceReactionService -[hidden]down- DDoSReactionService
@@ -107,6 +110,7 @@ together {
     RedisRateLimitService -[hidden]down- RedisScaleService
     RedisScaleService -[hidden]down- JpaReactionLogService
     JpaReactionLogService -[hidden]down- Retry
+    Retry -[hidden]down- SimulationWhitelistClient
   }
 }
 
@@ -128,10 +132,12 @@ together {
     class RabbitMqConfig
     class RedisConfig
     class ResendConfig
+    class SimulationProperties
 
     AlertProperties -[hidden]down- RabbitMqConfig
     RabbitMqConfig -[hidden]down- RedisConfig
     RedisConfig -[hidden]down- ResendConfig
+    ResendConfig -[hidden]down- SimulationProperties
   }
 }
 
@@ -159,6 +165,7 @@ ReactionService --> ReactionLogService
 EscalatingIpReactionService --|> ReactionService
 EscalatingIpReactionService --> IpBlockService
 EscalatingIpReactionService --> RateLimitService
+EscalatingIpReactionService --> WhitelistService
 
 BruteForceReactionService --|> EscalatingIpReactionService
 DDoSReactionService --|> EscalatingIpReactionService
@@ -168,6 +175,7 @@ TrafficReactionService --> ScaleService
 
 WebAttackReactionService --|> ReactionService
 WebAttackReactionService --> IpBlockService
+WebAttackReactionService --> WhitelistService
 
 ' ---- alert services ----
 CompositeAlertService ..|> AlertService
@@ -187,6 +195,12 @@ RedisScaleService ..|> ScaleService
 RedisIpBlockService --> Retry
 RedisRateLimitService --> Retry
 RedisScaleService --> Retry
+RedisIpBlockService --> WhitelistService
+RedisRateLimitService --> WhitelistService
+
+' ---- simulation whitelist client ----
+SimulationWhitelistClient ..|> WhitelistService
+SimulationWhitelistClient --> SimulationProperties
 
 ' ---- reaction log + mq ----
 JpaReactionLogService ..|> ReactionLogService

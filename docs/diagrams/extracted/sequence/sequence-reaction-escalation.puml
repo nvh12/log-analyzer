@@ -16,6 +16,8 @@ sequenceDiagram {
 participant "DetectionResultConsumer" as Consumer
 participant "ReactionService" as ReactionSvc
 participant "EscalatingIpReactionService" as EscalatingSvc
+participant "WhitelistService" as WhitelistSvc
+participant "Simulation Service" as Simulation
 participant "RedisTemplate" as Redis
 participant "IpBlockService" as BlockSvc
 participant "RateLimitService" as LimitSvc
@@ -25,17 +27,26 @@ participant "AlertService" as AlertSvc
 Consumer -> ReactionSvc : handle(ReactionInput)
 ReactionSvc -> EscalatingSvc : doHandle(ReactionInput)
 
-EscalatingSvc -> Redis : execute(INCR_WITH_EXPIRE, Key)
-Redis --> EscalatingSvc : attempts count
+EscalatingSvc -> WhitelistSvc : isWhitelisted(ip)
+WhitelistSvc -> Simulation : GET /admin/whitelist
+Simulation --> WhitelistSvc : ips
+WhitelistSvc --> EscalatingSvc : whitelisted?
 
-alt attempts >= ESCALATION_THRESHOLD (3)
-    EscalatingSvc -> BlockSvc : block(ip, severity)
-    BlockSvc --> EscalatingSvc : blocked
-    EscalatingSvc --> ReactionSvc : ReactionAction.BLOCK
-else attempts < ESCALATION_THRESHOLD (3)
-    EscalatingSvc -> LimitSvc : limit(ip, severity)
-    LimitSvc --> EscalatingSvc : limited
-    EscalatingSvc --> ReactionSvc : ReactionAction.RATE_LIMIT
+alt ip whitelisted
+    EscalatingSvc --> ReactionSvc : ReactionAction.WHITELISTED
+else not whitelisted
+    EscalatingSvc -> Redis : execute(INCR_WITH_EXPIRE, Key)
+    Redis --> EscalatingSvc : attempts count
+
+    alt attempts >= ESCALATION_THRESHOLD (3)
+        EscalatingSvc -> BlockSvc : block(ip, severity)
+        BlockSvc --> EscalatingSvc : blocked
+        EscalatingSvc --> ReactionSvc : ReactionAction.BLOCK
+    else attempts < ESCALATION_THRESHOLD (3)
+        EscalatingSvc -> LimitSvc : limit(ip, severity)
+        LimitSvc --> EscalatingSvc : limited
+        EscalatingSvc --> ReactionSvc : ReactionAction.RATE_LIMIT
+    end
 end
 
 ReactionSvc -> LogSvc : save(ReactionInput, ReactionAction)

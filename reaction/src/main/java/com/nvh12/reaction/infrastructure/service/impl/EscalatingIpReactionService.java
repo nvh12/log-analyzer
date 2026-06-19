@@ -5,6 +5,7 @@ import com.nvh12.reaction.service.IpBlockService;
 import com.nvh12.reaction.service.RateLimitService;
 import com.nvh12.reaction.service.ReactionLogService;
 import com.nvh12.reaction.service.ReactionService;
+import com.nvh12.reaction.service.WhitelistService;
 import com.nvh12.reaction.service.dto.DetectionType;
 import com.nvh12.reaction.service.dto.ReactionAction;
 import com.nvh12.reaction.service.dto.ReactionInput;
@@ -31,16 +32,19 @@ abstract class EscalatingIpReactionService extends ReactionService {
     private final IpBlockService ipBlockService;
     private final RateLimitService rateLimitService;
     private final RedisTemplate<String, String> redisTemplate;
+    private final WhitelistService whitelistService;
 
     protected EscalatingIpReactionService(DetectionType type, AlertService alertService,
                                           ReactionLogService reactionLogService,
                                           IpBlockService ipBlockService,
                                           RateLimitService rateLimitService,
-                                          RedisTemplate<String, String> redisTemplate) {
+                                          RedisTemplate<String, String> redisTemplate,
+                                          WhitelistService whitelistService) {
         super(type, alertService, reactionLogService);
         this.ipBlockService = ipBlockService;
         this.rateLimitService = rateLimitService;
         this.redisTemplate = redisTemplate;
+        this.whitelistService = whitelistService;
     }
 
     protected abstract String attemptsKeyPrefix();
@@ -48,6 +52,12 @@ abstract class EscalatingIpReactionService extends ReactionService {
     @Override
     protected final ReactionAction doHandle(ReactionInput input) {
         String ip = input.getSourceIp();
+
+        if (whitelistService.isWhitelisted(ip)) {
+            log.info("{} from {} — IP whitelisted, skipping escalation", getType(), ip);
+            return ReactionAction.WHITELISTED;
+        }
+
         String attemptsKey = attemptsKeyPrefix() + ip;
 
         Long attempts = redisTemplate.execute(INCR_WITH_EXPIRE,

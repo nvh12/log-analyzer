@@ -33,6 +33,7 @@ public class DlqRetryScheduler {
     private final Counter retrySuccessCounter;
     private final Counter retryFailedCounter;
     private final Counter retryExhaustedCounter;
+    private final Counter auditWriteFailedCounter;
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(
             r -> {
@@ -60,6 +61,7 @@ public class DlqRetryScheduler {
         this.retrySuccessCounter = meterRegistry.counter("logs.retry", "result", "success");
         this.retryFailedCounter = meterRegistry.counter("logs.retry", "result", "failed");
         this.retryExhaustedCounter = meterRegistry.counter("logs.retry", "result", "exhausted");
+        this.auditWriteFailedCounter = meterRegistry.counter("logs.retry", "result", "audit_write_failed");
     }
 
     @PostConstruct
@@ -106,7 +108,10 @@ public class DlqRetryScheduler {
                 try {
                     dropAuditRepository.record(entry, DropReason.RETRY_EXHAUSTED);
                 } catch (Exception ae) {
-                    log.error("Failed to persist exhausted retry to audit store. id={}", entry.rawLog().getId(), ae);
+                    log.error("Failed to persist exhausted retry to audit store — requeueing to DLQ for retry. id={}",
+                            entry.rawLog().getId(), ae);
+                    auditWriteFailedCounter.increment();
+                    failedLogRepository.saveEntry(entry);
                 }
                 continue;
             }

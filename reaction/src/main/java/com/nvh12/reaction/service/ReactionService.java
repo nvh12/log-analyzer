@@ -25,7 +25,9 @@ public abstract class ReactionService {
     public final void handle(ReactionInput input) {
         ReactionAction action = doHandle(input);
         reactionLogService.save(input, action);
-        alertService.enqueue(buildAlertDto(input));
+        if (action != ReactionAction.WHITELISTED) {
+            alertService.enqueue(buildAlertDto(input));
+        }
     }
 
     protected abstract Alert buildAlertDto(ReactionInput input);

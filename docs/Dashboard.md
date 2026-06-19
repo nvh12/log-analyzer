@@ -101,7 +101,7 @@ Server-side filters: time range, IP, status/verdict. Server-side pagination from
 Filter rail (UC, severity, verdict, time range) + table. Row click opens a UC-specific detail panel — **not a unified panel.** The four UCs produce different shaped evidence and the dashboard should make that visible.
 
 - **UC1 detail:** minute timeline, 4-detector vote breakdown, weighted score, severity, baseline median, observed count.
-- **UC2 detail:** flow feature table (45 features), probability gauge, top-contributing features if SHAP values are persisted.
+- **UC2 detail:** flow feature table (43 features), probability gauge, top-contributing features if SHAP values are persisted.
 - **UC3 detail:** request payload, layer-that-caught-it badge (Regex / XGBoost), matched regex pattern with highlighting *or* XGBoost probability with feature breakdown.
 - **UC4 detail:** same shape as UC2.
 

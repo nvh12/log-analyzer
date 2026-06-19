@@ -7,4 +7,6 @@ public interface IpBlockService {
     void block(String ip, Severity severity);
 
     boolean isBlocked(String ip);
+
+    void liftBlock(String ip);
 }
