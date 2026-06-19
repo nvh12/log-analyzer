@@ -100,6 +100,6 @@ log-analysis/
 
 ## 4. Communication & Messaging
 
--   **RabbitMQ Consumer**: Subscribes to `log.normalized.http` and `log.normalized.flow`.
+-   **RabbitMQ Consumer**: Subscribes to `log.normalized.http` and `log.normalized.flow`, both declared via `declare_input_queue()` with `x-dead-letter-exchange`/`x-dead-letter-routing-key` arguments identical to log-processing's (Java) declaration of the same queues — the arguments must match byte-for-byte or RabbitMQ rejects the mismatched re-declare. Processing exceptions are logged with the full message body, then re-raised so `message.process(requeue=False)` rejects the message to its DLQ instead of silently acking it.
 -   **RabbitMQ Publisher**: Publishes alerts to the `detection.results` fanout exchange.
--   **PostgreSQL Write**: Persists every detection verdict to database tables before publishing downstream.
+-   **PostgreSQL Write**: Persists every detection verdict to database tables before publishing downstream. Web-attack verdicts additionally persist `layer_triggered` (`"rule_engine"` or `"xgboost"`, migration `0002_add_layer_triggered.sql`).

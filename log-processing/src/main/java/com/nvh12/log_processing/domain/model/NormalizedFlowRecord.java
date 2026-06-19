@@ -7,6 +7,7 @@ import java.util.Map;
 
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record NormalizedFlowRecord(
+        String sourceLogId,
         double timestamp,
         String sourceIp,
         String destIp,

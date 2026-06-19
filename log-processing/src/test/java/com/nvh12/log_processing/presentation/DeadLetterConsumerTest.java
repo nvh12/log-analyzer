@@ -1,6 +1,9 @@
 package com.nvh12.log_processing.presentation;
 
+import com.nvh12.log_processing.domain.model.RawLog;
 import com.nvh12.log_processing.domain.service.DropAuditRepository;
+import com.nvh12.log_processing.domain.service.FailedLogRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,13 +28,16 @@ class DeadLetterConsumerTest {
     @Mock
     private DropAuditRepository dropAuditRepository;
 
+    @Mock
+    private FailedLogRepository failedLogRepository;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private DeadLetterConsumer consumer;
 
     @BeforeEach
     void setUp() {
-        consumer = new DeadLetterConsumer(dropAuditRepository, objectMapper);
+        consumer = new DeadLetterConsumer(dropAuditRepository, failedLogRepository, objectMapper, new SimpleMeterRegistry());
     }
 
     private Message message(String body, List<Map<String, ?>> xDeath) {
@@ -89,11 +95,24 @@ class DeadLetterConsumerTest {
     }
 
     @Test
-    void recordDeadLetterThrows_doesNotPropagate() {
+    void recordDeadLetterThrows_requeuesParsableBodyToRedisDlq() {
         Message message = message("{\"id\":\"id-err\"}", null);
         doThrow(new RuntimeException("audit down")).when(dropAuditRepository)
                 .recordDeadLetter(anyString(), anyString(), anyString());
 
         assertThatNoException().isThrownBy(() -> consumer.onDeadLetter(message));
+
+        verify(failedLogRepository).save(org.mockito.ArgumentMatchers.any(RawLog.class), anyString());
+    }
+
+    @Test
+    void recordDeadLetterThrows_andBodyUnparseable_doesNotPropagateOrRequeue() {
+        Message message = message("not json", null);
+        doThrow(new RuntimeException("audit down")).when(dropAuditRepository)
+                .recordDeadLetter(anyString(), org.mockito.ArgumentMatchers.isNull(), anyString());
+
+        assertThatNoException().isThrownBy(() -> consumer.onDeadLetter(message));
+
+        org.mockito.Mockito.verifyNoInteractions(failedLogRepository);
     }
 }

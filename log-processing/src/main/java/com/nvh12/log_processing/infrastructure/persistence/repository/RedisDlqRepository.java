@@ -36,6 +36,7 @@ public class RedisDlqRepository implements FailedLogRepository {
     private final DropAuditRepository dropAuditRepository;
     private final int capacity;
     private final Counter dlqDroppedCounter;
+    private final Counter dlqDoubleFaultCounter;
 
     public RedisDlqRepository(StringRedisTemplate redisTemplate,
                               ObjectMapper objectMapper,
@@ -47,6 +48,10 @@ public class RedisDlqRepository implements FailedLogRepository {
         this.dropAuditRepository = dropAuditRepository;
         this.capacity = properties.dlqCapacity();
         this.dlqDroppedCounter = meterRegistry.counter("logs.dlq.dropped");
+        // Both Redis (DLQ full/unreachable) and Postgres (audit write) failed for the same
+        // entry — there's nowhere left to requeue it. This counter is the only signal that
+        // such an entry was permanently and silently lost; the full entry is still logged above.
+        this.dlqDoubleFaultCounter = meterRegistry.counter("logs.dlq.double_fault");
 
         meterRegistry.gauge("logs.dlq.size", this, repo -> {
             Long size = repo.redisTemplate.opsForList().size(DLQ_KEY);
@@ -76,7 +81,9 @@ public class RedisDlqRepository implements FailedLogRepository {
                 try {
                     dropAuditRepository.record(entry, DropReason.DLQ_OVERFLOW);
                 } catch (Exception ae) {
-                    log.error("Failed to persist DLQ overflow to audit store. id={}", entry.rawLog().getId(), ae);
+                    log.error("Failed to persist DLQ overflow to audit store — entry is permanently lost (DLQ full, audit write failed). id={}",
+                            entry.rawLog().getId(), ae);
+                    dlqDoubleFaultCounter.increment();
                 }
             }
         } catch (Exception e) {
@@ -84,7 +91,9 @@ public class RedisDlqRepository implements FailedLogRepository {
             try {
                 dropAuditRepository.record(entry, DropReason.DLQ_SAVE_FAILED);
             } catch (Exception ae) {
-                log.error("Failed to persist DLQ save failure to audit store. id={}", entry.rawLog().getId(), ae);
+                log.error("Failed to persist DLQ save failure to audit store — entry is permanently lost (Redis unreachable, audit write failed). id={}",
+                        entry.rawLog().getId(), ae);
+                dlqDoubleFaultCounter.increment();
             }
         }
     }

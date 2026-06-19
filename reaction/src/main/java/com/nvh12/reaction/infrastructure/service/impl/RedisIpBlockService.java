@@ -44,6 +44,9 @@ public class RedisIpBlockService implements IpBlockService {
     public void liftBlock(String ip) {
         redisTemplate.delete(BLOCKLIST_IP_PREFIX + ip);
         redisTemplate.opsForSet().remove(BLOCKLIST_IPS, ip);
+        for (String prefix : EscalatingIpReactionService.ALL_ATTEMPT_KEY_PREFIXES) {
+            redisTemplate.delete(prefix + ip);
+        }
         log.info("Lifted IP block for {}", ip);
     }
 

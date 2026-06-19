@@ -25,7 +25,7 @@ public class BruteForceReactionService extends EscalatingIpReactionService {
 
     @Override
     protected String attemptsKeyPrefix() {
-        return "brute:attempts:";
+        return BRUTE_FORCE_ATTEMPTS_PREFIX;
     }
 
     @Override

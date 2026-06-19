@@ -38,8 +38,12 @@ public class LogProcessingWorker {
     public void processSingleLog(RawLog raw) {
         try {
             ProcessingResult result = logProcessingService.process(raw);
-            processedLogRepository.save(result);
-            eventService.publish(result);
+            boolean isNew = processedLogRepository.save(result);
+            if (isNew) {
+                eventService.publish(result);
+            } else {
+                log.info("Skipping publish for already-processed log {} (duplicate source_log_id)", raw.getId());
+            }
             successCounter.increment();
         } catch (Exception e) {
             log.warn("Failed to process log {}. Sending to DLQ.", raw.getId(), e);

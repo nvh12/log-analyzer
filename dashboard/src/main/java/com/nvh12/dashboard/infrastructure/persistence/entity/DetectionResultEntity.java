@@ -55,6 +55,9 @@ public class DetectionResultEntity {
     @Column(name = "method_flags", columnDefinition = "jsonb")
     private Map<String, Boolean> methodFlags;
 
+    @Column(name = "layer_triggered", length = 32)
+    private String layerTriggered;
+
     @Column(name = "log_timestamp")
     private Instant logTimestamp;
 

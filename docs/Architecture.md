@@ -181,13 +181,13 @@ The asynchronous backbone of the system utilizes **RabbitMQ** to connect all pro
         [ Exchange: amq.direct ]     [ Exchange: amq.direct ]
                         │                    │
                         ▼                    ▼
-     ┌───────────────────────┐    ┌───────────────────────┐
-     │Queue: log.normal.http │    │Queue: log.normal.flow │
-     └──────────┬────────────┘    └──────────┬────────────┘
-                │                            │
-                │ (FastAPI Consume)          │ (FastAPI Consume)
-                ▼                            ▼
-                  ┌──────────────────────────┐
+      ┌───────────────────────────┐    ┌───────────────────────────┐
+      │Queue: log.normalized.http │    │Queue: log.normalized.flow │
+      └──────────┬────────────────┘    └──────────┬────────────────┘
+                 │                                │
+                 │ (FastAPI Consume)              │ (FastAPI Consume)
+                 ▼                                ▼
+                   ┌──────────────────────────┐
                   │    DETECTION SERVICE     │
                   └─────────────┬────────────┘
                                 │
@@ -226,14 +226,14 @@ All RabbitMQ exchanges are configured as durable to withstand broker restarts.
     *   **Purpose**: Simulation service publishes raw line events directly to this entrypoint.
 2.  **HTTP Normalized Channel**:
     *   **Exchange**: `amq.direct`
-    *   **Queue Name**: `log.normalized.http` (Durable)
+    *   **Queue Name**: `log.normalized.http` (Durable; `x-dead-letter-exchange: log.dlx`, `x-dead-letter-routing-key: log.normalized.http.dlq`)
     *   **Routing Key**: `log.normalized.http`
-    *   **Purpose**: Processing service routes parsed HTTP logs to the Detection service.
+    *   **Purpose**: Processing service routes parsed HTTP logs to the Detection service. Declared with identical DLX arguments on both the publishing side (log-processing, Java) and the consuming side (log-analysis, Python) so either can declare the queue first without a `406 PRECONDITION_FAILED` argument mismatch.
 3.  **Flow Normalized Channel**:
     *   **Exchange**: `amq.direct`
-    *   **Queue Name**: `log.normalized.flow` (Durable)
+    *   **Queue Name**: `log.normalized.flow` (Durable; `x-dead-letter-exchange: log.dlx`, `x-dead-letter-routing-key: log.normalized.flow.dlq`)
     *   **Routing Key**: `log.normalized.flow`
-    *   **Purpose**: Processing service routes sanitized network flows to the Detection service.
+    *   **Purpose**: Processing service routes sanitized network flows to the Detection service. Same cross-service DLX-argument-matching requirement as above.
 4.  **Detection Verdict Channel**:
     *   **Exchange**: `detection.results` (Type: `fanout`)
     *   **Subscribers**:
@@ -265,11 +265,11 @@ The `log-processing` service implements two distinct error paths depending on th
 1.  **Transient Processing/Database Failures (DB-backed Retry - `DlqRetryScheduler`)**:
     -   If parsing or persistence fails due to transient database connection issues or transaction rollbacks, the exception is caught.
     -   Instead of losing the message, the raw payload is saved as a `FailedLogEntry` in a Redis list DLQ (key `failed-log-queue`, via `RedisDlqRepository`) with `retry_count = 0`.
-    -   A dedicated background scheduler (`DlqRetryScheduler`) polls failed entries, re-processes, and republishes them with a configurable backoff (default: 30000ms) and randomized jitter (default: ±5000ms). Exceeding `max_retries` (default: 3) marks the log as exhausted and persists it to the Postgres `drop_audit` table; if that Postgres write itself fails, the entry is pushed back onto the Redis DLQ for a future retry rather than being lost.
+    -   A dedicated background scheduler (`DlqRetryScheduler`) polls failed entries, re-processes, and republishes them with a configurable backoff (default: 30000ms) and randomized jitter (default: ±5000ms). Exceeding `max_retries` (default: 3) marks the log as exhausted and persists it to the Postgres `drop_audit` table. If Redis itself is unreachable/full, or that `drop_audit` write also fails (a double fault, with nowhere left to requeue), the entry is logged in full at ERROR and a `logs.dlq.double_fault` metric is incremented so the loss is observable instead of silent.
 2.  **Fatal Serialization/Validation Failures (RabbitMQ DLX - `DeadLetterConsumer`)**:
     -   Fatal payload conversion issues or JSON formatting errors in the Spring listener container trigger rejection without requeueing.
     -   These messages are routed through the Dead Letter Exchange (`log.dlx`) to the `log.raw.dlq` queue.
-    -   A dedicated `DeadLetterConsumer` consumes the queue using a raw non-converting listener factory (`dlqContainerFactory`) to prevent conversion error loops, parsing the message body and logging it alongside its `x-death` metadata directly to the `drop_audit` table.
+    -   A dedicated `DeadLetterConsumer` consumes the queue using a raw non-converting listener factory (`dlqContainerFactory`) to prevent conversion error loops, parsing the message body and logging it alongside its `x-death` metadata to the `drop_audit` table. If that `drop_audit` write fails, the consumer attempts to deserialize the body back into a `RawLog` and requeue it into the Redis DLQ for a fresh retry cycle (`logs.dlx.requeued_to_dlq` metric) — this is a legitimate cross-pipeline action, not circular, since the message arrived via RabbitMQ's DLX rather than the Redis DLQ. If the body isn't valid `RawLog` JSON, it's logged as unrecoverable (`logs.dlx.unrecoverable` metric).
 
 ---
 

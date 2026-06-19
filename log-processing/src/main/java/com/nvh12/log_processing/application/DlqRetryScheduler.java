@@ -118,8 +118,12 @@ public class DlqRetryScheduler {
 
             try {
                 ProcessingResult result = logProcessingService.process(entry.rawLog());
-                processedLogRepository.save(result);
-                eventService.publish(result);
+                boolean isNew = processedLogRepository.save(result);
+                if (isNew) {
+                    eventService.publish(result);
+                } else {
+                    log.info("Skipping publish for already-processed log {} (duplicate source_log_id)", entry.rawLog().getId());
+                }
                 log.debug("Retry succeeded for log id={}", entry.rawLog().getId());
                 retrySuccessCounter.increment();
             } catch (Exception e) {

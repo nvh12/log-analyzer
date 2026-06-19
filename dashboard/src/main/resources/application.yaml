@@ -45,6 +45,8 @@ dashboard:
   rabbitmq-management-user: ${RABBITMQ_USERNAME:guest}
   rabbitmq-management-password: ${RABBITMQ_PASSWORD:guest}
   detection-metrics-url: ${DETECTION_METRICS_URL:http://localhost:8000/metrics}
+  http-client-connect-timeout: ${HTTP_CLIENT_CONNECT_TIMEOUT:3s}
+  http-client-read-timeout: ${HTTP_CLIENT_READ_TIMEOUT:5s}
 
 simulation:
   url: ${SIMULATION_URL:http://localhost:8001}

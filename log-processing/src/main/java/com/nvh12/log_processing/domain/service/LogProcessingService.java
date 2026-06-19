@@ -91,6 +91,7 @@ public class LogProcessingService {
         int responseSize = "-".equals(m.group(6)) ? 0 : Integer.parseInt(m.group(6));
 
         return new NormalizedLog(
+                rawLog.getId(),
                 timestamp,
                 ip,
                 method,
@@ -127,7 +128,7 @@ public class LogProcessingService {
                 features.put(entry.getKey(), sanitize(entry.getValue()));
             }
 
-            return new NormalizedFlowRecord(timestamp, sourceIp, destIp, sourcePort, destPort, features);
+            return new NormalizedFlowRecord(rawLog.getId(), timestamp, sourceIp, destIp, sourcePort, destPort, features);
         } catch (Exception e) {
             throw new RuntimeException("Failed to parse flow record: " + e.getMessage(), e);
         }

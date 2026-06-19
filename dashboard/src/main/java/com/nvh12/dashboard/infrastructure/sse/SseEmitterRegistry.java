@@ -47,7 +47,11 @@ public class SseEmitterRegistry implements BroadcastPort, SseRegistrar {
             try {
                 emitter.send(event);
             } catch (IOException e) {
+                // completeWithError also triggers the onError callback registered in
+                // register(), which removes the emitter again — redundant but harmless
+                // on a CopyOnWriteArrayList (second remove() is a no-op).
                 emitters.remove(emitter);
+                emitter.completeWithError(e);
             }
         }
     }

@@ -39,13 +39,27 @@ class PostgresProcessedLogRepositoryIT extends AbstractContainerIT {
     @Test
     void nullHeadersMap_saveSucceeds() {
         NormalizedLog log = new NormalizedLog(
-                1714730000.0, "1.2.3.4", HttpMethod.GET, "/test", 200, 1024,
+                "it-null-headers", 1714730000.0, "1.2.3.4", HttpMethod.GET, "/test", 200, 1024,
                 null, null, null, null
         );
         repository.save(new ProcessingResult.Http(log));
 
         Integer count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM log_processing.normalized_http", Integer.class);
+        assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    void duplicateSourceLogId_doesNotInsertSecondRow() {
+        NormalizedLog log = new NormalizedLog(
+                "dup-id", 1714730000.0, "1.2.3.4", HttpMethod.GET, "/test", 200, 1024,
+                null, null, null, null
+        );
+        repository.save(new ProcessingResult.Http(log));
+        repository.save(new ProcessingResult.Http(log));
+
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM log_processing.normalized_http WHERE source_log_id = 'dup-id'", Integer.class);
         assertThat(count).isEqualTo(1);
     }
 }

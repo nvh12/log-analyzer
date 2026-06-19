@@ -181,6 +181,7 @@ Stores every HTTP access log that successfully passed CLF parsing and was persis
 | `user_agent` | TEXT | Yes | — | User-Agent string; null for basic CLF; truncated to 512 chars |
 | `referer` | TEXT | Yes | — | Referer header; null for basic CLF; literal `-` is preserved |
 | `processed_at` | TIMESTAMPTZ | No | NOW() | Server-side timestamp when the row was inserted (set by DB default) |
+| `source_log_id` | VARCHAR(64) | Yes | — | Idempotency key copied from the originating `RawLog.id` (UUID); unique among non-null values (partial index, added in V2). Lets `ProcessedLogRepository.save()` detect and no-op on a duplicate insert from a DLQ retry instead of re-publishing |
 
 ### 5.2 `log_processing.normalized_flow`
 
@@ -196,6 +197,7 @@ Stores every network flow record that successfully passed parsing by the log-pro
 | `dest_port` | INT | Yes | — | Destination port; 0 if missing |
 | `features` | JSONB | No | — | 43-feature CICFlowMeter vector as `{name: float}`; NaN/Infinity sanitized to 0.0 |
 | `processed_at` | TIMESTAMPTZ | No | NOW() | Server-side insert timestamp |
+| `source_log_id` | VARCHAR(64) | Yes | — | Idempotency key copied from the originating `RawLog.id` (UUID); unique among non-null values (partial index, added in V2). Lets `ProcessedLogRepository.save()` detect and no-op on a duplicate insert from a DLQ retry instead of re-publishing |
 
 ### 5.3 `log_processing.drop_audit`
 
@@ -234,6 +236,7 @@ Stores anomaly verdicts from all four detection pipelines. **Only anomalies are 
 | `window_start` | TIMESTAMPTZ | Yes | — | Start of the 60-second analysis window; **non-null only for TRAFFIC** |
 | `window_end` | TIMESTAMPTZ | Yes | — | End of the 60-second analysis window; **non-null only for TRAFFIC** |
 | `detected_at` | TIMESTAMPTZ | No | — | UTC timestamp when the detection pipeline produced this result |
+| `layer_triggered` | VARCHAR(32) | Yes | — | `"rule_engine"` \| `"xgboost"`; **non-null only for WEB_ATTACK** (added in migration `0002`) |
 
 ### 5.5 `analysis.schema_migrations`
 
@@ -271,6 +274,8 @@ Records every automated reaction action taken in response to a detection. Writte
 | `log_processing.normalized_http` | `idx_normalized_http_ip` | `ip` | B-tree | IP-filtered log queries from the dashboard |
 | `log_processing.normalized_flow` | `idx_normalized_flow_timestamp` | `timestamp` | B-tree | Time-range queries |
 | `log_processing.normalized_flow` | `idx_normalized_flow_source_ip` | `source_ip` | B-tree | Source IP filtering from the dashboard |
+| `log_processing.normalized_http` | `idx_normalized_http_source_log_id` | `source_log_id` | B-tree (unique, partial `WHERE source_log_id IS NOT NULL`) | Idempotency dedup on DLQ retry |
+| `log_processing.normalized_flow` | `idx_normalized_flow_source_log_id` | `source_log_id` | B-tree (unique, partial `WHERE source_log_id IS NOT NULL`) | Idempotency dedup on DLQ retry |
 | `log_processing.drop_audit` | `idx_drop_audit_log_id` | `log_id` | B-tree | Lookup dropped entries by original raw log UUID |
 | `log_processing.drop_audit` | `idx_drop_audit_dropped_at` | `dropped_at` | B-tree | Time-ordered audit queries |
 | `log_processing.drop_audit` | `idx_drop_audit_drop_reason` | `drop_reason` | B-tree | Filter by failure category |
@@ -301,7 +306,7 @@ CREATE SCHEMA IF NOT EXISTS analysis;
 
 -- ============================================================
 --  SCHEMA: log_processing
---  Owner: log-processing service (Flyway migration V1)
+--  Owner: log-processing service (Flyway migrations V1, V2)
 -- ============================================================
 
 CREATE TABLE log_processing.normalized_http
@@ -317,7 +322,8 @@ CREATE TABLE log_processing.normalized_http
     headers       JSONB,
     user_agent    TEXT,
     referer       TEXT,
-    processed_at  TIMESTAMPTZ      NOT NULL DEFAULT NOW()
+    processed_at  TIMESTAMPTZ      NOT NULL DEFAULT NOW(),
+    source_log_id VARCHAR(64)
 );
 
 CREATE INDEX idx_normalized_http_timestamp
@@ -325,6 +331,11 @@ CREATE INDEX idx_normalized_http_timestamp
 
 CREATE INDEX idx_normalized_http_ip
     ON log_processing.normalized_http (ip);
+
+-- Migration V2
+CREATE UNIQUE INDEX idx_normalized_http_source_log_id
+    ON log_processing.normalized_http (source_log_id)
+    WHERE source_log_id IS NOT NULL;
 
 
 CREATE TABLE log_processing.normalized_flow
@@ -336,7 +347,8 @@ CREATE TABLE log_processing.normalized_flow
     source_port  INT,
     dest_port    INT,
     features     JSONB            NOT NULL,
-    processed_at TIMESTAMPTZ      NOT NULL DEFAULT NOW()
+    processed_at TIMESTAMPTZ      NOT NULL DEFAULT NOW(),
+    source_log_id VARCHAR(64)
 );
 
 CREATE INDEX idx_normalized_flow_timestamp
@@ -344,6 +356,11 @@ CREATE INDEX idx_normalized_flow_timestamp
 
 CREATE INDEX idx_normalized_flow_source_ip
     ON log_processing.normalized_flow (source_ip);
+
+-- Migration V2
+CREATE UNIQUE INDEX idx_normalized_flow_source_log_id
+    ON log_processing.normalized_flow (source_log_id)
+    WHERE source_log_id IS NOT NULL;
 
 
 CREATE TABLE log_processing.drop_audit
@@ -372,7 +389,7 @@ CREATE INDEX idx_drop_audit_drop_reason
 
 -- ============================================================
 --  SCHEMA: analysis
---  Owner: log-analysis service (custom SQL runner, version 0001)
+--  Owner: log-analysis service (custom SQL runner, versions 0001, 0002)
 -- ============================================================
 
 -- Internal migration tracker (bootstrapped by runner.py before any version SQL is applied)
@@ -407,6 +424,10 @@ CREATE INDEX detection_results_detected_at_idx
 
 CREATE INDEX detection_results_type_time_idx
     ON analysis.detection_results (detection_type, detected_at DESC);
+
+-- Migration 0002
+ALTER TABLE analysis.detection_results
+    ADD COLUMN layer_triggered VARCHAR(32);
 
 
 -- ============================================================

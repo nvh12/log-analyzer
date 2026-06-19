@@ -1,8 +1,11 @@
 package com.nvh12.log_processing.presentation;
 
+import com.nvh12.log_processing.domain.model.RawLog;
 import com.nvh12.log_processing.domain.service.DropAuditRepository;
+import com.nvh12.log_processing.domain.service.FailedLogRepository;
 import com.nvh12.log_processing.infrastructure.config.RabbitMqConfig;
-import lombok.AllArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -14,12 +17,25 @@ import java.util.List;
 import java.util.Map;
 
 @Component
-@AllArgsConstructor
 @Slf4j
 public class DeadLetterConsumer {
 
     private final DropAuditRepository dropAuditRepository;
+    private final FailedLogRepository failedLogRepository;
     private final ObjectMapper objectMapper;
+    private final Counter requeuedCounter;
+    private final Counter unrecoverableCounter;
+
+    public DeadLetterConsumer(DropAuditRepository dropAuditRepository,
+                               FailedLogRepository failedLogRepository,
+                               ObjectMapper objectMapper,
+                               MeterRegistry meterRegistry) {
+        this.dropAuditRepository = dropAuditRepository;
+        this.failedLogRepository = failedLogRepository;
+        this.objectMapper = objectMapper;
+        this.requeuedCounter = meterRegistry.counter("logs.dlx.requeued_to_dlq");
+        this.unrecoverableCounter = meterRegistry.counter("logs.dlx.unrecoverable");
+    }
 
     @RabbitListener(queues = RabbitMqConfig.QUEUE_RAW_DLQ, containerFactory = "dlqContainerFactory")
     public void onDeadLetter(Message message) {
@@ -30,9 +46,22 @@ public class DeadLetterConsumer {
         try {
             dropAuditRepository.recordDeadLetter(body, logId, reason);
         } catch (Exception e) {
-            // Log full body so the message can be recovered from logs if persistence fails.
+            // Audit write failed. Unlike RedisDlqRepository's case, this message came from
+            // RabbitMQ's DLX (not the Redis DLQ), so requeueing to Redis is a legitimate
+            // cross-pipeline action, not circular. Only possible if the body still
+            // deserializes into a RawLog — if it doesn't, there's nowhere safe to put it.
             log.error("Failed to persist dead-letter to audit store. logId={}, reason={}, body={}",
                     logId, reason, body, e);
+            try {
+                RawLog rawLog = objectMapper.readValue(body, RawLog.class);
+                failedLogRepository.save(rawLog, reason);
+                requeuedCounter.increment();
+                log.warn("Requeued dead-letter to Redis DLQ after audit write failure. logId={}", logId);
+            } catch (Exception parseEx) {
+                unrecoverableCounter.increment();
+                log.error("Dead-letter body could not be requeued (not a valid RawLog) — entry is permanently lost. logId={}",
+                        logId, parseEx);
+            }
         }
     }
 

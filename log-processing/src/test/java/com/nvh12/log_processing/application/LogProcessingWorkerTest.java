@@ -55,16 +55,33 @@ class LogProcessingWorkerTest {
     void successfulLogIsProcessedAndPublished() {
         RawLog rawLog = makeRawLog("id-ok");
         NormalizedLog normalized = new NormalizedLog(
-                1688000000.0, "1.2.3.4", HttpMethod.GET, "/", 200, 100, "", Map.of(), null, null);
+                "id-ok", 1688000000.0, "1.2.3.4", HttpMethod.GET, "/", 200, 100, "", Map.of(), null, null);
         ProcessingResult result = new ProcessingResult.Http(normalized);
 
         when(logProcessingService.process(rawLog)).thenReturn(result);
+        when(processedLogRepository.save(result)).thenReturn(true);
 
         worker.processSingleLog(rawLog);
 
         verify(processedLogRepository).save(result);
         verify(eventService).publish(result);
         verify(failedLogRepository, never()).save(any(), any());
+    }
+
+    @Test
+    void duplicateLogIsSavedButNotRepublished() {
+        RawLog rawLog = makeRawLog("id-dup");
+        NormalizedLog normalized = new NormalizedLog(
+                "id-dup", 1688000000.0, "1.2.3.4", HttpMethod.GET, "/", 200, 100, "", Map.of(), null, null);
+        ProcessingResult result = new ProcessingResult.Http(normalized);
+
+        when(logProcessingService.process(rawLog)).thenReturn(result);
+        when(processedLogRepository.save(result)).thenReturn(false);
+
+        worker.processSingleLog(rawLog);
+
+        verify(processedLogRepository).save(result);
+        verify(eventService, never()).publish(any());
     }
 
     @Test

@@ -73,7 +73,7 @@ class DlqRetrySchedulerTest {
 
     private ProcessingResult successResult() {
         NormalizedLog normalized = new NormalizedLog(
-                1688000000.0, "1.2.3.4", HttpMethod.GET, "/", 200, 100, "", Map.of(), null, null);
+                "id-ok", 1688000000.0, "1.2.3.4", HttpMethod.GET, "/", 200, 100, "", Map.of(), null, null);
         return new ProcessingResult.Http(normalized);
     }
 
@@ -84,11 +84,28 @@ class DlqRetrySchedulerTest {
 
         when(failedLogRepository.getFailedLogEntries(anyInt())).thenReturn(List.of(failedEntry(rawLog, 0)));
         when(logProcessingService.process(rawLog)).thenReturn(result);
+        when(processedLogRepository.save(result)).thenReturn(true);
 
         scheduler.retryFailedLogs();
 
         verify(processedLogRepository).save(result);
         verify(eventService).publish(result);
+        verify(failedLogRepository, never()).saveEntry(any());
+    }
+
+    @Test
+    void duplicateRetrySkipsPublishButStillCountsAsSuccess() {
+        RawLog rawLog = makeRawLog("id-dup");
+        ProcessingResult result = successResult();
+
+        when(failedLogRepository.getFailedLogEntries(anyInt())).thenReturn(List.of(failedEntry(rawLog, 0)));
+        when(logProcessingService.process(rawLog)).thenReturn(result);
+        when(processedLogRepository.save(result)).thenReturn(false);
+
+        scheduler.retryFailedLogs();
+
+        verify(processedLogRepository).save(result);
+        verify(eventService, never()).publish(any());
         verify(failedLogRepository, never()).saveEntry(any());
     }
 
@@ -164,6 +181,7 @@ class DlqRetrySchedulerTest {
                 failedEntry(maxedLog, maxRetries)));
         when(logProcessingService.process(goodLog)).thenReturn(result);
         when(logProcessingService.process(badLog)).thenThrow(new RuntimeException("transient"));
+        when(processedLogRepository.save(result)).thenReturn(true);
 
         scheduler.retryFailedLogs();
 

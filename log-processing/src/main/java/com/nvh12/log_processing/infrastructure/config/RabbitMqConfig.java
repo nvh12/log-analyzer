@@ -17,6 +17,8 @@ public class RabbitMqConfig {
     public static final String QUEUE_NORMALIZED_HTTP = "log.normalized.http";
     public static final String QUEUE_NORMALIZED_FLOW = "log.normalized.flow";
     public static final String QUEUE_RAW_DLQ = "log.raw.dlq";
+    public static final String QUEUE_NORMALIZED_HTTP_DLQ = "log.normalized.http.dlq";
+    public static final String QUEUE_NORMALIZED_FLOW_DLQ = "log.normalized.flow.dlq";
 
     private static final String DLX_NAME = "log.dlx";
 
@@ -43,14 +45,44 @@ public class RabbitMqConfig {
         return BindingBuilder.bind(rawLogDlq).to(deadLetterExchange).with(QUEUE_RAW_DLQ);
     }
 
+    // This service publishes to these queues but log-analysis (Python) consumes from them.
+    // The DLX must be declared here, not on the consumer side: queue arguments are fixed at
+    // creation and whoever connects first "wins" the declaration — a consumer-side declare
+    // with different arguments would hit a 406 PRECONDITION_FAILED against this one.
     @Bean
     public Queue normalizedHttpQueue() {
-        return new Queue(QUEUE_NORMALIZED_HTTP, true);
+        return QueueBuilder.durable(QUEUE_NORMALIZED_HTTP)
+                .withArgument("x-dead-letter-exchange", DLX_NAME)
+                .withArgument("x-dead-letter-routing-key", QUEUE_NORMALIZED_HTTP_DLQ)
+                .build();
     }
 
     @Bean
     public Queue normalizedFlowQueue() {
-        return new Queue(QUEUE_NORMALIZED_FLOW, true);
+        return QueueBuilder.durable(QUEUE_NORMALIZED_FLOW)
+                .withArgument("x-dead-letter-exchange", DLX_NAME)
+                .withArgument("x-dead-letter-routing-key", QUEUE_NORMALIZED_FLOW_DLQ)
+                .build();
+    }
+
+    @Bean
+    public Queue normalizedHttpDlq() {
+        return new Queue(QUEUE_NORMALIZED_HTTP_DLQ, true);
+    }
+
+    @Bean
+    public Queue normalizedFlowDlq() {
+        return new Queue(QUEUE_NORMALIZED_FLOW_DLQ, true);
+    }
+
+    @Bean
+    public Binding normalizedHttpDlqBinding(Queue normalizedHttpDlq, DirectExchange deadLetterExchange) {
+        return BindingBuilder.bind(normalizedHttpDlq).to(deadLetterExchange).with(QUEUE_NORMALIZED_HTTP_DLQ);
+    }
+
+    @Bean
+    public Binding normalizedFlowDlqBinding(Queue normalizedFlowDlq, DirectExchange deadLetterExchange) {
+        return BindingBuilder.bind(normalizedFlowDlq).to(deadLetterExchange).with(QUEUE_NORMALIZED_FLOW_DLQ);
     }
 
     @Bean

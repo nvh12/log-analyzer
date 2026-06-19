@@ -46,7 +46,7 @@ class EventServiceImplIT extends AbstractContainerIT {
     @Test
     void publishHttp_sendsToCorrectQueue() {
         NormalizedLog log = new NormalizedLog(
-                1.0, "1.1.1.1", HttpMethod.POST, "/api", 201, 10,
+                "evt-http-1", 1.0, "1.1.1.1", HttpMethod.POST, "/api", 201, 10,
                 null, Map.of(), "UA", null
         );
         eventService.publish(new ProcessingResult.Http(log));
@@ -59,7 +59,7 @@ class EventServiceImplIT extends AbstractContainerIT {
     @Test
     void publishFlow_sendsToCorrectQueue() {
         NormalizedFlowRecord record = new NormalizedFlowRecord(
-                2.0, "10.0.0.1", "10.0.0.2", 80, 8080, Map.of()
+                "evt-flow-1", 2.0, "10.0.0.1", "10.0.0.2", 80, 8080, Map.of()
         );
         eventService.publish(new ProcessingResult.Flow(record));
 

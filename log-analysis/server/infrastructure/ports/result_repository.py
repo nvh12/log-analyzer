@@ -6,9 +6,9 @@ from infrastructure.config import postgres
 _INSERT = """
     INSERT INTO analysis.detection_results (
         detection_type, severity, anomaly, confidence, network_layer,
-        source_ip, dest_ip, dest_port, method_flags,
+        source_ip, dest_ip, dest_port, method_flags, layer_triggered,
         log_timestamp, window_start, window_end, detected_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14)
 """
 
 
@@ -32,6 +32,7 @@ class PostgresDetectionResultRepository(ResultRepositoryPort):
                 getattr(result, "dest_ip", None),
                 getattr(result, "dest_port", None),
                 json.dumps(method_flags) if method_flags is not None else None,
+                getattr(result, "layer_triggered", None),
                 result.log_timestamp,
                 result.window_start,
                 result.window_end,

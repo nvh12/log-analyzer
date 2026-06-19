@@ -111,4 +111,14 @@ class RedisIpBlockServiceTest {
         verify(redisTemplate).delete(BLOCKLIST_IP_PREFIX + "1.2.3.4");
         verify(setOps).remove(BLOCKLIST_IPS, "1.2.3.4");
     }
+
+    @Test
+    void liftBlock_alsoClearsEscalationAttemptCountersForEverySubclass() {
+        when(redisTemplate.opsForSet()).thenReturn(setOps);
+
+        service.liftBlock("1.2.3.4");
+
+        verify(redisTemplate).delete("ddos:attempts:1.2.3.4");
+        verify(redisTemplate).delete("brute:attempts:1.2.3.4");
+    }
 }

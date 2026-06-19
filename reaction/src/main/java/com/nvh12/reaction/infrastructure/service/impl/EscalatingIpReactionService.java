@@ -29,6 +29,15 @@ abstract class EscalatingIpReactionService extends ReactionService {
     private static final Duration ATTEMPT_WINDOW = Duration.ofMinutes(10);
     private static final int ESCALATION_THRESHOLD = 3;
 
+    // Single source of truth for each subclass's Redis key prefix — subclasses' attemptsKeyPrefix()
+    // overrides return these same constants rather than re-declaring the literal, and
+    // RedisIpBlockService.liftBlock() iterates ALL_ATTEMPT_KEY_PREFIXES to clear every subclass's
+    // counter without depending on the subclasses directly (which would be a circular dependency,
+    // since they depend on IpBlockService).
+    static final String DDOS_ATTEMPTS_PREFIX = "ddos:attempts:";
+    static final String BRUTE_FORCE_ATTEMPTS_PREFIX = "brute:attempts:";
+    static final List<String> ALL_ATTEMPT_KEY_PREFIXES = List.of(DDOS_ATTEMPTS_PREFIX, BRUTE_FORCE_ATTEMPTS_PREFIX);
+
     private final IpBlockService ipBlockService;
     private final RateLimitService rateLimitService;
     private final RedisTemplate<String, String> redisTemplate;

@@ -50,23 +50,39 @@ async def handle_flow_message(
     async with message.process(requeue=False):
         try:
             flow_msg = parse_flow(message.body)
-            await asyncio.gather(
+            results = await asyncio.gather(
                 ddos_use_case.execute(_to_ddos_input(flow_msg)),
                 brute_force_use_case.execute(_to_brute_force_input(flow_msg)),
+                return_exceptions=True,
             )
+            failures = [
+                (name, result)
+                for name, result in zip(("ddos", "brute_force"), results)
+                if isinstance(result, BaseException)
+            ]
+            for name, exc in failures:
+                logger.error("%s use case failed for flow message: %s", name, exc, exc_info=exc)
+            if failures:
+                # At least one UC failed; propagate so the message dead-letters instead of
+                # being silently acked. The other UC's result (if it succeeded) already
+                # published/persisted internally before gather() returned.
+                raise failures[0][1]
         except ValidationError as e:
+            # Permanently unparseable — log full body for recovery, then dead-letter.
             logger.error(
-                "Invalid flow message schema, discarding. Error: %s | Body: %s",
-                e, message.body[:500],
+                "Invalid flow message schema, dead-lettering. Error: %s | Body: %s",
+                e, message.body,
             )
+            raise
         except Exception as e:
-            logger.exception("Unexpected error processing flow message: %s", e)
+            logger.exception("Unexpected error processing flow message, dead-lettering: %s | Body: %s", e, message.body)
+            raise
 
 
 async def start_flow_consumer() -> None:
     """Initializes and starts the RabbitMQ consumer for normalized flow records."""
     if rabbitmq.channel is None:
         raise RuntimeError("RabbitMQ channel not initialized — cannot start flow consumer")
-    queue = await rabbitmq.channel.declare_queue(settings.QUEUE_IN_FLOW, durable=True)
+    queue = await rabbitmq.declare_input_queue(rabbitmq.channel, settings.QUEUE_IN_FLOW)
     await queue.consume(handle_flow_message)
     await asyncio.Future()

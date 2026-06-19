@@ -25,7 +25,7 @@ public class DDoSReactionService extends EscalatingIpReactionService {
 
     @Override
     protected String attemptsKeyPrefix() {
-        return "ddos:attempts:";
+        return DDOS_ATTEMPTS_PREFIX;
     }
 
     @Override

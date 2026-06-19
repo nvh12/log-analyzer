@@ -19,11 +19,14 @@ public class SimulationWhitelistClient implements WhitelistService {
 
     private static final Duration CACHE_TTL = Duration.ofSeconds(5);
 
+    private record WhitelistCache(Set<String> ips, Instant expiresAt) {}
+
+    private static final WhitelistCache EMPTY_EXPIRED = new WhitelistCache(Set.of(), Instant.EPOCH);
+
     private final SimulationProperties properties;
     private final RestClient restClient;
 
-    private volatile Set<String> cachedIps = Set.of();
-    private volatile Instant cacheExpiresAt = Instant.EPOCH;
+    private volatile WhitelistCache cache = EMPTY_EXPIRED;
 
     public SimulationWhitelistClient(SimulationProperties properties, RestClient.Builder restClientBuilder) {
         this.properties = properties;
@@ -35,11 +38,23 @@ public class SimulationWhitelistClient implements WhitelistService {
         return fetchWhitelist().contains(ip);
     }
 
-    private synchronized Set<String> fetchWhitelist() {
+    private Set<String> fetchWhitelist() {
         Instant now = Instant.now();
-        if (now.isBefore(cacheExpiresAt)) {
-            return cachedIps;
+        WhitelistCache snapshot = cache;
+        if (now.isBefore(snapshot.expiresAt())) {
+            return snapshot.ips();
         }
+        synchronized (this) {
+            // Re-check: another thread may have already refreshed while we waited for the lock.
+            snapshot = cache;
+            if (now.isBefore(snapshot.expiresAt())) {
+                return snapshot.ips();
+            }
+            return refresh(now);
+        }
+    }
+
+    private Set<String> refresh(Instant now) {
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> body = restClient.get()
@@ -49,9 +64,9 @@ public class SimulationWhitelistClient implements WhitelistService {
                     .body(Map.class);
             @SuppressWarnings("unchecked")
             List<String> ips = body == null ? List.of() : (List<String>) body.getOrDefault("ips", List.of());
-            cachedIps = Set.copyOf(ips);
-            cacheExpiresAt = now.plus(CACHE_TTL);
-            return cachedIps;
+            Set<String> fetched = Set.copyOf(ips);
+            cache = new WhitelistCache(fetched, now.plus(CACHE_TTL));
+            return fetched;
         } catch (HttpClientErrorException.Forbidden e) {
             log.error("Whitelist check rejected by simulation service — ADMIN_API_KEY is misconfigured between reaction and simulation");
             return failOpen(now);
@@ -62,8 +77,7 @@ public class SimulationWhitelistClient implements WhitelistService {
     }
 
     private Set<String> failOpen(Instant now) {
-        cachedIps = Set.of();
-        cacheExpiresAt = now.plus(CACHE_TTL);
-        return cachedIps;
+        cache = new WhitelistCache(Set.of(), now.plus(CACHE_TTL));
+        return Set.of();
     }
 }

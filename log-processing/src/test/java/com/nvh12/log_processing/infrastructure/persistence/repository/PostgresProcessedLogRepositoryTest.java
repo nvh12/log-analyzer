@@ -12,11 +12,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class PostgresProcessedLogRepositoryTest {
@@ -36,7 +38,7 @@ class PostgresProcessedLogRepositoryTest {
     @Test
     void saveHttpVariantMapsToHttpEntity() {
         NormalizedLog log = new NormalizedLog(
-                1688000000.0, "1.2.3.4", HttpMethod.GET, "/api", 200, 1024, "q=1", Map.of("Host", "localhost"), "Mozilla", "http://ref");
+                "src-1", 1688000000.0, "1.2.3.4", HttpMethod.GET, "/api", 200, 1024, "q=1", Map.of("Host", "localhost"), "Mozilla", "http://ref");
         ProcessingResult result = new ProcessingResult.Http(log);
 
         repository.save(result);
@@ -60,7 +62,7 @@ class PostgresProcessedLogRepositoryTest {
     @Test
     void saveFlowVariantMapsToFlowEntity() {
         NormalizedFlowRecord record = new NormalizedFlowRecord(
-                1688000000.0, "10.0.0.1", "10.0.0.2", 1234, 80, Map.of("f1", 1.0, "f2", 0.5));
+                "src-2", 1688000000.0, "10.0.0.1", "10.0.0.2", 1234, 80, Map.of("f1", 1.0, "f2", 0.5));
         ProcessingResult result = new ProcessingResult.Flow(record);
 
         repository.save(result);
@@ -75,5 +77,27 @@ class PostgresProcessedLogRepositoryTest {
         assertThat(saved.getSourcePort()).isEqualTo(1234);
         assertThat(saved.getDestPort()).isEqualTo(80);
         assertThat(saved.getFeatures()).containsEntry("f1", 1.0).containsEntry("f2", 0.5);
+    }
+
+    @Test
+    void saveHttpVariant_returnsTrueOnNewInsert() {
+        NormalizedLog log = new NormalizedLog(
+                "new-id", 1688000000.0, "1.2.3.4", HttpMethod.GET, "/api", 200, 1024, "", Map.of(), null, null);
+
+        boolean saved = repository.save(new ProcessingResult.Http(log));
+
+        assertThat(saved).isTrue();
+    }
+
+    @Test
+    void saveHttpVariant_returnsFalseAndSwallowsExceptionOnDuplicateSourceLogId() {
+        NormalizedLog log = new NormalizedLog(
+                "already-done", 1688000000.0, "1.2.3.4", HttpMethod.GET, "/api", 200, 1024, "", Map.of(), null, null);
+        when(httpRepository.save(org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new DataIntegrityViolationException("duplicate key"));
+
+        boolean saved = repository.save(new ProcessingResult.Http(log));
+
+        assertThat(saved).isFalse();
     }
 }

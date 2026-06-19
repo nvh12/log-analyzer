@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS analysis.detection_results (
     dest_ip        VARCHAR(45),
     dest_port      INTEGER,
     method_flags   JSONB,
+    layer_triggered VARCHAR(32),
     log_timestamp  TIMESTAMPTZ,
     window_start   TIMESTAMPTZ,
     window_end     TIMESTAMPTZ,

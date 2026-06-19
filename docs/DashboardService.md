@@ -71,7 +71,7 @@ dashboard/
 ### 2.1 Server-Sent Events (SSE) Registry (`application/port/SseRegistrar.java`)
 -   Registers client connections using Spring's `SseEmitter`.
 -   **Heartbeat Task**: Automatically broadcasts 15-second heartbeat ticks (`heartbeat` event) to keep client/browser connections alive.
--   **Thread-Safety**: Manages client connections inside a thread-safe concurrent collection.
+-   **Thread-Safety**: Manages client connections inside a thread-safe concurrent collection (`SseEmitterRegistry`, backed by a `CopyOnWriteArrayList`). On a broadcast `IOException` (client disconnected), the emitter is removed from the list and explicitly completed via `completeWithError(e)`, ensuring the underlying async request resource is released rather than left dangling.
 
 ### 2.2 Throughput Calculator
 -   Runs database count aggregation queries on PostgreSQL tables (`normalized_http` and `normalized_flow`) every 2 seconds.
@@ -79,7 +79,11 @@ dashboard/
 
 ### 2.3 Historical REST endpoints
 -   Exposes endpoints to query paginated logs, detections, and reactions directly from PostgreSQL.
--   Preserves the per-use-case evidence payload using a discriminated JSON union on `uc`.
+-   Preserves the per-use-case evidence payload using a discriminated JSON union on `uc`; for `WEB_ATTACK`, includes `layer_triggered` (`"rule_engine"` or `"xgboost"`) when present. The same field is also included in the live `detection` SSE event, not just the historical detail view.
+
+### 2.4 Simulation Whitelist Proxy
+-   Dashboard, not Reaction, owns writes to the IP whitelist: `PUT /api/reactions/whitelist` and `POST /api/reactions/blocks/lift` are served by Dashboard's `ReactionController`, which calls `SimulationWhitelistAdapter` → Simulation's `PUT /admin/whitelist` over a Spring `RestClient` bean (`WebConfig`).
+-   The `RestClient`'s `HttpClient` is forced to HTTP/1.1 (uvicorn rejects the JDK client's default h2-upgrade on PUT/POST with a body) and has configurable connect/read timeouts (`DashboardProperties.httpClientConnectTimeout` / `httpClientReadTimeout`, defaulting to 3s/5s, overridable via `HTTP_CLIENT_CONNECT_TIMEOUT`/`HTTP_CLIENT_READ_TIMEOUT`).
 
 ---
 

@@ -23,9 +23,12 @@ public class WebConfig implements WebMvcConfigurer {
         // on PUT/POST with a body ("Unsupported upgrade request").
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(properties.httpClientConnectTimeout())
                 .build();
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        requestFactory.setReadTimeout(properties.httpClientReadTimeout());
         return RestClient.builder()
-                .requestFactory(new JdkClientHttpRequestFactory(httpClient))
+                .requestFactory(requestFactory)
                 .build();
     }
 

@@ -300,12 +300,13 @@ Same shape as UC2 (DDOS).
 | `window_start` | TIMESTAMPTZ | Yes | Non-null only for TRAFFIC |
 | `window_end` | TIMESTAMPTZ | Yes | Non-null only for TRAFFIC |
 | `detected_at` | TIMESTAMPTZ | No | |
+| `layer_triggered` | VARCHAR(32) | Yes | Non-null only for WEB_ATTACK (`"rule_engine"` or `"xgboost"`); null for all other types |
 
 **`network_layer` column:** Written using `result.network_layer.value`, producing `"HTTP"` or `"FLOW"` (uppercase), matching the `NetworkLayer` enum in Dashboard's JPA entity.
 
-**`layer_triggered` not persisted:** `WebAttackResult.layer_triggered` is in the MQ message body (`DetectionMessage`) but has no column in `detection_results` and is not forwarded to the SSE channel (the Dashboard's `DetectionResultListener` only broadcasts a 6-field thin summary). It is effectively dropped after the listener processes the message.
+**`layer_triggered` persisted and broadcast:** `WebAttackResult.layer_triggered` is persisted to `detection_results` (migration `0002_add_layer_triggered.sql`) and forwarded to the SSE channel — Dashboard's `DetectionResultListener` includes it in the broadcast summary alongside the existing fields.
 
-**`DetectionDetailView.payload` for WEB_ATTACK:** The `DetectionMapper.toDetail()` switch has no `WEB_ATTACK` case — the payload is always an empty map `{}`. `layer_triggered` is never queryable via the REST API.
+**`DetectionDetailView.payload` for WEB_ATTACK:** `DetectionMapper.toDetail()` has a `WEB_ATTACK` case that populates `payload["layer_triggered"]` when the persisted value is non-null, so it's queryable via the REST detail API.
 
 ---
 
@@ -387,7 +388,7 @@ The full `ReactionResultMessage` is forwarded as-is to the SSE channel (`registr
 
 ### SSE broadcast for detection events
 
-`DetectionResultListener` does NOT forward the full `DetectionMessage` to SSE. It constructs a thin 6-field map:
+`DetectionResultListener` does NOT forward the full `DetectionMessage` to SSE. It constructs a thin 7-field map:
 
 | SSE field | Source | Notes |
 |---|---|---|
@@ -397,8 +398,9 @@ The full `ReactionResultMessage` is forwarded as-is to the SSE channel (`registr
 | `confidence` | `msg.confidence()` | |
 | `source_ip` | `msg.sourceIp()` | |
 | `ts` | `msg.detectedAt().toString()` | null-safe |
+| `layer_triggered` | `msg.layerTriggered()` | only non-null for WEB_ATTACK |
 
-All other `DetectionMessage` fields (`dest_ip`, `dest_port`, `method_flags`, `layer_triggered`, `window_start`, `window_end`, `log_timestamp`, `network_layer`) are dropped and never reach the SSE client.
+All other `DetectionMessage` fields (`dest_ip`, `dest_port`, `method_flags`, `window_start`, `window_end`, `log_timestamp`, `network_layer`) are dropped and never reach the SSE client.
 
 ---
 
@@ -456,7 +458,6 @@ The blocklist/rate-limit keys are set by Reaction service; Simulation's `AccessC
 | `response_time_ms` always 0.0 | `LogMessage` / `Log` in log-analysis | Feature extraction for web attack uses `response_size` but `response_time_ms` is unused noise |
 | `body` always `None` | `LogMessage` / `Log` in log-analysis | `WebAttackInput.body` is always null; body-based attack patterns can never be detected |
 | `headers` always `{}` | HTTP log path | log-processing copies `RawLog.headers` (which is `{}` from Simulation); actual HTTP headers are never captured |
-| `layer_triggered` not persisted | `WebAttackResult` | Exists only in the MQ message body while the Dashboard listener processes it; not forwarded to SSE, not stored in DB, not in the REST detail payload — completely dropped |
 | Non-anomalies completely dropped | All use cases | Neither DB row nor MQ event is produced for benign traffic — the `detection_results` table contains only confirmed attacks |
 | `source_ip` null for TRAFFIC | `DetectionResult` / `reaction_logs` | TRAFFIC detections have no per-request IP; blocklist/rate-limit actions are not applicable; Reaction applies `SCALE_UP` instead |
 | Dashboard drops `headers` column | `NormalizedHttpEntity` in Dashboard | The `headers` JSONB column in `log_processing.normalized_http` is invisible to Dashboard |

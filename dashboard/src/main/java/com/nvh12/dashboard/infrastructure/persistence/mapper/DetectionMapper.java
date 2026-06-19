@@ -22,6 +22,9 @@ public class DetectionMapper {
         if (e.getDetectionType() == DetectionType.TRAFFIC && e.getMethodFlags() != null) {
             payload.put("method_flags", e.getMethodFlags());
         }
+        if (e.getDetectionType() == DetectionType.WEB_ATTACK && e.getLayerTriggered() != null) {
+            payload.put("layer_triggered", e.getLayerTriggered());
+        }
         return new DetectionDetailView(e.getId(), e.getDetectionType(), e.getSeverity(),
                 e.getAnomaly(), e.getConfidence(), e.getNetworkLayer(), e.getSourceIp(),
                 e.getDestIp(), e.getDestPort(), e.getLogTimestamp(), e.getWindowStart(),

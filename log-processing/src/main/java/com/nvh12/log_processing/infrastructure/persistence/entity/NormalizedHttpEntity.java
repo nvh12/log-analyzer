@@ -23,6 +23,9 @@ public class NormalizedHttpEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "source_log_id", length = 64, unique = true)
+    private String sourceLogId;
+
     @Column(name = "timestamp", nullable = false)
     private Double timestamp;
 

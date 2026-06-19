@@ -31,12 +31,18 @@ async def handle_message(
             log = log_message.to_domain()
             await window_adapter.add_log(log)
         except ValidationError as e:
+            # Permanently unparseable — log full body for recovery, then let it
+            # dead-letter so it's inspectable rather than silently discarded.
             logger.error(
-                "Invalid log message schema, discarding. Error: %s | Body: %s",
-                e, message.body[:500],
+                "Invalid log message schema, dead-lettering. Error: %s | Body: %s",
+                e, message.body,
             )
+            raise
         except Exception as e:
-            logger.exception("Unexpected error processing message: %s", e)
+            # Transient failure (DB/Redis/etc). Must propagate so message.process()
+            # rejects to the DLX instead of swallowing it and acking as if it succeeded.
+            logger.exception("Unexpected error processing message, dead-lettering: %s | Body: %s", e, message.body)
+            raise
 
 
 async def start_consumer() -> None:
@@ -45,6 +51,6 @@ async def start_consumer() -> None:
     """
     if rabbitmq.channel is None:
         raise RuntimeError("RabbitMQ channel not initialized — cannot start HTTP log consumer")
-    queue = await rabbitmq.channel.declare_queue(settings.QUEUE_IN_HTTP, durable=True)
+    queue = await rabbitmq.declare_input_queue(rabbitmq.channel, settings.QUEUE_IN_HTTP)
     await queue.consume(handle_message)
     await asyncio.Future()

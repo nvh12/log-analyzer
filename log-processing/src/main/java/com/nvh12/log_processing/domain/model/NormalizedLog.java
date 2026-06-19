@@ -7,6 +7,7 @@ import java.util.Map;
 
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record NormalizedLog(
+        String sourceLogId,
         double timestamp,
         String ip,
         HttpMethod method,

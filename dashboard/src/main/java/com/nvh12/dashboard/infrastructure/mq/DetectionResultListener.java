@@ -30,6 +30,7 @@ public class DetectionResultListener {
         summary.put("anomaly", msg.anomaly());
         summary.put("confidence", msg.confidence());
         summary.put("source_ip", msg.sourceIp());
+        summary.put("layer_triggered", msg.layerTriggered());
         summary.put("ts", msg.detectedAt() != null ? msg.detectedAt().toString() : null);
         broadcastPort.broadcast("detection", summary);
     }
