@@ -144,8 +144,30 @@ ok "All infrastructure containers healthy"
 
 step "Syncing ML model artifacts to MinIO (localhost:$MINIO_PORT)"
 
-VENV_PYTHON="$SCRIPT_DIR/log-analysis/server/venv/bin/python"
-if [[ -f "$VENV_PYTHON" ]]; then
+VENV_DIR="$SCRIPT_DIR/log-analysis/server/venv"
+VENV_PYTHON="$VENV_DIR/bin/python"
+REQUIREMENTS_FILE="$SCRIPT_DIR/log-analysis/server/requirements.txt"
+
+ensure_venv() {
+    [[ -f "$VENV_PYTHON" ]] && return 0
+
+    local pybin
+    if command -v python3 &>/dev/null; then
+        pybin="python3"
+    elif command -v python &>/dev/null; then
+        pybin="python"
+    else
+        return 1
+    fi
+
+    warn "Server venv not found at log-analysis/server/venv. Creating it..."
+    "$pybin" -m venv "$VENV_DIR" || return 1
+    "$VENV_PYTHON" -m pip install --quiet --upgrade pip
+    "$VENV_PYTHON" -m pip install --quiet -r "$REQUIREMENTS_FILE" || return 1
+    ok "Created venv and installed dependencies from server/requirements.txt"
+}
+
+if ensure_venv; then
     PYTHON_EXE="$VENV_PYTHON"
     ok "Python: $PYTHON_EXE"
 else
@@ -157,8 +179,8 @@ else
     else
         fail "Python not found. Install Python 3 or create the server venv first."
     fi
-    warn "Server venv not found at log-analysis/server/venv. Falling back to $PYTHON_EXE."
-    warn "Ensure 'minio' and 'joblib' are installed: pip install minio joblib"
+    warn "Could not create/use server venv. Falling back to $PYTHON_EXE."
+    warn "Ensure 'minio', 'joblib', and 'redis' are installed: pip install -r log-analysis/server/requirements.txt"
 fi
 
 # Pass credentials via env vars — avoids any quoting/escaping issues with special characters
