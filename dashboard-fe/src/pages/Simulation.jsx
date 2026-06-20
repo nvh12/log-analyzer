@@ -3,12 +3,13 @@ import { api } from '../api'
 import Card from '../components/Card'
 import StatusDot from '../components/StatusDot'
 
-const SCENARIOS = ['NORMAL', 'TRAFFIC_SPIKE', 'DDOS', 'BRUTE_FORCE', 'WEB_ATTACK']
+// NORMAL is the always-on baseline (auto-started server-side, never stoppable
+// via REST) — this picklist only covers scenarios a caller can layer on top of it.
+const SCENARIOS = ['TRAFFIC_SPIKE', 'DDOS', 'BRUTE_FORCE', 'WEB_ATTACK']
 
 // Mirrors SCENARIO_LOG_TYPE in simulation/domain/services/log_generator.py.
 // Log type is enforced server-side — shown here as read-only context only.
 const SCENARIO_LOG_TYPE = {
-  NORMAL:        'MIXED',
   TRAFFIC_SPIKE: 'HTTP',
   DDOS:          'FLOW',
   BRUTE_FORCE:   'FLOW',
@@ -18,29 +19,25 @@ const SCENARIO_LOG_TYPE = {
 // Default rate per scenario. TRAFFIC_SPIKE is 10× normal so the statistical
 // detectors (z-score, IQR, EMA, seasonal) all fire reliably.
 const SCENARIO_RATE = {
-  NORMAL: 5, TRAFFIC_SPIKE: 50, DDOS: 20, BRUTE_FORCE: 10, WEB_ATTACK: 10,
+  TRAFFIC_SPIKE: 50, DDOS: 20, BRUTE_FORCE: 10, WEB_ATTACK: 10,
 }
 
 // Per-scenario default attack % (= 100 − _BENIGN_RATIO × 100 for attack scenarios)
 const SCENARIO_ATTACK_PCT = {
-  NORMAL: 100, TRAFFIC_SPIKE: 100, DDOS: 70, BRUTE_FORCE: 80, WEB_ATTACK: 70,
+  TRAFFIC_SPIKE: 100, DDOS: 70, BRUTE_FORCE: 80, WEB_ATTACK: 70,
 }
 
 // target_ip is only read by _generate_http/_generate_flow for BRUTE_FORCE and WEB_ATTACK.
-// NORMAL, TRAFFIC_SPIKE, and DDOS always call _random_ip() — target_ip is silently ignored.
+// TRAFFIC_SPIKE and DDOS always call _random_ip() — target_ip is silently ignored.
 // Adding a new scenario: update this filter predicate to keep it accurate.
-const USES_TARGET_IP = new Set(SCENARIOS.filter(s => !['NORMAL', 'TRAFFIC_SPIKE', 'DDOS'].includes(s)))
-
-// attack_pct has no effect for NORMAL: effective scenario is always NORMAL regardless.
-// All other scenarios (including TRAFFIC_SPIKE) are meaningfully affected.
-const USES_ATTACK_PCT = new Set(SCENARIOS.filter(s => s !== 'NORMAL'))
+const USES_TARGET_IP = new Set(SCENARIOS.filter(s => !['TRAFFIC_SPIKE', 'DDOS'].includes(s)))
 
 const DEFAULTS = {
-  scenario:        'NORMAL',
+  scenario:        'TRAFFIC_SPIKE',
   count:           100,
-  rate_per_second: SCENARIO_RATE.NORMAL,
+  rate_per_second: SCENARIO_RATE.TRAFFIC_SPIKE,
   target_ip:       '192.168.100.100',
-  attack_pct:      100,
+  attack_pct:      SCENARIO_ATTACK_PCT.TRAFFIC_SPIKE,
 }
 
 const REPLAY_DEFAULTS = {
@@ -57,7 +54,6 @@ export default function Simulation() {
   const [form,         setForm]         = useState(DEFAULTS)
   const [replayForm,   setReplay]       = useState(REPLAY_DEFAULTS)
   const [busy,         setBusy]         = useState(false)
-  const [baselineBusy, setBaselineBusy] = useState(false)
   const [toast,        setToast]        = useState(null)
 
   function showToast(message, type = 'success') {
@@ -117,19 +113,6 @@ export default function Simulation() {
     }
   }
 
-  async function handleStopBaseline() {
-    setBaselineBusy(true)
-    try {
-      await api.simulationBaselineStop()
-      await fetchBaseline()
-      showToast('Baseline stop signal sent')
-    } catch {
-      showToast('Failed to stop baseline', 'error')
-    } finally {
-      setBaselineBusy(false)
-    }
-  }
-
   async function handleReplay() {
     if (!replayForm.source_key.trim()) { showToast('Source key is required', 'error'); return }
     setBusy(true)
@@ -154,7 +137,6 @@ export default function Simulation() {
   const baselineRunning = baseline?.state === 'running'
   const derivedLogType  = SCENARIO_LOG_TYPE[form.scenario] ?? 'HTTP'
   const targetIpActive  = USES_TARGET_IP.has(form.scenario)
-  const attackPctActive = USES_ATTACK_PCT.has(form.scenario)
 
   function field(key) {
     return {
@@ -183,37 +165,26 @@ export default function Simulation() {
         ) : (
           <div className="p-4 space-y-3">
             <p className="text-xs text-gray-500">
-              Continuous NORMAL / MIXED traffic started automatically at service launch.
-              Keeps HTTP and FLOW detection baselines warm between manual simulations.
+              Continuous NORMAL / MIXED traffic, always running for the lifetime of the
+              service — there is no REST control to stop it. Keeps HTTP and FLOW detection
+              baselines warm; scenarios started below run on top of it.
             </p>
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <StatusDot color={baselineRunning ? 'green' : 'gray'} pulse={baselineRunning} />
-                  <span className="mono text-sm text-gray-200">{baseline.state}</span>
-                </div>
-                {baselineRunning && (
-                  <div className="grid grid-cols-2 gap-4 text-xs mono">
-                    <div>
-                      <div className="text-gray-500 mb-0.5">Sent</div>
-                      <div className="text-gray-200">{baseline.sent}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500 mb-0.5">Log type</div>
-                      <div className="text-gray-200">{baseline.log_type ?? 'MIXED'}</div>
-                    </div>
-                  </div>
-                )}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <StatusDot color={baselineRunning ? 'green' : 'gray'} pulse={baselineRunning} />
+                <span className="mono text-sm text-gray-200">{baseline.state}</span>
               </div>
               {baselineRunning && (
-                <button
-                  onClick={handleStopBaseline}
-                  disabled={baselineBusy}
-                  className="mono text-xs px-3 py-1.5 rounded bg-red-900 border border-red-700 text-red-300
-                             hover:bg-red-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Stop baseline
-                </button>
+                <div className="grid grid-cols-2 gap-4 text-xs mono">
+                  <div>
+                    <div className="text-gray-500 mb-0.5">Sent</div>
+                    <div className="text-gray-200">{baseline.sent}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500 mb-0.5">Log type</div>
+                    <div className="text-gray-200">{baseline.log_type ?? 'MIXED'}</div>
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -311,18 +282,15 @@ export default function Simulation() {
               />
             </label>
 
-            <label className={`flex flex-col gap-1 text-xs ${attackPctActive ? 'text-gray-500' : 'text-gray-600'}`}>
+            <label className="flex flex-col gap-1 text-xs text-gray-500">
               Attack %
-              {!attackPctActive && (
-                <span className="-mt-0.5 text-gray-600">n/a — NORMAL always produces benign traffic</span>
-              )}
               <input
                 type="number"
                 min="0"
                 max="100"
                 step="5"
                 className="field"
-                disabled={!attackPctActive || running || busy}
+                disabled={running || busy}
                 value={form.attack_pct}
                 onChange={e => setForm(prev => ({ ...prev, attack_pct: e.target.value }))}
               />

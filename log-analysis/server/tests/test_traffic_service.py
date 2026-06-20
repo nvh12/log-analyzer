@@ -306,3 +306,109 @@ def test_variance_min_floor_stifles_small_variations(thresholds):
     assert result.method_flags["iqr"] is False
     assert result.anomaly is False
 
+
+def test_idle_baseline_jump_just_above_floor_does_not_alert(thresholds):
+    # Regression: an idle/near-zero baseline ticking up to a value that merely
+    # clears absolute_min_floor (e.g. 16 with floor=15) must not fire z_score/iqr/ema
+    # together purely because the floored variance is tiny relative to the jump.
+    idle_history = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0]
+    window = make_window(idle_history + [16.0])
+
+    floor_thresholds = thresholds.model_copy(update={
+        "absolute_min_floor": 15.0,
+        "variance_min_floor": 5.0,
+        "low_volume_jump_multiplier": 3.0,
+    })
+
+    result = traffic_service.detect(window, floor_thresholds)
+
+    assert result.anomaly is False
+    assert result.method_flags == {"z_score": False, "iqr": False, "ema": False, "seasonal": False}
+
+
+def test_idle_baseline_large_jump_still_alerts(thresholds):
+    # A genuine flood from an idle baseline (e.g. 0/1 -> 200) must still fire,
+    # since the low-volume suppression should only catch modest jumps near the floor.
+    idle_history = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0]
+    window = make_window(idle_history + [200.0])
+
+    floor_thresholds = thresholds.model_copy(update={
+        "absolute_min_floor": 15.0,
+        "variance_min_floor": 5.0,
+        "low_volume_jump_multiplier": 3.0,
+    })
+
+    result = traffic_service.detect(window, floor_thresholds)
+
+    assert result.anomaly is True
+
+
+def test_idle_baseline_boundary_at_effective_floor(thresholds):
+    # With floor=15 and multiplier=3.0, the effective floor for an idle baseline
+    # is 45. Just below it must suppress; at/above it must let detection run.
+    idle_history = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0]
+    floor_thresholds = thresholds.model_copy(update={
+        "absolute_min_floor": 15.0,
+        "variance_min_floor": 5.0,
+        "low_volume_jump_multiplier": 3.0,
+    })
+
+    below = traffic_service.detect(make_window(idle_history + [44.0]), floor_thresholds)
+    at = traffic_service.detect(make_window(idle_history + [45.0]), floor_thresholds)
+
+    assert below.anomaly is False
+    assert at.anomaly is True
+
+
+def test_active_baseline_is_not_subject_to_low_volume_multiplier(thresholds):
+    # An already-active baseline (mean >= absolute_min_floor) must be evaluated
+    # normally even when current_count is well below absolute_min_floor * multiplier —
+    # the multiplier only ever raises the bar for idle/near-zero baselines.
+    active_history = [20.0] * 9
+    window = make_window(active_history + [25.0])  # 25 < 15 * 3.0 = 45
+
+    sensitive = thresholds.model_copy(update={
+        "absolute_min_floor": 15.0,
+        "variance_min_floor": 5.0,
+        "low_volume_jump_multiplier": 3.0,
+        "z_score_flag": 0.5,
+        "iqr_multiplier": 0.1,
+        "ema_dev_threshold": 0.5,
+    })
+
+    result = traffic_service.detect(window, sensitive)
+
+    assert result.anomaly is True
+    assert result.method_flags["z_score"] is True
+
+
+def test_low_volume_jump_multiplier_is_configurable(thresholds):
+    # Lowering the multiplier to 1.0 collapses the low-volume gate back to the
+    # plain absolute_min_floor, so the idle->16 case (suppressed by default) fires.
+    idle_history = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0]
+    window = make_window(idle_history + [16.0])
+
+    loose_thresholds = thresholds.model_copy(update={
+        "absolute_min_floor": 15.0,
+        "variance_min_floor": 5.0,
+        "low_volume_jump_multiplier": 1.0,
+    })
+
+    result = traffic_service.detect(window, loose_thresholds)
+
+    assert result.anomaly is True
+
+
+def test_single_tick_window_does_not_crash_or_use_current_as_its_own_baseline(thresholds):
+    # Regression: with min_history=1, a window with no real history (just the
+    # current tick) must treat history as empty rather than falling back to
+    # using the current value as its own baseline (which would always read as
+    # "high volume" and skip the low-volume gate incorrectly).
+    single_tick_thresholds = thresholds.model_copy(update={"min_history": 1})
+    window = make_window([20.0])
+
+    result = traffic_service.detect(window, single_tick_thresholds)
+
+    assert result.anomaly is False
+    assert result.method_flags == {"z_score": False, "iqr": False, "ema": False, "seasonal": False}
+

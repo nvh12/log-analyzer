@@ -133,6 +133,7 @@ presentation -[hidden]down- "infrastructure.polling"
 ' ---- presentation -> application & domain.service ----
 RawLogConsumer --> QueueService
 DeadLetterConsumer --> DropAuditRepository
+DeadLetterConsumer --> FailedLogRepository
 
 ' ---- application -> domain.service ----
 LogProcessingWorker --> LogProcessingService

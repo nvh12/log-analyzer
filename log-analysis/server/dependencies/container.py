@@ -41,6 +41,9 @@ def create_traffic_thresholds(data: dict, settings) -> TrafficThresholds:
         weight_seasonal=w.get("seasonal", settings.TRAFFIC_WEIGHT_SEASONAL),
         absolute_min_floor=t.get("absolute_min_floor", settings.TRAFFIC_ABSOLUTE_MIN_FLOOR),
         variance_min_floor=t.get("variance_min_floor", settings.TRAFFIC_VARIANCE_MIN_FLOOR),
+        low_volume_jump_multiplier=t.get(
+            "low_volume_jump_multiplier", settings.TRAFFIC_LOW_VOLUME_JUMP_MULTIPLIER
+        ),
     )
 
 

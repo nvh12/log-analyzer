@@ -40,8 +40,8 @@ async def lifespan(app: FastAPI):
         stats = await asyncio.to_thread(loader.load)
         init_flow_stats(stats)
 
-    if settings.AUTO_START_NORMAL:
-        baseline_uc = container.baseline_use_case()
+    baseline_uc = container.baseline_use_case() if settings.AUTO_START_NORMAL else None
+    if baseline_uc is not None:
         # Only one worker should run the baseline loop. start() acquires a Redis
         # lock via SETNX — if another worker (or a previous run whose lock hasn't
         # expired yet) already holds it, skip rather than spawning a duplicate
@@ -73,6 +73,21 @@ async def lifespan(app: FastAPI):
     ))
 
     yield
+
+    if baseline_uc is not None:
+        # Tell the baseline run loop to stop and wait (briefly) for it to release
+        # its Redis lock — otherwise a container restart races the lock's 300s TTL:
+        # the new process's SETNX fails against a lock whose only owner is this
+        # now-dead process, and the baseline never comes back until the stale TTL
+        # lapses on its own (and nothing re-triggers it even then).
+        await baseline_uc.stop()
+        for _ in range(50):
+            status = await baseline_uc.status()
+            if status.get("state") != "running":
+                break
+            await asyncio.sleep(0.1)
+        else:
+            logger.warning("Baseline did not release its lock within the shutdown grace period")
 
     scaler_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):

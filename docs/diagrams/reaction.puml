@@ -197,6 +197,7 @@ RedisRateLimitService --> Retry
 RedisScaleService --> Retry
 RedisIpBlockService --> WhitelistService
 RedisRateLimitService --> WhitelistService
+RedisIpBlockService --> EscalatingIpReactionService : uses ALL_ATTEMPT_KEY_PREFIXES
 
 ' ---- simulation whitelist client ----
 SimulationWhitelistClient ..|> WhitelistService

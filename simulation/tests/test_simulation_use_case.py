@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 from application.simulation_use_case import SimulationUseCase
 from domain.models.scenario import SimulationScenario, LogType
@@ -26,6 +26,9 @@ def redis_mock():
     mock.mset.return_value = True
     mock.delete.return_value = 1
     mock.incr.return_value = 1
+    # register_script returns a sync callable; the callable itself is async
+    # (mirrors redis.asyncio's Script.__call__). Default: ownership confirmed.
+    mock.register_script = MagicMock(return_value=AsyncMock(return_value=1))
     return mock
 
 
@@ -144,6 +147,7 @@ async def test_run_publishes_one_log_when_count_is_one(use_case, publisher_mock,
         count=1,
         rate_per_second=1000.0,
         target_ip="10.0.0.1",
+        worker_id="w1",
     )
     publisher_mock.publish.assert_called_once()
 
@@ -158,6 +162,7 @@ async def test_run_stops_on_stop_signal(use_case, publisher_mock, redis_mock):
         count=0,          # unlimited — would loop forever without stop signal
         rate_per_second=1000.0,
         target_ip="10.0.0.1",
+        worker_id="w1",
     )
     publisher_mock.publish.assert_not_called()
 
@@ -171,11 +176,16 @@ async def test_run_cleans_up_lock_on_finish(use_case, redis_mock):
         count=1,
         rate_per_second=1000.0,
         target_ip="10.0.0.1",
+        worker_id="w1",
     )
-    # delete should be called with lock key (and stop_signal key)
+    # lock release goes through the ownership-checked Lua script, not a plain delete
+    release_script = redis_mock.register_script.return_value
+    release_script.assert_any_call(keys=["test:lock"], args=["w1"])
+
+    # stop_signal is still cleared with a plain delete
     delete_calls = redis_mock.delete.call_args_list
     all_deleted_args = [arg for c in delete_calls for arg in c.args]
-    assert "test:lock" in all_deleted_args
+    assert "test:stop_signal" in all_deleted_args
 
     # set should be called with state="idle" in cleanup
     set_calls = redis_mock.set.call_args_list
@@ -193,6 +203,7 @@ async def test_run_publishes_correct_number_of_logs(use_case, publisher_mock, re
         count=count,
         rate_per_second=10000.0,
         target_ip="10.0.0.1",
+        worker_id="w1",
     )
     assert publisher_mock.publish.call_count == count
 
@@ -206,6 +217,7 @@ async def test_run_increments_sent_counter(use_case, redis_mock):
         count=3,
         rate_per_second=10000.0,
         target_ip="10.0.0.1",
+        worker_id="w1",
     )
     # incr should have been called 3 times on the sent key
     incr_calls = [c for c in redis_mock.incr.call_args_list if "sent" in str(c.args[0])]

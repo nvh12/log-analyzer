@@ -25,3 +25,15 @@ class StartSimulationRequest(BaseModel):
         except ValueError:
             raise ValueError("target_ip must be a valid IPv4 or IPv6 address")
         return v
+
+    @field_validator("scenario")
+    @classmethod
+    def validate_scenario(cls, v: SimulationScenario) -> SimulationScenario:
+        # NORMAL is the always-running baseline (see main.py AUTO_START_NORMAL) and
+        # runs continuously in its own namespace — REST callers trigger attack/anomaly
+        # scenarios on top of it, not NORMAL itself.
+        if v == SimulationScenario.NORMAL:
+            raise ValueError(
+                "NORMAL is the always-on baseline and cannot be triggered via REST"
+            )
+        return v

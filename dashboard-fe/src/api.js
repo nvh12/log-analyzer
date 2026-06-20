@@ -25,5 +25,4 @@ export const api = {
   simulationStop:           () => axios.post('/simulate/stop').then(r => r.data),
   simulationReplay:         (p) => axios.post('/simulate/replay', p).then(r => r.data),
   simulationBaselineStatus: () => axios.get('/simulate/baseline').then(r => r.data),
-  simulationBaselineStop:   () => axios.post('/simulate/baseline/stop').then(r => r.data),
 }

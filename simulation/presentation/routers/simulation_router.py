@@ -110,14 +110,10 @@ async def start_replay(
 async def get_baseline_status(
     baseline_uc: SimulationUseCase = Depends(_get_baseline_use_case),
 ) -> dict:
-    """Returns the running state of the auto-started NORMAL baseline traffic."""
+    """Returns the running state of the always-on NORMAL baseline traffic.
+
+    There is intentionally no /baseline/stop — the baseline runs continuously
+    for the lifetime of the service; REST callers can only layer attack/anomaly
+    scenarios on top of it via /simulate/start.
+    """
     return await baseline_uc.status()
-
-
-@router.post("/baseline/stop", status_code=200)
-async def stop_baseline(
-    baseline_uc: SimulationUseCase = Depends(_get_baseline_use_case),
-) -> dict:
-    """Sends a stop signal to the NORMAL baseline traffic generator."""
-    await baseline_uc.stop()
-    return {"message": "Baseline stop signal sent"}

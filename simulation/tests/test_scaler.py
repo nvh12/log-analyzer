@@ -1,6 +1,6 @@
 """Unit tests for infrastructure.scaler."""
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -22,6 +22,10 @@ def _make_redis(*, lock_acquired=True, replicas=None, current=None):
     mock.set.return_value = True if lock_acquired else None
     mock.expire.return_value = True
     mock.delete.return_value = 1
+    # register_script returns a sync callable; the callable itself is async
+    # (mirrors redis.asyncio's Script.__call__). Ownership confirmed by default,
+    # matching lock_acquired — refresh_if_owner/release_if_owner both key off this.
+    mock.register_script = MagicMock(return_value=AsyncMock(return_value=1 if lock_acquired else 0))
 
     async def get_side_effect(key):
         if key == scaler._LOCK_KEY:
@@ -118,7 +122,9 @@ async def test_run_holder_deletes_lock_on_cancel():
             await scaler.run(redis, pid_file="/tmp/x.pid", default_workers=1,
                              min_workers=1, max_workers=8, poll_interval=30)
 
-    redis.delete.assert_called_once_with(scaler._LOCK_KEY)
+    # Release goes through the ownership-checked Lua script, not a plain delete.
+    release_script = redis.register_script.return_value
+    release_script.assert_any_call(keys=[scaler._LOCK_KEY], args=[_FIXED_WORKER_ID])
 
 
 # ---------------------------------------------------------------------------
@@ -288,6 +294,8 @@ async def test_run_breaks_inner_loop_when_lock_lost():
     redis = AsyncMock()
     redis.expire.return_value = True
     redis.delete.return_value = 1
+    # refresh_if_owner's Lua script reports lost ownership immediately.
+    redis.register_script = MagicMock(return_value=AsyncMock(return_value=0))
 
     set_call_count = 0
 

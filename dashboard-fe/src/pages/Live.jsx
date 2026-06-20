@@ -367,7 +367,7 @@ export default function Live() {
                 <div>
                   <div className="text-xs text-gray-500 mb-2">Blocked ({blocklist.length})</div>
                   {blocklist.length === 0 ? <Empty message="No active blocks" /> : (
-                    <ul className="space-y-1.5">
+                    <ul className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                       {blocklist.map((b, i) => (
                         <li key={i} className="flex items-center justify-between gap-3 mono text-xs
                                                 bg-red-900/20 border border-red-800/60 rounded px-2.5 py-1.5">
@@ -381,7 +381,7 @@ export default function Live() {
                 <div>
                   <div className="text-xs text-gray-500 mb-2">Rate-limited ({rateLimits.length})</div>
                   {rateLimits.length === 0 ? <Empty message="No active rate limits" /> : (
-                    <ul className="space-y-1.5">
+                    <ul className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                       {rateLimits.map((r, i) => (
                         <li key={i} className="flex items-center justify-between gap-3 mono text-xs
                                                 bg-orange-900/20 border border-orange-800/60 rounded px-2.5 py-1.5">

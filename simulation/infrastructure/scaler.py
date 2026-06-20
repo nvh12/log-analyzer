@@ -13,6 +13,8 @@ import uuid
 
 from redis.asyncio import Redis
 
+from infrastructure.redis_lock import RedisLock
+
 logger = logging.getLogger(__name__)
 
 _LOCK_KEY = "scale:scaler_lock"
@@ -48,10 +50,11 @@ async def run(
     polls Redis and sends gunicorn signals. Others wait and retry each poll_interval."""
     worker_id = str(uuid.uuid4())
     held = False  # tracks whether this worker currently owns the lock
+    lock = RedisLock(redis, _LOCK_KEY)
 
     while True:
         try:
-            acquired = await redis.set(_LOCK_KEY, worker_id, nx=True, ex=_LOCK_TTL)
+            acquired = await lock.acquire(worker_id, _LOCK_TTL)
             if not acquired:
                 await asyncio.sleep(poll_interval)
                 continue
@@ -62,12 +65,9 @@ async def run(
             while True:
                 await asyncio.sleep(poll_interval)
 
-                owner = await redis.get(_LOCK_KEY)
-                if owner != worker_id:
+                if not await lock.refresh_if_owner(worker_id, _LOCK_TTL):
                     logger.warning("Scaler lock lost — yielding to new holder")
                     break
-
-                await redis.expire(_LOCK_KEY, _LOCK_TTL)
 
                 target_str = await redis.get(_REPLICAS_KEY)
                 current_str = await redis.get(_CURRENT_KEY)
@@ -108,12 +108,12 @@ async def run(
         except asyncio.CancelledError:
             if held:
                 with contextlib.suppress(Exception):
-                    await redis.delete(_LOCK_KEY)
+                    await lock.release_if_owner(worker_id)
             raise
         except Exception as e:
             if held:
                 with contextlib.suppress(Exception):
-                    await redis.delete(_LOCK_KEY)
+                    await lock.release_if_owner(worker_id)
             held = False
             logger.error("Scaler error: %s — retrying in %ds", e, poll_interval, exc_info=True)
             await asyncio.sleep(poll_interval)

@@ -21,6 +21,7 @@ class TrafficThresholds(BaseModel):
     weight_seasonal: float = Field(ge=0)
     absolute_min_floor: float = Field(default=15.0, ge=0)
     variance_min_floor: float = Field(default=5.0, ge=0)
+    low_volume_jump_multiplier: float = Field(default=3.0, gt=0)
 
 
     @model_validator(mode="after")

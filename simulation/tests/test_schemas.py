@@ -7,7 +7,7 @@ from presentation.schemas.simulation_request import StartSimulationRequest
 
 def _make(**kwargs) -> StartSimulationRequest:
     """Helper: build a StartSimulationRequest with a valid scenario plus overrides."""
-    base = {"scenario": SimulationScenario.NORMAL}
+    base = {"scenario": SimulationScenario.DDOS}
     base.update(kwargs)
     return StartSimulationRequest(**base)
 
@@ -25,7 +25,31 @@ def test_log_type_field_does_not_exist():
 def test_log_type_kwarg_raises_validation_error():
     """Passing log_type to the constructor must raise (extra fields forbidden)."""
     with pytest.raises((ValidationError, TypeError)):
-        StartSimulationRequest(scenario=SimulationScenario.NORMAL, log_type="HTTP")
+        StartSimulationRequest(scenario=SimulationScenario.DDOS, log_type="HTTP")
+
+
+# ---------------------------------------------------------------------------
+# scenario validation — NORMAL is the always-on baseline, not REST-triggerable
+# ---------------------------------------------------------------------------
+
+def test_normal_scenario_raises_validation_error():
+    with pytest.raises(ValidationError, match="always-on baseline"):
+        _make(scenario=SimulationScenario.NORMAL)
+
+
+def test_traffic_spike_scenario_is_accepted():
+    req = _make(scenario=SimulationScenario.TRAFFIC_SPIKE)
+    assert req.scenario == SimulationScenario.TRAFFIC_SPIKE
+
+
+def test_attack_scenarios_are_accepted():
+    for scenario in (
+        SimulationScenario.DDOS,
+        SimulationScenario.BRUTE_FORCE,
+        SimulationScenario.WEB_ATTACK,
+    ):
+        req = _make(scenario=scenario)
+        assert req.scenario == scenario
 
 
 # ---------------------------------------------------------------------------

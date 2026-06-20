@@ -95,7 +95,14 @@ def detect(
 
     vals = np.array(window.req_counts)
     current_count = window.req_counts[-1] if window.req_counts else 0.0
-    if len(vals) < thresholds.min_history or current_count < thresholds.absolute_min_floor:
+    history = vals[:-1]
+    # An idle/near-zero baseline only justifies running detection once current_count
+    # represents a real jump, not just a tick that happens to clear absolute_min_floor.
+    low_volume = (
+        history.mean() < thresholds.absolute_min_floor
+        and current_count < thresholds.absolute_min_floor * thresholds.low_volume_jump_multiplier
+    ) if len(history) > 0 else False
+    if len(vals) < thresholds.min_history or current_count < thresholds.absolute_min_floor or low_volume:
         return TrafficResult(
             anomaly=False,
             confidence=0.0,

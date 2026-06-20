@@ -45,10 +45,19 @@ def test_start_simulation_returns202_andDerivesLogType(client, use_case):
 def test_start_simulation_alreadyRunning_returns409(client, use_case):
     use_case.start.side_effect = RuntimeError("Simulation already running")
 
-    response = client.post("/start", json={"scenario": "NORMAL"})
+    response = client.post("/start", json={"scenario": "DDOS"})
 
     assert response.status_code == 409
     assert response.json()["detail"] == "Simulation already running"
+
+
+def test_start_simulation_normalScenario_returns422(client, use_case):
+    # NORMAL is the always-on baseline (auto-started, see main.py) — REST callers
+    # may only trigger attack/anomaly scenarios on top of it.
+    response = client.post("/start", json={"scenario": "NORMAL"})
+
+    assert response.status_code == 422
+    use_case.start.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -146,9 +155,8 @@ def test_get_baseline_status_returnsBaselineUseCaseStatus(client, baseline_use_c
     assert response.json() == {"state": "running"}
 
 
-def test_stop_baseline_returns200(client, baseline_use_case):
+def test_no_baseline_stop_route(client):
+    # Baseline is always-on by design — there is no REST way to stop it.
     response = client.post("/baseline/stop")
 
-    assert response.status_code == 200
-    assert response.json() == {"message": "Baseline stop signal sent"}
-    baseline_use_case.stop.assert_awaited_once()
+    assert response.status_code == 404

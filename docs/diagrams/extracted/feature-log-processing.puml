@@ -106,6 +106,7 @@ together {
 ' ---- Interactions / Relationships ----
 RawLogConsumer o-- QueueService
 DeadLetterConsumer o-- DropAuditRepository
+DeadLetterConsumer o-- FailedLogRepository
 
 LogProcessingPoller o-- QueueService
 LogProcessingPoller o-- LogProcessingWorker

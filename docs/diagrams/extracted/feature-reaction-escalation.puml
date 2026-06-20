@@ -120,6 +120,7 @@ ResendAlertService ..|> AlertChannel
 SmtpAlertService ..|> AlertChannel
 
 RedisIpBlockService ..|> IpBlockService
+RedisIpBlockService --> EscalatingIpReactionService : uses ALL_ATTEMPT_KEY_PREFIXES
 RedisRateLimitService ..|> RateLimitService
 RedisScaleService ..|> ScaleService
 
