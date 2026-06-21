@@ -34,3 +34,17 @@ class TrafficThresholds(BaseModel):
                 "weight_iqr=1.0, weight_seasonal=1.0"
             )
         return self
+
+    @model_validator(mode="after")
+    def _check_min_weighted_chosen_requires_corroboration(self) -> "TrafficThresholds":
+        max_single_weight = max(self.weight_ema, self.weight_zscore, self.weight_iqr, self.weight_seasonal)
+        if self.min_weighted_chosen <= max_single_weight:
+            raise ValueError(
+                f"min_weighted_chosen ({self.min_weighted_chosen}) must exceed the largest "
+                f"single detector weight ({max_single_weight}), otherwise that one detector "
+                "firing alone is enough to declare an anomaly with no corroboration from a "
+                "second axis. A calibration artifact that picks an operating point this low "
+                "defeats the ensemble design — re-tune pick_operating_point() instead of "
+                "lowering this bar."
+            )
+        return self

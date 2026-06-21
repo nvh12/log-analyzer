@@ -41,11 +41,15 @@ async def lifespan(app: FastAPI):
         init_flow_stats(stats)
 
     baseline_uc = container.baseline_use_case() if settings.AUTO_START_NORMAL else None
+    baseline_started = False
     if baseline_uc is not None:
         # Only one worker should run the baseline loop. start() acquires a Redis
         # lock via SETNX — if another worker (or a previous run whose lock hasn't
         # expired yet) already holds it, skip rather than spawning a duplicate
-        # overlapping task.
+        # overlapping task. stop_signal is a single global Redis key, not
+        # per-worker, so only the worker that actually won the lock here may
+        # signal it to stop on shutdown — otherwise a losing worker's own
+        # shutdown would stop the *other* worker's still-running baseline.
         try:
             await baseline_uc.start(
                 scenario=SimulationScenario.NORMAL,
@@ -54,6 +58,7 @@ async def lifespan(app: FastAPI):
                 rate_per_second=settings.AUTO_START_RATE,
                 target_ip="192.168.100.100",   # unused by NORMAL (always _random_ip)
             )
+            baseline_started = True
             logger.info(
                 "Baseline NORMAL traffic started at %.1f logs/s", settings.AUTO_START_RATE
             )
@@ -74,7 +79,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    if baseline_uc is not None:
+    if baseline_started:
         # Tell the baseline run loop to stop and wait (briefly) for it to release
         # its Redis lock — otherwise a container restart races the lock's 300s TTL:
         # the new process's SETNX fails against a lock whose only owner is this

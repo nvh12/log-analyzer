@@ -237,6 +237,33 @@ def test_canonical_weights_are_accepted():
     )
 
 
+def test_min_weighted_chosen_at_max_single_weight_is_rejected():
+    # Regression: a calibration artifact that picks min_weighted_chosen == 1.0
+    # lets IQR or Seasonal (weight 1.0 each) fire alone with zero corroboration
+    # from a second detector, defeating the ensemble design.
+    with pytest.raises(ValueError, match="must exceed the largest"):
+        TrafficThresholds(
+            z_score_flag=2.0,
+            iqr_multiplier=1.5, ema_alpha=0.3, ema_dev_threshold=2.0,
+            min_history=5, ema_warmup=3,
+            seasonal_z_threshold=2.0, seasonal_min_bucket_size=3,
+            min_weighted_chosen=1.0,
+            weight_ema=0.5, weight_zscore=0.5, weight_iqr=1.0, weight_seasonal=1.0,
+        )
+
+
+def test_min_weighted_chosen_just_above_max_single_weight_is_accepted():
+    # Must not raise — strictly greater than the largest single weight (1.0).
+    TrafficThresholds(
+        z_score_flag=2.0,
+        iqr_multiplier=1.5, ema_alpha=0.3, ema_dev_threshold=2.0,
+        min_history=5, ema_warmup=3,
+        seasonal_z_threshold=2.0, seasonal_min_bucket_size=3,
+        min_weighted_chosen=1.0001,
+        weight_ema=0.5, weight_zscore=0.5, weight_iqr=1.0, weight_seasonal=1.0,
+    )
+
+
 # ---------------------------------------------------------------------------
 # scored field
 # ---------------------------------------------------------------------------
