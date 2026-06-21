@@ -376,7 +376,7 @@ Khi click vào một dòng trong bảng, drawer trượt ra từ phải:
 **Điểm thiết kế chính**:
 - Blocklist card: mỗi IP có 2 checkbox — **Lift** (đỏ) và **WL** (xanh lá). Tick checkbox thêm IP vào trạng thái pending.
 - Whitelist card: hiển thị effective whitelist (bao gồm thay đổi pending chưa lưu). IP pending (chưa lưu) hiện bằng italic. Form "Add" thêm IP thủ công vào pending.
-- **Apply changes** button: chỉ hiện khi có thay đổi pending. Khi nhấn, gọi đúng 2 API song song: `PUT /simulate/admin/whitelist` (Simulation service) + `POST /api/reactions/blocks/lift` (Dashboard service — Reaction service chỉ đọc whitelist/blocklist, không expose endpoint nào).
+- **Apply changes** button: chỉ hiện khi có thay đổi pending. Khi nhấn, gọi đúng 2 API song song, cả hai đều gọi tới Dashboard service (không gọi trực tiếp Simulation): `PUT /api/reactions/whitelist` (Dashboard proxy sang `PUT /admin/whitelist` của Simulation) + `POST /api/reactions/blocks/lift` (thao tác trực tiếp lên Redis trong Dashboard, không đi qua Simulation — Reaction service chỉ đọc whitelist/blocklist, không expose endpoint nào).
 - Timeline table: nút "Lift block" riêng lẻ vẫn giữ nguyên để override từng dòng lịch sử.
 
 ---

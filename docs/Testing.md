@@ -168,7 +168,7 @@ Khi một bản ghi log không thể xử lý (payload hỏng, hết số lần 
 
 ## 6. Chức Năng 5 — API Điều Khiển Mô Phỏng Tấn Công (Simulation Service)
 
-`simulation_router` là cổng điều khiển duy nhất để bắt đầu/dừng kịch bản mô phỏng (`NORMAL`, `TRAFFIC_SPIKE`, `DDOS`, `BRUTE_FORCE`, `WEB_ATTACK`), phát lại dữ liệu CSV từ MinIO (`/replay`), và quản lý luồng traffic nền (`/baseline`). Trước vòng kiểm thử này, router (5 endpoint công khai + dependency `_get_replay_loader`) **chưa có kiểm thử nào**.
+`simulation_router` là cổng điều khiển duy nhất để bắt đầu/dừng các kịch bản tấn công/bất thường (`TRAFFIC_SPIKE`, `DDOS`, `BRUTE_FORCE`, `WEB_ATTACK`), phát lại dữ liệu CSV từ MinIO (`/replay`), và xem trạng thái luồng baseline nền (`/baseline`). `NORMAL` không còn nằm trong danh sách scenario REST-triggerable được — nó là baseline always-on, tự khởi động ở phía server (`AUTO_START_NORMAL`) và bị validator của `/start` từ chối nếu truyền vào. Trước vòng kiểm thử này, router (5 endpoint công khai + dependency `_get_replay_loader`) **chưa có kiểm thử nào**.
 
 **Kỹ thuật sử dụng:** Kiểm thử hộp đen qua FastAPI `TestClient` với `dependency_overrides` (mock `SimulationUseCase`) và `unittest.mock.patch.object` (mock `ReplayLoader`); Phân hoạch tương đương cho các nhánh lỗi HTTP (202/409/503/404/422).
 
@@ -186,9 +186,12 @@ Khi một bản ghi log không thể xử lý (payload hỏng, hết số lần 
 | SIM-08 | `POST /replay` với CSV rỗng | `loader.load()` trả `[]` | HTTP 422 | Đạt |
 | SIM-09 | `POST /replay` khi đang chạy mô phỏng khác | `use_case.replay()` ném `RuntimeError("Simulation already running")` | HTTP 409 | Đạt |
 | SIM-10 | `GET /baseline` | `baseline_use_case.status()` trả `{"state": "running"}` | HTTP 200 trả nguyên trạng thái baseline | Đạt |
-| SIM-11 | `POST /baseline/stop` | — | HTTP 200, `{"message": "Baseline stop signal sent"}`; `baseline_use_case.stop()` được gọi | Đạt |
+| SIM-11 | `POST /baseline/stop` không còn tồn tại | — | HTTP 404 (`test_no_baseline_stop_route`) | Đạt |
+| SIM-12 | `POST /start` với `scenario="NORMAL"` | NORMAL là baseline always-on | HTTP 422 (`test_start_simulation_normalScenario_returns422`); `use_case.start()` không được gọi | Đạt |
 
-**Thống kê:** 11 trường hợp mới (`test_simulation_router.py`, file hoàn toàn mới) bao phủ 100% nhánh điều khiển luồng của 6 endpoint (`/start`, `/stop`, `/status`, `/replay`, `/baseline`, `/baseline/stop`), kết hợp với 11 trường hợp đã có của `test_simulation_use_case.py` (logic khóa Redis, trạng thái, phát lại) → **22 trường hợp** cho toàn bộ chức năng điều khiển mô phỏng, tất cả đạt.
+> **Cập nhật (sau khi baseline trở thành always-on):** `/baseline/stop` đã bị loại bỏ khỏi `simulation_router` — baseline (`NORMAL`) giờ tự khởi động ở phía server (`AUTO_START_NORMAL`) và không thể dừng qua REST, và `scenario="NORMAL"` qua `/start` giờ bị validator từ chối (422). SIM-11 trước đây kiểm thử route `/baseline/stop` tồn tại và trả về 200; route đó đã được thay bằng `test_no_baseline_stop_route` xác nhận route **không** tồn tại (404), và SIM-12 (mới) xác nhận `/start` từ chối NORMAL. Số liệu bên dưới phản ánh bộ test hiện tại.
+
+**Thống kê:** 12 trường hợp (`test_simulation_router.py`, file hoàn toàn mới) bao phủ 100% nhánh điều khiển luồng của 5 endpoint còn REST-triggerable (`/start`, `/stop`, `/status`, `/replay`, `/baseline`) cộng với việc xác nhận `/baseline/stop` không tồn tại và `/start` từ chối scenario NORMAL, kết hợp với 11 trường hợp đã có của `test_simulation_use_case.py` (logic khóa Redis, trạng thái, phát lại) → **23 trường hợp** cho toàn bộ chức năng điều khiển mô phỏng, tất cả đạt.
 
 ---
 
@@ -244,13 +247,15 @@ Tất cả **540/540 trường hợp kiểm thử đều đạt** (passed).
 > **Đã sửa**: 6 trường hợp trong `simulation/tests/test_scaler.py` trước đó thất bại do bộ test chưa được cập nhật theo 2 thay đổi trước đây của `infrastructure/scaler.py`: (1) `os.kill()` được gọi trong vòng lặp với `asyncio.sleep(0.1)` xen giữa mỗi tín hiệu (chống tràn hàng đợi tín hiệu gunicorn) khiến `asyncio.sleep` bị mock raise `CancelledError` quá sớm, trước khi đủ tín hiệu được gửi; (2) `init()` có guard `redis.exists(_LOCK_KEY)` nhưng test dùng `AsyncMock` mặc định (giá trị truthy) nên `redis.set()` không bao giờ được gọi. Đã sửa số lần `asyncio.sleep` mong đợi cho từng kịch bản scale (= 1 lần poll + số tín hiệu gửi), mock `redis.exists` trả `False`/`True` tương ứng, và thêm 1 trường hợp mới `test_init_skips_reset_when_lock_held` cho nhánh guard.
 
 > **Lưu ý điều chỉnh số liệu**: Số liệu của `reaction` trong bản cập nhật trước (53/26=79) chưa phản ánh bộ kiểm thử mở rộng được thêm ở vòng rà soát trước đó (`AlertHtmlTemplateTest`, `CompositeAlertServiceTest`, `JpaReactionLogServiceTest`, `RetryTest`, `DetectionResultConsumerTest`, `ReactionResultPublisherTest`, `EscalatingIpReactionServiceTestBase` dùng chung cho `BruteForceReactionServiceTest`/`DDoSReactionServiceTest`). Số liệu 92/26=118 ở trên được đếm trực tiếp từ số phương thức `@Test` hiện có trong mã nguồn.
+>
+> **Chưa cập nhật vào bảng trên**: Vòng sửa lỗi `DetectionResultConsumer` không ack/nack đúng (manual ack + DLX `reaction.dlx` → `detection.results.reaction.dlq` → `ReactionDeadLetterConsumer` → `reaction.dropped_reactions`, xem §3 trong `docs/ReactionService.md`) đã thêm 1 file unit test mới (`ReactionDeadLetterConsumerTest`, 4 trường hợp) và 1 trường hợp tích hợp mới (`DetectionResultConsumerIT.ddosDetection_handlerThrows_messageRoutedToDlqNotLost`) — `reaction` thực tế hiện có 96 unit / 27 integration = 123, chưa được gộp vào bảng tổng kết phía trên.
 
 Các bổ sung kiểm thử trong vòng rà soát gần nhất, theo từng dịch vụ:
 
 - **log-processing**: thêm 12 trường hợp biên cho `LogProcessingService` (mã trạng thái HTTP 100/99/599/600, độ dài URL/IP/User-Agent tối đa và vượt ngưỡng, phương thức HTTP không xác định, referer rỗng vs `null`, sanitize giá trị Flow feature tràn số `Infinity`/`-Infinity` về `0.0`); 1 trường hợp cho `DlqRetryScheduler` (lỗi audit khi retry đã hết hạn không lan truyền); 2 trường hợp cho `RedisQueueService` (script Redis trả `null`, Redis ném lỗi khi enqueue); 2 trường hợp cho `RawLogConsumer` (enqueue ném lỗi → DLQ, `receivedAt=null` → tự gán `now()` và xử lý bình thường); 1 trường hợp cho `LogProcessingPoller` (bỏ qua dequeue khi hàng đợi executor vượt ngưỡng backpressure); và file mới `DeadLetterConsumerTest` (6 trường hợp cho việc trích xuất lý do/log id từ message DLQ). Đồng thời gỡ bỏ `EventServiceImplTest` (trùng lặp hoàn toàn với `EventServiceImplIT` chạy trên RabbitMQ thực).
 - **dashboard**: thêm file mới `DetectionMapperTest` (4 trường hợp) bao phủ ánh xạ `DetectionResultEntity` → `DetectionSummaryView`/`DetectionDetailView`, bao gồm logic `method_flags` chỉ áp dụng cho `DetectionType.TRAFFIC`.
 - **log-analysis**: thêm file mới `test_detection_job_runner.py` (11 trường hợp) bao phủ `DetectionJobRunner` — chạy job traffic (rỗng, bình thường, chuyển giờ với/không đủ mẫu lịch sử theo mùa), chạy job web-attack (không có log mới, có log mới, một request lỗi không chặn các request khác), phân tích biểu thức cron (5/6 trường, không hợp lệ), và bản sao độc lập của `job_status()`.
-- **simulation**: thêm file mới `test_simulation_router.py` (11 trường hợp) bao phủ toàn bộ endpoint của `simulation_router` — `/start` (202, log_type tự suy ra từ scenario, 409 khi đang chạy), `/stop`, `/status`, `/replay` (202, 503 khi MinIO chưa cấu hình, 404 khi không tìm thấy nguồn, 422 khi CSV rỗng, 409 khi đang chạy), và `/baseline`, `/baseline/stop`.
+- **simulation**: thêm file mới `test_simulation_router.py` (12 trường hợp) bao phủ toàn bộ endpoint của `simulation_router` — `/start` (202, log_type tự suy ra từ scenario, 409 khi đang chạy, 422 khi `scenario=NORMAL` — bị validator từ chối vì NORMAL là baseline always-on), `/stop`, `/status`, `/replay` (202, 503 khi MinIO chưa cấu hình, 404 khi không tìm thấy nguồn, 422 khi CSV rỗng, 409 khi đang chạy), `/baseline`, và xác nhận `/baseline/stop` không còn tồn tại (404).
 
 Trong quá trình phát triển, một số lỗi được phát hiện nhờ kiểm thử và đã được khắc phục trước khi hoàn thiện:
 

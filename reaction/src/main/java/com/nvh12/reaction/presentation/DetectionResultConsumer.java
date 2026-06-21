@@ -5,10 +5,14 @@ import com.nvh12.reaction.service.ReactionService;
 import com.nvh12.reaction.service.dto.DetectionType;
 import com.nvh12.reaction.service.dto.ReactionInput;
 import com.nvh12.reaction.service.dto.Severity;
+import com.rabbitmq.client.Channel;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.support.AmqpHeaders;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -25,7 +29,8 @@ public class DetectionResultConsumer {
     }
 
     @RabbitListener(queues = RabbitMqConfig.QUEUE_DETECTION_RESULTS)
-    public void consume(ReactionInput input) {
+    public void consume(ReactionInput input, Channel channel, @Header(AmqpHeaders.DELIVERY_TAG) long tag)
+            throws IOException {
         DetectionType type = input.getDetectionType();
         String sourceIp = input.getSourceIp();
         boolean needsSourceIp = type != null && type != DetectionType.TRAFFIC;
@@ -33,22 +38,27 @@ public class DetectionResultConsumer {
                 || (needsSourceIp && (sourceIp == null || sourceIp.isBlank()))) {
             log.warn("Dropping malformed detection event: type={}, sourceIp={}, severity={}, detectedAt={}",
                     type, sourceIp, input.getSeverity(), input.getDetectedAt());
+            channel.basicAck(tag, false);
             return;
         }
         if (input.getSeverity() == Severity.NONE) {
             log.debug("Ignoring benign (NONE-severity) detection: type={} sourceIp={}", type, sourceIp);
+            channel.basicAck(tag, false);
             return;
         }
         ReactionService service = services.get(type);
         if (service == null) {
             log.warn("No handler registered for detection type: {}", type);
+            channel.basicAck(tag, false);
             return;
         }
         log.debug("Dispatching {} detection from {} to {}", type, sourceIp, service.getClass().getSimpleName());
         try {
             service.handle(input);
+            channel.basicAck(tag, false);
         } catch (Exception e) {
             log.error("Failed to handle {} detection from {}: {}", type, sourceIp, e.getMessage(), e);
+            channel.basicNack(tag, false, false);
         }
     }
 }

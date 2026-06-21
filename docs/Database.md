@@ -10,7 +10,7 @@ Single PostgreSQL instance (`log-analyzer` database) shared across all services.
 |---|---|---|---|
 | `log_processing` | Flyway | log-processing (Java) | `normalized_http`, `normalized_flow`, `drop_audit` |
 | `analysis` | Custom SQL runner (asyncpg) | log-analysis (Python) | `detection_results`, `schema_migrations` |
-| `reaction` | Flyway | reaction (Java) | `reaction_logs` |
+| `reaction` | Flyway | reaction (Java) | `reaction_logs`, `dropped_reactions` |
 
 **Cross-schema read access:** The dashboard service reads all tables across all three schemas (read-only via JPA). No foreign key constraints cross schema boundaries — all inter-table relationships are application-level (logical).
 
@@ -104,6 +104,19 @@ Single PostgreSQL instance (`log-analyzer` database) shared across all services.
 │  │    window_start    (TRAFFIC only)      │                               │
 │  │    window_end      (TRAFFIC only)      │                               │
 │  │    reacted_at                          │                               │
+│  └────────────────────────────────────────┘                               │
+│                                                                           │
+│  ┌────────────────────────────────────────┐                               │
+│  │           dropped_reactions            │                               │
+│  │────────────────────────────────────────│                               │
+│  │ PK id                                  │                               │
+│  │    detection_type  (nullable)          │                               │
+│  │    source_ip       (nullable)          │                               │
+│  │    severity        (nullable)          │                               │
+│  │    detected_at     (nullable)          │                               │
+│  │    failure_reason  (x-death reason)    │                               │
+│  │    raw_payload     (full message body) │                               │
+│  │    dropped_at                          │                               │
 │  └────────────────────────────────────────┘                               │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
@@ -264,6 +277,21 @@ Records every automated reaction action taken in response to a detection. Writte
 | `window_end` | TIMESTAMPTZ | Yes | — | Copied from detection; non-null only for TRAFFIC reactions |
 | `reacted_at` | TIMESTAMPTZ | No | — | Timestamp when the reaction service wrote this row (set by application to `Instant.now()`) |
 
+### 5.7 `reaction.dropped_reactions`
+
+Audit trail for detection events that Reaction received but failed to process (a Postgres or Redis write inside `ReactionService.handle()` threw). Populated by `ReactionDeadLetterConsumer`, which consumes the `detection.results.reaction.dlq` queue (reached via `reaction.dlx` after the main consumer `nack`s the message without requeue). Added in migration `V2__create_dropped_reactions.sql`.
+
+| Column | Type | Nullable | Default | Description |
+|---|---|---|---|---|
+| `id` | BIGSERIAL | No | auto | Surrogate primary key |
+| `detection_type` | VARCHAR(20) | Yes | — | Parsed from the dead-lettered message body; null if the body couldn't be parsed as JSON |
+| `source_ip` | VARCHAR(45) | Yes | — | Parsed from the dead-lettered message body; null if absent or unparseable |
+| `severity` | VARCHAR(10) | Yes | — | Parsed from the dead-lettered message body; null if absent or unparseable |
+| `detected_at` | TIMESTAMPTZ | Yes | — | Parsed from the dead-lettered message body; null if absent or unparseable |
+| `failure_reason` | TEXT | Yes | — | The first `x-death` header entry's `reason` (e.g. `"rejected"`); `"unknown"` if the header is missing or malformed |
+| `raw_payload` | TEXT | Yes | — | The full dead-lettered message body, preserved regardless of whether it parsed |
+| `dropped_at` | TIMESTAMPTZ | No | NOW() | Server-side timestamp when the audit row was written |
+
 ---
 
 ## 6. Indexes
@@ -283,6 +311,7 @@ Records every automated reaction action taken in response to a detection. Writte
 | `analysis.detection_results` | `detection_results_type_time_idx` | `(detection_type, detected_at DESC)` | B-tree | Filtered list queries by detection type + time |
 | `reaction.reaction_logs` | `reaction_logs_source_ip_idx` | `source_ip` | B-tree | IP-filtered reaction queries |
 | `reaction.reaction_logs` | `reaction_logs_reacted_at_idx` | `reacted_at` | B-tree | Time-ordered reaction timeline queries |
+| `reaction.dropped_reactions` | `dropped_reactions_dropped_at_idx` | `dropped_at` | B-tree | Time-ordered audit queries |
 
 ---
 
@@ -454,6 +483,22 @@ CREATE INDEX reaction_logs_source_ip_idx
 
 CREATE INDEX reaction_logs_reacted_at_idx
     ON reaction.reaction_logs (reacted_at);
+
+-- Migration V2
+CREATE TABLE reaction.dropped_reactions
+(
+    id             BIGSERIAL    PRIMARY KEY,
+    detection_type VARCHAR(20),
+    source_ip      VARCHAR(45),
+    severity       VARCHAR(10),
+    detected_at    TIMESTAMPTZ,
+    failure_reason TEXT,
+    raw_payload    TEXT,
+    dropped_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX dropped_reactions_dropped_at_idx
+    ON reaction.dropped_reactions (dropped_at);
 ```
 
 ---
@@ -491,4 +536,4 @@ Simulation ──► [log.raw MQ] ──► log-processing
                                 all 4 app tables)
 ```
 
-Failed raw logs at the log-processing stage write to `drop_audit` (permanent) or the Redis `failed-log-queue` list (transient retry buffer, not persisted to PostgreSQL).
+Failed raw logs at the log-processing stage write to `drop_audit` (permanent) or the Redis `failed-log-queue` list (transient retry buffer, not persisted to PostgreSQL). Detection events that Reaction fails to handle (Postgres/Redis write failure) are routed via `reaction.dlx` to `dropped_reactions` (permanent), instead of being lost on ack.

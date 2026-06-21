@@ -123,8 +123,8 @@ def seed() -> None:
     n_seasonal   = seed_seasonal(r, seasonal_key)
     n_short_term = seed_short_term(r, short_term_key)
 
-    print(f"  Seeded {n_seasonal} seasonal entries  → {seasonal_key}")
-    print(f"  Seeded {n_short_term} short-term entries → {short_term_key}")
+    print(f"  Seeded {n_seasonal} seasonal entries  -> {seasonal_key}")
+    print(f"  Seeded {n_short_term} short-term entries -> {short_term_key}")
 
 
 if __name__ == "__main__":

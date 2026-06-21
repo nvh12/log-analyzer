@@ -28,10 +28,10 @@ graph TD
     subgraph Domain
         Poisson[Poisson Generator]
         Templates[Log Templates]
-        Replayer[Flow Replayer]
     end
 
     subgraph Infrastructure
+        Replayer[Flow Replay Loader MinIO]
         Publisher[RabbitMQ aio-pika Publisher]
         Redis[Redis Cache & Blocklist]
         Scaler[Dynamic Scaler SIGUSR]
@@ -69,7 +69,7 @@ simulation/
 ### 2.1 Scenario & Traffic Generators
 -   **Poisson Traffic Generator**: Simulates normal background traffic patterns using Poisson distribution models to simulate realistic inter-arrival times between benign requests.
 -   **Spike/Web Attack Generator**: Generates synthetic malicious HTTP CLF records containing SQLi, XSS, and Path Traversal signatures.
--   **Flow Replayer**: Replays structured network flow records from the CICIDS2017 dataset on scheduled tick intervals.
+-   **Flow Replay Loader** (`infrastructure/replay_loader.py`): Reads structured network flow records (CICIDS2017 CSV rows) from MinIO on demand for the `/simulate/replay` endpoint — an infrastructure-layer I/O adapter, not domain logic, since it talks directly to the MinIO client.
 -   **Distributed Simulation Lock**: A Redis lock (key `{namespace}:lock`, TTL 300s, refreshed every 60s) acquired via `SETNX` prevents concurrent scenario runs across workers. Released in a `finally` block on stop; startup no longer force-clears a stale lock (to avoid a TOCTOU race against a live worker) — `start()`/`replay()` rely solely on the atomic `SETNX` and surface a `RuntimeError` if the lock is already held.
 
 ### 2.2 Dynamic Scaling Engine (`infrastructure/scaler.py`)

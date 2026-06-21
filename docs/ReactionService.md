@@ -70,7 +70,7 @@ reaction/
     -   `attempts < 3`: Triggers `RATE_LIMIT` action. Updates Redis to throttle traffic.
     -   `attempts >= 3`: Escalates to `BLOCK` action. Blacklists the IP in Redis.
 -   **Lifting a block**: `RedisIpBlockService.liftBlock(ip)` removes the block metadata key and set membership, and also clears the IP's `ddos:attempts:`/`brute:attempts:` escalation counters — so a lifted IP starts its escalation count from zero rather than immediately re-escalating on its next violation.
--   **Whitelist Management**: Whitelist storage and the `GET/POST/DELETE/PUT /admin/whitelist` endpoints live in the simulation service (`presentation/routers/access_control_router.py`), gated by `X-Admin-Key`. Reaction does not expose any HTTP endpoints itself (it's a pure consumer/worker service) — writes to the whitelist, and lifting a block, are both done through the **Dashboard** backend (`POST /api/reactions/blocks/lift`, `PUT /api/reactions/whitelist`), which proxies to Simulation's admin API. Reaction only reads the whitelist via the client above, to honor the short-circuit.
+-   **Whitelist Management**: Whitelist storage and the `GET/POST/DELETE/PUT /admin/whitelist` endpoints live in the simulation service (`presentation/routers/access_control_router.py`), gated by `X-Admin-Key`. Reaction does not expose any HTTP endpoints itself (it's a pure consumer/worker service) — both override actions are done through the **Dashboard** backend, but only one of them reaches Simulation: `PUT /api/reactions/whitelist` proxies to Simulation's admin API, while `POST /api/reactions/blocks/lift` is a direct Redis operation inside Dashboard (clears the `blocklist:ip:{ip}` key and set membership) and never calls Simulation. Reaction only reads the whitelist via the client above, to honor the short-circuit.
 
 ### 2.2 Alert Dispatch Engine
 -   Implements `CompositeAlertService` to manage notifications.
@@ -83,6 +83,7 @@ reaction/
 
 ## 3. Communication & Messaging
 
--   **RabbitMQ Consumer**: Subscribes to the `detection.results` durable queue. Uses **Manual Acknowledgment** (acks are sent only after PostgreSQL and Redis status operations succeed).
+-   **RabbitMQ Consumer**: Subscribes to the `detection.results.reaction` durable queue (bound to the `detection.results` fanout exchange). Uses **Manual Acknowledgment** via the message `Channel` (`DetectionResultConsumer`): the message is acked on success or on an intentional drop (malformed event, `NONE` severity, no handler registered), and `nack`ed without requeue (`basicNack(tag, false, false)`) if `ReactionService.handle()` throws — e.g. a Postgres or Redis write failure inside the escalation logic.
+-   **Dead-Letter Path**: `detection.results.reaction` declares `x-dead-letter-exchange=reaction.dlx` / `x-dead-letter-routing-key=detection.results.reaction.dlq`, mirroring log-processing's DLX pattern. A nacked message is routed to the `detection.results.reaction.dlq` queue, consumed by a separate auto-ack `ReactionDeadLetterConsumer`, which extracts the `x-death` reason and writes an audit row to `reaction.dropped_reactions` (detection_type, source_ip, severity, detected_at, failure_reason, raw_payload) — so a failed reaction is recorded rather than silently lost. If the audit write itself fails, the full entry is logged at ERROR (no further requeue path, since this is the terminal leaf of the pipeline).
 -   **RabbitMQ Publisher**: Publishes actions to the `reaction.results` fanout exchange.
--   **PostgreSQL Persistence**: Writes all reaction logs and active block actions to database tables.
+-   **PostgreSQL Persistence**: Writes all reaction logs and active block actions to database tables, plus dropped-reaction audit rows via the dead-letter path above.

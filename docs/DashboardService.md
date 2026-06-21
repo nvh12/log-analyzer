@@ -81,9 +81,10 @@ dashboard/
 -   Exposes endpoints to query paginated logs, detections, and reactions directly from PostgreSQL.
 -   Preserves the per-use-case evidence payload using a discriminated JSON union on `uc`; for `WEB_ATTACK`, includes `layer_triggered` (`"rule_engine"` or `"xgboost"`) when present. The same field is also included in the live `detection` SSE event, not just the historical detail view.
 
-### 2.4 Simulation Whitelist Proxy
--   Dashboard, not Reaction, owns writes to the IP whitelist: `PUT /api/reactions/whitelist` and `POST /api/reactions/blocks/lift` are served by Dashboard's `ReactionController`, which calls `SimulationWhitelistAdapter` → Simulation's `PUT /admin/whitelist` over a Spring `RestClient` bean (`WebConfig`).
--   The `RestClient`'s `HttpClient` is forced to HTTP/1.1 (uvicorn rejects the JDK client's default h2-upgrade on PUT/POST with a body) and has configurable connect/read timeouts (`DashboardProperties.httpClientConnectTimeout` / `httpClientReadTimeout`, defaulting to 3s/5s, overridable via `HTTP_CLIENT_CONNECT_TIMEOUT`/`HTTP_CLIENT_READ_TIMEOUT`).
+### 2.4 Simulation Whitelist Proxy & Block Lift
+-   Both endpoints are served by Dashboard's `ReactionController`, but only one of them talks to Simulation:
+    -   `PUT /api/reactions/whitelist` — Dashboard, not Reaction, owns writes to the IP whitelist. This call proxies to `SimulationWhitelistAdapter` → Simulation's `PUT /admin/whitelist` over a Spring `RestClient` bean (`WebConfig`). The `RestClient`'s `HttpClient` is forced to HTTP/1.1 (uvicorn rejects the JDK client's default h2-upgrade on PUT/POST with a body) and has configurable connect/read timeouts (`DashboardProperties.httpClientConnectTimeout` / `httpClientReadTimeout`, defaulting to 3s/5s, overridable via `HTTP_CLIENT_CONNECT_TIMEOUT`/`HTTP_CLIENT_READ_TIMEOUT`).
+    -   `POST /api/reactions/blocks/lift` — **not** a Simulation proxy. This is a direct Redis operation: `ReactionController` calls `IpBlockStore`, which deletes the `blocklist:ip:{ip}` metadata key and the `blocklist:ips` set membership for each listed IP. Simulation is never contacted for this call.
 
 ---
 

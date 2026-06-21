@@ -139,6 +139,24 @@ class DetectionResultConsumerIT extends AbstractContainerIT {
         assertThat(redisTemplate.hasKey(BLOCKLIST_IP_PREFIX + IP)).isFalse();
     }
 
+    @Test
+    void ddosDetection_handlerThrows_messageRoutedToDlqNotLost() {
+        when(whitelistService.isWhitelisted(IP)).thenThrow(new RuntimeException("boom"));
+
+        rabbitTemplate.convertAndSend(RabbitMqConfig.QUEUE_DETECTION_RESULTS, ddosInput(IP, Severity.HIGH));
+
+        // The ReactionDeadLetterConsumer (separate auto-ack listener on the DLQ) should pick the
+        // message up and persist an audit row — so we assert on that row rather than draining the
+        // queue ourselves, since a manual receive() here would race the real DLQ consumer for the message.
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() ->
+                assertThat(jdbcTemplate.queryForObject(
+                        "SELECT count(*) FROM reaction.dropped_reactions WHERE source_ip = ?", Long.class, IP))
+                        .isGreaterThan(0)
+        );
+        // Failed delivery must not have been silently acked off the live queue either.
+        assertThat(redisTemplate.hasKey(BLOCKLIST_IP_PREFIX + IP)).isFalse();
+    }
+
     private DDoSInput ddosInput(String ip, Severity severity) {
         DDoSInput input = new DDoSInput();
         input.setDetectionType(DetectionType.DDOS);

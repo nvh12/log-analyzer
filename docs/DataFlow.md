@@ -12,7 +12,8 @@ This document traces every message and table through the pipeline, field by fiel
 | `log.raw.dlq` | Direct queue (via `log.dlx`) | Yes | Consumed by `DeadLetterConsumer`; entries mirrored to Redis for retry |
 | `log.normalized.http` | Direct queue | Yes | |
 | `log.normalized.flow` | Direct queue | Yes | |
-| `detection.results` | Fanout exchange | Yes | Two consumer queues: `detection.results.reaction` (Reaction, durable) and an anonymous auto-delete queue (Dashboard, non-durable) |
+| `detection.results` | Fanout exchange | Yes | Two consumer queues: `detection.results.reaction` (Reaction, durable, has DLX → `reaction.dlx`, DLQ routing key `detection.results.reaction.dlq`) and an anonymous auto-delete queue (Dashboard, non-durable) |
+| `detection.results.reaction.dlq` | Direct queue (via `reaction.dlx`) | Yes | Consumed by `ReactionDeadLetterConsumer` (auto-ack); entries written to `reaction.dropped_reactions` for audit |
 | `reaction.results` | Fanout exchange | Yes | One consumer: anonymous auto-delete queue in Dashboard |
 
 ---
@@ -26,6 +27,7 @@ This document traces every message and table through the pipeline, field by fiel
 | `drop_audit` | `log_processing` | log-processing writes | Dropped/failed logs |
 | `detection_results` | `analysis` | log-analysis writes, Dashboard reads | |
 | `reaction_logs` | `reaction` | reaction writes, Dashboard reads | |
+| `dropped_reactions` | `reaction` | reaction writes | Detection events Reaction failed to handle (Postgres/Redis write failure), recovered via the `detection.results.reaction.dlq` dead-letter path |
 | `schema_migrations` | `analysis` | log-analysis schema tracker | Internal |
 
 ---
@@ -335,7 +337,7 @@ Fields actually read by each reaction service:
 
 `log_timestamp` is in the message but has no field in `ReactionInput` — silently dropped.
 
-**Guard in consumer:** `source_ip` must be non-blank for DDOS, WEB_ATTACK, and BRUTE_FORCE. For TRAFFIC, null is allowed. If the guard fails, the message is dropped with a warning.
+**Guard in consumer:** `source_ip` must be non-blank for DDOS, WEB_ATTACK, and BRUTE_FORCE. For TRAFFIC, null is allowed. If the guard fails (or `severity=NONE`, or no handler is registered for the type), the message is dropped with a warning **and acked** — these are intentional, non-retryable drops, not failures. If `ReactionService.handle()` throws (e.g. the Postgres or Redis write fails), the message is `nack`ed without requeue and routed to `reaction.dlx` → `detection.results.reaction.dlq`, where `ReactionDeadLetterConsumer` records it to `reaction.dropped_reactions` instead of it being silently lost.
 
 ### Produced: `reaction_logs` DB row + `reaction.results` message
 
