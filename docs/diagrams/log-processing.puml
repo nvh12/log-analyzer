@@ -85,9 +85,9 @@ together {
     class RedisDlqRepository
     class PostgresDropAuditRepository
     class PostgresProcessedLogRepository
-    class DropAuditJpaRepository
-    class NormalizedHttpJpaRepository
-    class NormalizedFlowJpaRepository
+    interface DropAuditJpaRepository
+    interface NormalizedHttpJpaRepository
+    interface NormalizedFlowJpaRepository
 
     RedisDlqRepository -[hidden]down- PostgresDropAuditRepository
     PostgresDropAuditRepository -[hidden]down- PostgresProcessedLogRepository

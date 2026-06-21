@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     QUEUE_OUT: str = "detection.results"
 
     # HTTP-track detection job cron schedules (6-field: second minute hour day month day_of_week)
-    CRON_TRAFFIC: str = "*/10 * * * * *"
+    CRON_TRAFFIC: str = "0 * * * * *"
     CRON_WEB_ATTACK: str = "*/5 * * * * *"
     # Window / history / lock
     WINDOW_SECONDS: int = 60

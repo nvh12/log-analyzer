@@ -113,7 +113,7 @@ class DetectionJobRunner:
 
         # Build phase: Hourly rollover summary calculation (Seasonal Baseline V2)
         if current_hour != self._last_traffic_hour:
-            # We assume req_counts contains enough samples for the hour (limit=360 at 10s interval)
+            # We assume req_counts contains enough samples for the hour (limit=60 at 60s interval)
             # Use samples from the previous hour (all but the latest one)
             prev_samples = input_data.req_counts[:-1]
             if len(prev_samples) >= 2:
@@ -137,8 +137,10 @@ class DetectionJobRunner:
 
         await self._traffic_use_case.execute(input_data, seasonal_summaries=seasonal_summaries)
 
-        # Update rolling history (limit=360 = 1 hour of 10s samples, matching ROLL_WINDOW=60 mins)
-        await self._history_adapter.update_history(self._traffic_history_key, input_data.req_counts, limit=360)
+        # Update rolling history (limit=60 = 1 hour of 60s samples, matching ROLL_WINDOW=60 mins).
+        # Tick interval is deliberately equal to WINDOW_SECONDS so each tick's window is
+        # disjoint from the last, instead of resampling the same burst across several ticks.
+        await self._history_adapter.update_history(self._traffic_history_key, input_data.req_counts, limit=60)
 
     async def _run_web_attack(self):
         agg = await self._get_aggregator()

@@ -7,7 +7,8 @@ abstract class ReactionService {
     # alertService: AlertService
     # reactionLogService: ReactionLogService
     
-    + handle(input: ReactionInput): void
+    + getType(): DetectionType
+    + {final} handle(input: ReactionInput): void
     # {abstract} buildAlertDto(input: ReactionInput): Alert
     # {abstract} doHandle(input: ReactionInput): ReactionAction
 }
@@ -16,9 +17,9 @@ abstract class EscalatingIpReactionService {
     - {static} INCR_WITH_EXPIRE: DefaultRedisScript<Long>
     - {static} ATTEMPT_WINDOW: Duration
     - {static} ESCALATION_THRESHOLD: int
-    + {static} DDOS_ATTEMPTS_PREFIX: String
-    + {static} BRUTE_FORCE_ATTEMPTS_PREFIX: String
-    + {static} ALL_ATTEMPT_KEY_PREFIXES: List<String>
+    ~ {static} DDOS_ATTEMPTS_PREFIX: String
+    ~ {static} BRUTE_FORCE_ATTEMPTS_PREFIX: String
+    ~ {static} ALL_ATTEMPT_KEY_PREFIXES: List<String>
     - ipBlockService: IpBlockService
     - rateLimitService: RateLimitService
     - redisTemplate: RedisTemplate<String, String>

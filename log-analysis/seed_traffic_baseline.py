@@ -14,7 +14,7 @@ The traffic spike detector (UC1) needs two Redis keys to function in a fresh env
                                     >= TRAFFIC_MIN_HISTORY (5) entries before detect() fires.
 
 Both keys are written by the log-analysis detection job at runtime.  Without a seed they
-remain empty until enough real traffic has accumulated (hours for seasonal, ~1 minute for
+remain empty until enough real traffic has accumulated (hours for seasonal, ~5 minutes for
 short-term), making the TRAFFIC_SPIKE simulation scenario impossible to demo on a fresh stack.
 
 Baseline values represent ~5 req/s sustained through a 60-second window (~300 logs/window),
@@ -22,13 +22,14 @@ which matches the default NORMAL simulation rate set in the dashboard UI.  Runni
 TRAFFIC_SPIKE at 50 req/s produces a ~10x count, comfortably above every threshold.
 
 Each short-term entry is one such 60-second-window sample, taken once per detection-job
-tick (CRON_TRAFFIC, currently every 10s) — NOT once per 60 seconds. The per-entry value
-above is cadence-independent (always describes a 60s window, however often it's sampled),
-so SHORT_TERM_SEED doesn't need to scale with CRON_TRAFFIC. The actual cadence-coupled
-constant is detection_job.py's `limit=360` on the rolling history list (360 = 3600s / 10s,
-i.e. "1 hour of samples" only at the current 10s cadence) — revisit that, not this script,
-if CRON_TRAFFIC's interval ever changes. This script intentionally doesn't import
-Settings/CRON_TRAFFIC (it's meant to run standalone via its own env vars).
+tick (CRON_TRAFFIC, now once per 60 seconds — deliberately equal to WINDOW_SECONDS so each
+tick's window is disjoint from the last, instead of resampling the same burst across several
+overlapping ticks). The per-entry value above is cadence-independent (always describes a 60s
+window, however often it's sampled), so SHORT_TERM_SEED doesn't need to scale with
+CRON_TRAFFIC. The cadence-coupled constant is detection_job.py's `limit=60` on the rolling
+history list (60 samples × 60s = 1 hour of history at the current cadence) — revisit that,
+not this script, if CRON_TRAFFIC's interval ever changes. This script intentionally doesn't
+import Settings/CRON_TRAFFIC (it's meant to run standalone via its own env vars).
 
 Environment variables (all optional):
   _LA_REDIS_URL        Full Redis URL  (default: redis://localhost:6379/0)
