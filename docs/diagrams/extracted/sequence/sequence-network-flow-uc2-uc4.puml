@@ -20,28 +20,30 @@ participant "ModelRepository" as ModelStore
 participant "ResultRepositoryPort" as ResultRepo
 participant "PublisherPort" as Publisher
 
-Consumer -> DDoS_UC : execute(DDoSInput)
-DDoS_UC -> ModelStore : get(DDOS_MODEL)
-ModelStore --> DDoS_UC : XGBoost Model
-DDoS_UC -> DDoS_UC : run classifier inference
-alt Anomaly Detected
-    DDoS_UC -> ResultRepo : save(DDoSResult)
-    ResultRepo --> DDoS_UC : saved
-    DDoS_UC -> Publisher : publish(DDoSResult)
-    Publisher --> DDoS_UC : published
+par asyncio.gather(return_exceptions=True)
+    Consumer -> DDoS_UC : execute(DDoSInput)
+    DDoS_UC -> ModelStore : get(DDOS_MODEL)
+    ModelStore --> DDoS_UC : XGBoost Model
+    DDoS_UC -> DDoS_UC : run classifier inference
+    alt Anomaly Detected
+        DDoS_UC -> ResultRepo : save(DDoSResult)
+        ResultRepo --> DDoS_UC : saved
+        DDoS_UC -> Publisher : publish(DDoSResult)
+        Publisher --> DDoS_UC : published
+    end
+    DDoS_UC --> Consumer : done
+else
+    Consumer -> BF_UC : execute(BruteForceInput)
+    BF_UC -> ModelStore : get(BRUTE_FORCE_MODEL)
+    ModelStore --> BF_UC : XGBoost Model
+    BF_UC -> BF_UC : run classifier inference
+    alt Anomaly Detected
+        BF_UC -> ResultRepo : save(BruteForceResult)
+        ResultRepo --> BF_UC : saved
+        BF_UC -> Publisher : publish(BruteForceResult)
+        Publisher --> BF_UC : published
+    end
+    BF_UC --> Consumer : done
 end
-DDoS_UC --> Consumer : done
-
-Consumer -> BF_UC : execute(BruteForceInput)
-BF_UC -> ModelStore : get(BRUTE_FORCE_MODEL)
-ModelStore --> BF_UC : XGBoost Model
-BF_UC -> BF_UC : run classifier inference
-alt Anomaly Detected
-    BF_UC -> ResultRepo : save(BruteForceResult)
-    ResultRepo --> BF_UC : saved
-    BF_UC -> Publisher : publish(BruteForceResult)
-    Publisher --> BF_UC : published
-end
-BF_UC --> Consumer : done
 
 @enduml

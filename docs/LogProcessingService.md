@@ -21,7 +21,8 @@ graph TD
     end
 
     subgraph Ports / Application
-        IngestService[LogIngestionService]
+        Poller[LogProcessingPoller]
+        Worker[LogProcessingWorker]
         RetryScheduler[DlqRetryScheduler]
     end
 
@@ -31,20 +32,23 @@ graph TD
     end
 
     subgraph Outbound Adapters / Infrastructure
+        Queue[Redis raw-log-queue]
         JPA[Spring Data JPA Repositories]
         DB[(PostgreSQL)]
         Rabbit[RabbitTemplate Publisher]
         RMQ{RabbitMQ Broker}
     end
 
-    Listener --> IngestService
-    IngestService --> Parser
+    Listener --> Queue
+    Queue --> Poller
+    Poller --> Worker
+    Worker --> Parser
     Parser --> Entity
-    IngestService --> JPA
+    Worker --> JPA
     JPA --> DB
-    IngestService --> Rabbit
+    Worker --> Rabbit
     Rabbit --> RMQ
-    RetryScheduler --> IngestService
+    RetryScheduler --> Worker
     RetryScheduler --> DB
 ```
 

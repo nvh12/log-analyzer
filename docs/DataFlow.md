@@ -300,7 +300,7 @@ Same shape as UC2 (DDOS).
 | `window_start` | TIMESTAMPTZ | Yes | Non-null only for TRAFFIC |
 | `window_end` | TIMESTAMPTZ | Yes | Non-null only for TRAFFIC |
 | `detected_at` | TIMESTAMPTZ | No | |
-| `layer_triggered` | VARCHAR(32) | Yes | Non-null only for WEB_ATTACK (`"rule_engine"` or `"xgboost"`); null for all other types |
+| `layer_triggered` | VARCHAR(32) | Yes | Non-null only for WEB_ATTACK (`"rule_engine:sqli"`, `"rule_engine:xss"`, `"rule_engine:path_traversal"`, `"rule_engine:rce"`, or `"xgboost"`); null for all other types |
 
 **`network_layer` column:** Written using `result.network_layer.value`, producing `"HTTP"` or `"FLOW"` (uppercase), matching the `NetworkLayer` enum in Dashboard's JPA entity.
 
