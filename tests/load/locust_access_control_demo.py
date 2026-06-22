@@ -5,12 +5,19 @@ This script calls the admin access-controlled endpoints to block or rate-limit
 a specific source IP, then hits the target endpoints to observe the response.
 
 Since TCP source IPs cannot be spoofed by HTTP headers in this environment
-(the simulation middleware relies strictly on `request.client.host`), the user
-should run Locust and specify the runner's IP address using the `--source-ip` argument.
+(the simulation middleware relies strictly on `request.client.host`), the IP
+to block must match what the simulation service actually sees for this runner's
+connections — which is *not* always the runner's own address. Behind Docker's
+published-port forwarding (and doubly so behind an SSH `-L` tunnel into a
+loopback-only remote port), the simulation container typically sees the Docker
+bridge gateway IP instead of 127.0.0.1/::1.
+
+By default this script auto-detects the correct IP via GET /admin/whoami on
+test start (and before every manual-panel action) and uses that. Only pass
+--source-ip to override the auto-detected value.
 
 Run:
     locust -f locust_access_control_demo.py -H http://localhost:8001 \
-           --source-ip 127.0.0.1 \
            --admin-key test-admin-key \
            --demo-type block
 """
