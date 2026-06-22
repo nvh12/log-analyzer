@@ -114,9 +114,10 @@ graph TD
 
 ### 1.1 Ingestion / Simulation Service
 *   **Role**: Dedicated script and mock generator running on FastAPI/Uvicorn.
-*   **Architecture**: Follows an asynchronous task loop pattern powered by `asyncio`. It publishes raw log lines (CLF formatted logs and JSON flow arrays) using `aio-pika` to prevent blocking the generator thread.
-*   **Concurrency**: Implements a non-blocking asynchronous event loop, running baseline Poisson-based normal traffic generators and flow replayers concurrently.
+*   **Architecture**: Follows an asynchronous task loop pattern powered by `asyncio`. It publishes raw log lines (CLF formatted logs and JSON flow arrays) using `aio-pika` to prevent blocking the generator thread. `publish()` is bounded by a timeout so an orphaned `aio-pika` confirm future can't freeze the run loop forever; transient publish/Redis errors trigger a backoff-and-retry instead of killing the loop on the first failure.
+*   **Concurrency**: Implements a non-blocking asynchronous event loop, running baseline Poisson-based normal traffic generators and flow replayers concurrently. The `NORMAL` baseline traffic generator is always-on and started server-side at process startup (gated by `AUTO_START_NORMAL`) — it is not REST-triggerable or stoppable, and `NORMAL` is rejected by the simulation request schema.
 *   **Auto-Scaling Mechanism**: Exposes a scaling mechanism (`infrastructure/scaler.py`) that polls dynamic load requirements from Redis and orchestrates Gunicorn/Uvicorn child worker counts on the fly using signal traps (`SIGTTIN` to scale up, `SIGTTOU` to scale down). Only one worker holds the Redis scaler lock (`scale:scaler_lock`) at a time.
+*   **Distributed Lock Safety**: Both the scaler lock and the baseline-ownership lock use ownership-checked Lua scripts (`RedisLock.refresh_if_owner` / `release_if_owner` in `infrastructure/redis_lock.py`) instead of a blind `EXPIRE`/`DEL`, so a worker whose lock has lapsed and been reacquired by another worker can't clobber the new owner on its next refresh/release. On shutdown, a worker only calls `baseline_use_case.stop()` if it actually won the baseline lock at startup — a losing worker dying (e.g. during a gunicorn scale-down) no longer halts the real owner's still-running baseline via the shared stop-signal key.
 
 ### 1.2 Processing Service
 *   **Role**: Normalization and ingestion entrypoint.
@@ -198,21 +199,31 @@ The asynchronous backbone of the system utilizes **RabbitMQ** to connect all pro
                  ┌──────────────┴──────────────┐
                  │                             │
                  ▼                             ▼
-   ┌──────────────────────────┐  ┌──────────────────────────┐
-   │ Queue: detection.results │  │ Queue: anonymous.dash.dt │
-   │ (Durable, Reaction Serv.)│  │ (Non-durable, Dash Serv.)│
-   └─────────────┬────────────┘  └─────────────┬────────────┘
-                 │                             │
-                 ▼                             ▼
-         ┌──────────────┐              ┌──────────────┐
-         │ REACTION SRV │              │  DASHBOARD   │
-         └──────┬───────┘              └──────┬───────┘
-                │                             ▲
-                │ (Publish: fanout)           │
-                ▼                             │
-     [ Exchange: reaction.results ]           │
-                │                             │
-                └─────────────────────────────┘
+   ┌────────────────────────────────────┐  ┌──────────────────────────┐
+   │ Queue: detection.results.reaction  │  │ Queue: anonymous.dash.dt │
+   │ (Durable, Reaction Serv., manual   │  │ (Non-durable, Dash Serv.)│
+   │  ack; DLX -> reaction.dlx)         │  │                          │
+   └─────────────┬───────────────┬──────┘  └─────────────┬────────────┘
+                 │               │ (nack, no requeue)    │
+                 ▼               ▼                       ▼
+         ┌──────────────┐  [ Exchange: reaction.dlx ]   ┌──────────────┐
+         │ REACTION SRV │         │                     │  DASHBOARD   │
+         └──────┬───────┘         ▼                     └──────┬───────┘
+                │        ┌──────────────────────────┐          ▲
+                │        │ Queue: detection.results. │          │
+                │        │   reaction.dlq (Durable)  │          │
+                │        └─────────────┬─────────────┘          │
+                │                      ▼                        │
+                │        ┌──────────────────────────┐           │
+                │        │ ReactionDeadLetterConsumer│           │
+                │        │ (auto-ack) → Postgres     │           │
+                │        │  reaction.dropped_reactions│          │
+                │        └──────────────────────────┘            │
+                │ (Publish: fanout)                              │
+                ▼                                                │
+     [ Exchange: reaction.results ]                              │
+                │                                                │
+                └────────────────────────────────────────────────┘
                   (Binding to: anonymous.dash.rx)
 ```
 
@@ -246,7 +257,7 @@ All RabbitMQ exchanges are configured as durable to withstand broker restarts.
 6.  **Reaction Dead-Letter Channel**:
     *   **Exchange**: `reaction.dlx` (Type: `direct`)
     *   **Queue**: `detection.results.reaction.dlq` (Durable), consumed by `ReactionDeadLetterConsumer` (auto-ack — there is no further retry path from this leaf).
-    *   **Purpose**: Catches detection events that Reaction failed to process (e.g. a Postgres or Redis write failure inside the escalation logic) instead of losing them on ack. The consumer extracts the `x-death` reason and writes an audit row to `reaction.dropped_reactions`.
+    *   **Purpose**: Catches detection events that Reaction failed to process (an unexpected error in `handle()` — routine Redis/Postgres write failures are retried internally and only logged on exhaustion, so they don't reach this path by themselves) instead of losing them on ack. The consumer extracts the `x-death` reason and writes an audit row to `reaction.dropped_reactions`.
 
 ### 2.2 Serialization & Message Payload Schemas
 All messages are serialized and transmitted in **JSON UTF-8** format:

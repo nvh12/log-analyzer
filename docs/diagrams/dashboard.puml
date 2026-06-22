@@ -48,6 +48,8 @@ together {
     interface FlowLogRepository
     interface ReactionRepository
     interface IpBlockPort
+    interface WhitelistPort
+    interface SystemMetricsPort
     interface BroadcastPort
     interface SseRegistrar
 
@@ -55,7 +57,9 @@ together {
     HttpLogRepository -[hidden]down- FlowLogRepository
     FlowLogRepository -[hidden]down- ReactionRepository
     ReactionRepository -[hidden]down- IpBlockPort
-    IpBlockPort -[hidden]down- BroadcastPort
+    IpBlockPort -[hidden]down- WhitelistPort
+    WhitelistPort -[hidden]down- SystemMetricsPort
+    SystemMetricsPort -[hidden]down- BroadcastPort
     BroadcastPort -[hidden]down- SseRegistrar
   }
 }
@@ -101,6 +105,14 @@ together {
 
   package "infrastructure.sse" {
     class SseEmitterRegistry
+  }
+
+  package "infrastructure.web" {
+    class SimulationWhitelistAdapter
+  }
+
+  package "infrastructure.monitoring" {
+    class SystemMetricsAdapter
   }
 }
 
@@ -161,9 +173,11 @@ together {
 together {
   package "infrastructure.config" {
     class DashboardProperties
+    class SimulationProperties
     class WebConfig
 
-    DashboardProperties -[hidden]down- WebConfig
+    DashboardProperties -[hidden]down- SimulationProperties
+    SimulationProperties -[hidden]down- WebConfig
   }
 }
 
@@ -180,6 +194,8 @@ application -[hidden]right- "application.port"
 "infrastructure.mq" -[hidden]right- "infrastructure.mq.dto"
 "infrastructure.mq.dto" -[hidden]right- "infrastructure.redis"
 "infrastructure.redis" -[hidden]right- "infrastructure.sse"
+"infrastructure.sse" -[hidden]right- "infrastructure.web"
+"infrastructure.web" -[hidden]right- "infrastructure.monitoring"
 "infrastructure.persistence.entity" -[hidden]right- "infrastructure.persistence.mapper"
 
 ' ---- presentation -> application.port ----
@@ -188,8 +204,9 @@ LogController --> HttpLogRepository
 LogController --> FlowLogRepository
 ReactionController --> ReactionRepository
 ReactionController --> IpBlockPort
+ReactionController --> WhitelistPort
 SseController --> SseRegistrar
-SystemController --> DashboardProperties
+SystemController --> SystemMetricsPort
 
 ' ---- application ----
 ThroughputService --> HttpLogRepository
@@ -213,6 +230,14 @@ IpBlockStore ..|> IpBlockPort
 ' ---- infrastructure.sse ----
 SseEmitterRegistry ..|> BroadcastPort
 SseEmitterRegistry ..|> SseRegistrar
+
+' ---- infrastructure.web ----
+SimulationWhitelistAdapter ..|> WhitelistPort
+SimulationWhitelistAdapter --> SimulationProperties
+
+' ---- infrastructure.monitoring ----
+SystemMetricsAdapter ..|> SystemMetricsPort
+SystemMetricsAdapter --> DashboardProperties
 
 ' ---- infrastructure.persistence.repository ----
 DetectionRepositoryImpl ..|> DetectionRepository

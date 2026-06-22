@@ -101,10 +101,10 @@ together {
 
     class Log
     class Flow
-    class Vocab
+    class ParamVocab
 
     Log -[hidden]down- Flow
-    Flow -[hidden]down- Vocab
+    Flow -[hidden]down- ParamVocab
   }
 
   package Inputs {

@@ -13,7 +13,7 @@ hide empty members
 ' ---- Layout / Together groups ----
 together {
   package "domain.services" {
-    class LogGenerator
+    class "log_generator" as LogGenerator <<module>>
   }
 
   package "domain.models" {
@@ -40,9 +40,9 @@ together {
 
 together {
   package "presentation.routers" {
-    class SimulationRouter
-    class AccessControlRouter
-    class TargetRouter
+    class "simulation_router" as SimulationRouter <<module>>
+    class "access_control_router" as AccessControlRouter <<module>>
+    class "target_router" as TargetRouter <<module>>
 
     SimulationRouter -[hidden]down- AccessControlRouter
     AccessControlRouter -[hidden]down- TargetRouter
@@ -51,10 +51,12 @@ together {
   package "presentation.schemas" {
     class StartSimulationRequest
     class ReplayRequest
-    class AccessControlSchemas
+    class BlockRequest
+    class RateLimitRequest
 
     StartSimulationRequest -[hidden]down- ReplayRequest
-    ReplayRequest -[hidden]down- AccessControlSchemas
+    ReplayRequest -[hidden]down- BlockRequest
+    BlockRequest -[hidden]down- RateLimitRequest
   }
 }
 
@@ -75,16 +77,18 @@ together {
   package infrastructure {
     class FlowStatsLoader
     class ReplayLoader
-    class Scaler
+    class RedisLock
+    class "scaler" as Scaler <<module>>
 
     FlowStatsLoader -[hidden]down- ReplayLoader
-    ReplayLoader -[hidden]down- Scaler
+    ReplayLoader -[hidden]down- RedisLock
+    RedisLock -[hidden]down- Scaler
   }
 
   package "infrastructure.config" {
     class Settings
-    class Rabbitmq
-    class Redis
+    class "rabbitmq" as Rabbitmq <<module>>
+    class "redis_client" as Redis <<module>>
 
     Settings -[hidden]down- Rabbitmq
     Rabbitmq -[hidden]down- Redis
@@ -94,7 +98,7 @@ together {
 together {
   package dependencies {
     class Container
-    class AdminAuth
+    class "require_admin_key" as AdminAuth <<function>>
 
     Container -[hidden]down- AdminAuth
   }
@@ -122,6 +126,7 @@ AccessControlRouter --> AdminAuth
 ' ---- application ----
 SimulationUseCase --> PublishPort
 SimulationUseCase --> LogGenerator
+SimulationUseCase --> RedisLock
 
 ' ---- domain ----
 "domain.services" ..> "domain.models" : uses
@@ -132,9 +137,11 @@ RabbitMQPublisherAdapter ..|> PublishPort
 ' ---- infrastructure -> config ----
 RabbitMQPublisherAdapter --> Rabbitmq
 AccessControlRouter --> Redis
+AccessControlMiddleware --> Redis
 FlowStatsLoader ..> Settings : configured via
 ReplayLoader ..> Settings : configured via
 Scaler --> Redis
+Scaler --> RedisLock
 
 ' ---- DI container wiring ----
 Container --> SimulationUseCase

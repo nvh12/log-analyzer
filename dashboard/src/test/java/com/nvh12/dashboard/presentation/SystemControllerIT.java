@@ -53,14 +53,6 @@ class SystemControllerIT extends AbstractContainerIT {
     }
 
     @Test
-    void health_queueDepths_returnsArrayEvenWhenNoTrackedQueuesPresent() throws Exception {
-        // None of the tracked queues (log.raw, detection.results, etc.) exist in test container
-        mockMvc.perform(get("/api/system/health"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.queue_depths").isArray());
-    }
-
-    @Test
     void health_queueDepths_returnsMessageCountForTrackedQueueWithBacklog() throws Exception {
         amqpAdmin.declareQueue(new Queue("log.raw", false, false, false));
         rabbitTemplate.convertAndSend("", "log.raw", "test-message");

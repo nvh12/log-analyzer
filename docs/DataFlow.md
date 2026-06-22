@@ -27,7 +27,7 @@ This document traces every message and table through the pipeline, field by fiel
 | `drop_audit` | `log_processing` | log-processing writes | Dropped/failed logs |
 | `detection_results` | `analysis` | log-analysis writes, Dashboard reads | |
 | `reaction_logs` | `reaction` | reaction writes, Dashboard reads | |
-| `dropped_reactions` | `reaction` | reaction writes | Detection events Reaction failed to handle (Postgres/Redis write failure), recovered via the `detection.results.reaction.dlq` dead-letter path |
+| `dropped_reactions` | `reaction` | reaction writes | Detection events Reaction failed to handle (an unexpected error in `handle()`, not a routine retried Redis/Postgres write), recovered via the `detection.results.reaction.dlq` dead-letter path |
 | `schema_migrations` | `analysis` | log-analysis schema tracker | Internal |
 
 ---
@@ -349,7 +349,7 @@ Fields actually read by each reaction service:
 | `detection_type` | VARCHAR(20) | No | |
 | `source_ip` | VARCHAR(45) | Yes | Null for TRAFFIC reactions |
 | `severity` | VARCHAR(10) | No | |
-| `action` | VARCHAR(15) | No | TRAFFIC→`SCALE_UP`; DDOS→`RATE_LIMIT` (first 1-2 detections) or `BLOCK` (3rd+ within 10-min window); WEB_ATTACK→`BLOCK`; BRUTE_FORCE→`RATE_LIMIT` (first 1-2 detections) or `BLOCK` (3rd+ within 10-min window) |
+| `action` | VARCHAR(15) | No | TRAFFIC→`SCALE_UP`; DDOS→`RATE_LIMIT` (first 1-2 detections) or `BLOCK` (3rd+ within 10-min window); WEB_ATTACK→`BLOCK`; BRUTE_FORCE→`RATE_LIMIT` (first 1-2 detections) or `BLOCK` (3rd+ within 10-min window); DDOS/WEB_ATTACK/BRUTE_FORCE→`WHITELISTED` instead of the above when `source_ip` is on the whitelist (row is still saved; no alert is enqueued and no `reaction.results` message reason below applies the usual TTL) |
 | `network_layer` | VARCHAR(10) | No | |
 | `detected_at` | TIMESTAMPTZ | No | From `ReactionInput.detectedAt` |
 | `window_start` | TIMESTAMPTZ | Yes | Non-null only for TRAFFIC |

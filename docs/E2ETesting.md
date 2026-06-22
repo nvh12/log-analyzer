@@ -57,7 +57,7 @@ Every run builds the application images from scratch, so stale binaries from a p
 
 ```powershell
 pytest -v                        # verbose per-test output
-pytest test_ddos.py              # one file
+pytest test_flow_attacks.py      # one file
 pytest -k "test_http_logs"       # filter by name substring
 pytest -x                        # stop on first failure
 pytest --tb=short                # shorter tracebacks

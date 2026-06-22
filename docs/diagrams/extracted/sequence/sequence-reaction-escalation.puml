@@ -52,9 +52,13 @@ end
 ReactionSvc -> LogSvc : save(ReactionInput, ReactionAction)
 LogSvc --> ReactionSvc : saved
 
-ReactionSvc -> ReactionSvc : buildAlertDto(ReactionInput)
-ReactionSvc -> AlertSvc : enqueue(Alert)
-AlertSvc --> ReactionSvc : done
+alt action != WHITELISTED
+    ReactionSvc -> ReactionSvc : buildAlertDto(ReactionInput)
+    ReactionSvc -> AlertSvc : enqueue(Alert)
+    AlertSvc --> ReactionSvc : done
+else action == WHITELISTED
+    note right of ReactionSvc : alert skipped — only the\nWHITELISTED log row is written
+end
 
 ReactionSvc --> Consumer : done
 

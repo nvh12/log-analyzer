@@ -8,10 +8,10 @@ The **Dashboard Frontend** (contained in the `dashboard-fe` directory) is a Sing
 
 The Dashboard Frontend is designed using React’s **Component-Based Architecture** paired with a **Hooks-driven State Management** approach, isolating UI layouts from event streaming and data fetching logic:
 
--   **Views/Pages (`pages/`)**: Top-level route entrypoints (e.g. `Live`, `Logs`, `Detections`, `Reactions`, `System`). These manage layout assembly and invoke data hooks.
--   **Reusable Components (`components/`)**: Lightweight, stateless, or presentation-focused UI widgets (e.g. UC tiles, live scroll lists, modal charts, detail drawers) that accept attributes and styles.
--   **Custom Hooks (`hooks/`)**: Encapsulates state-management logic. Includes hooks to connect, buffer, and clean up SSE streams, as well as hooks that coordinate REST fetches with browser lifecycle hooks.
--   **API Clients (`api.js`)**: Isolated data connector layer that exposes functions to call REST endpoints, maintaining decoupling from components.
+-   **Views/Pages (`pages/`)**: Top-level route entrypoints — `Live`, `Logs`, `Detections`, `Reactions`, `System`, `Simulation`. These manage layout assembly and invoke data hooks.
+-   **Reusable Components (`components/`)**: Lightweight, stateless, or presentation-focused UI widgets — `Badge`, `Card`, `DetailDrawer`, `Empty`, `ErrorBoundary`, `Filters`, `Layout`, `Loading`, `Pagination`, `StatusDot`, `Table`.
+-   **Custom Hooks (`hooks/`)**: `useSSE` connects/cleans up the `/api/stream` `EventSource` and dispatches per-event-type handlers; `useData` coordinates REST fetches (loading/error/reload) with component lifecycle; `useDebounce` debounces filter inputs.
+-   **API Clients (`api.js`)**: Isolated data connector layer that exposes functions to call REST endpoints (via Axios), maintaining decoupling from components.
 
 ```mermaid
 graph TD
@@ -29,12 +29,12 @@ graph TD
     end
 
     subgraph Custom Hooks / State Management
-        useSse[useSse SSE EventSource handler]
-        useFetch[useFetch REST fetcher cache]
+        useSse[useSSE SSE EventSource handler]
+        useFetch[useData REST fetcher with loading/error/reload]
     end
 
     subgraph API Connectors
-        ApiClient[api.js Fetch client]
+        ApiClient[api.js Axios client]
     end
 
     LivePage --> UCTiles
@@ -56,16 +56,20 @@ graph TD
 ```
 dashboard-fe/
 ├── src/
-│   ├── components/      # UI components (tiles, streams, charts, detail cards)
+│   ├── components/      # UI components (Badge, Card, DetailDrawer, Empty, ErrorBoundary,
+│   │                      Filters, Layout, Loading, Pagination, StatusDot, Table)
 │   ├── pages/           # Views (Live, Logs, Detections, Reactions, System, Simulation)
-│   ├── hooks/           # Custom React hooks (SSE stream listeners, REST data fetching)
-│   ├── api.js           # REST API client configurations
+│   ├── hooks/           # useSSE (SSE stream), useData (REST fetch), useDebounce
+│   ├── api.js           # REST API client (Axios)
+│   ├── App.jsx          # BrowserRouter + Routes (route setup)
 │   ├── index.css        # Tailwind stylesheet
-│   └── main.jsx         # App mounting, route setup
-├── nginx.conf           # Local Nginx configuration (port 3000)
-├── nginx-ssl.conf       # SSL enabled deployment Nginx configuration (ports 80/443)
+│   └── main.jsx         # App mounting (renders <App/>)
+├── nginx.conf           # Production Nginx config (listens on port 80; proxies /api and /simulate)
+├── nginx-ssl.conf       # SSL-enabled deployment Nginx configuration (ports 80/443)
 └── Dockerfile           # Multi-stage production Nginx wrapper
 ```
+
+Note: the Vite dev server itself listens on port 3000 (`vite.config.js`) and proxies `/api` → `http://localhost:8083` and `/simulate` → `http://localhost:8001`; the production Nginx container (`nginx.conf`) listens on port 80 and proxies `/api/` → the `dashboard` service and `/simulate/` → the `simulation` service.
 
 ---
 

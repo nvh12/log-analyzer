@@ -9,7 +9,7 @@ This document outlines the strategy for detecting Brute Force attacks (specifica
 Brute Force attacks involve repetitive attempts to guess authentication credentials. Unlike volumetric DDoS attacks (UC2), Brute Force attacks are characterized by:
 *   High frequency of short-lived connections.
 *   Repeated authentication failures.
-*   Distinctive TCP flag patterns (e.g., frequent RST flags from rejected attempts).
+*   Distinctive TCP flag patterns (e.g., elevated FIN/PSH/ACK flag counts from rejected or short-lived attempts — the trained 43-feature set has no separate RST flag column).
 *   Targeting specific ports (Port 21 for FTP, Port 22 for SSH).
 
 By using **XGBoost**, we can distinguish these patterns from normal traffic by training the model on historical attack traces from the CICIDS2017 dataset.
@@ -28,8 +28,8 @@ Additionally, UC4 follows the same data cleaning protocol as UC2, replacing `NaN
 ### Key Indicators:
 *   **Packet Count**: High frequency of small packets (Bwd Packets/s).
 *   **IAT Mean/Std**: Irregular inter-arrival times during authentication attempts.
-*   **Flags**: High count of RST (Reset) flags during connection drops.
-*   **Destination Port**: Focus on common authentication service ports (21, 22).
+*   **Flags**: Elevated FIN/PSH/ACK/URG flag counts from short-lived connection attempts (the model's feature set, shared with UC2, has no dedicated RST flag column).
+*   **Destination Port**: Focus on common authentication service ports (21, 22). Note: `Destination Port` is not itself one of the 43 trained feature columns — the signal comes from the flow's timing/packet-shape features for traffic on those ports, not a port-number feature.
 
 ---
 
@@ -42,9 +42,10 @@ The model is trained and evaluated using the **CICIDS2017** dataset provided by 
 *   **Tuesday (Attack)**: Contains FTP-Patator (09:17–10:30) and SSH-Patator (02:09–03:11) campaigns.
 
 ### Temporal Split (Avoid Leakage):
-Due to the non-overlapping nature of the attack campaigns on Tuesday, a **70/30 temporal split** is used:
+Due to the non-overlapping nature of the attack campaigns on Tuesday, a **70/30 temporal split** is used (split at the row-count-derived 70th-percentile timestamp, floored to the second):
 *   **Training Set**: Includes the entirety of Monday and the first 70% of Tuesday (covering both SSH-Patator and FTP-Patator).
 *   **Test Set**: The remaining 30% of Tuesday (evaluating detection performance on FTP-Patator).
+*   **Known limitation**: because SSH-Patator (02:09–03:11) falls entirely before the 70% split point, the test set contains **zero SSH-Patator rows** — only FTP-Patator (2,804 rows) is represented in test-set evaluation metrics. SSH-Patator detection quality is therefore validated only on training-set performance, not held-out data. This is flagged explicitly in `brute_force_cicids2017_data_prep.ipynb`.
 
 ---
 

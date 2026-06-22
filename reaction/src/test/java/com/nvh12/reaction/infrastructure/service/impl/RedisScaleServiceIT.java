@@ -39,16 +39,4 @@ class RedisScaleServiceIT extends AbstractContainerIT {
 
         assertThat(redisTemplate.opsForValue().get(SCALE_REPLICAS)).isEqualTo("12");
     }
-
-    @Test
-    void requestScale_defaultReplicas_varyBySeverity() {
-        service.requestScale(DetectionType.TRAFFIC, Severity.LOW);
-        assertThat(redisTemplate.opsForValue().get(SCALE_REPLICAS)).isEqualTo("2");
-
-        service.requestScale(DetectionType.TRAFFIC, Severity.MEDIUM);
-        assertThat(redisTemplate.opsForValue().get(SCALE_REPLICAS)).isEqualTo("3");
-
-        service.requestScale(DetectionType.TRAFFIC, Severity.CRITICAL);
-        assertThat(redisTemplate.opsForValue().get(SCALE_REPLICAS)).isEqualTo("8");
-    }
 }

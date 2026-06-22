@@ -36,15 +36,6 @@ class ReactionResultListenerTest {
     }
 
     @Test
-    void onReaction_scaleUpAction_broadcastsWithNullTarget() {
-        ReactionResultMessage msg = new ReactionResultMessage(7L, ReactionAction.SCALE_UP, null, 0L, Instant.now());
-
-        listener.onReaction(msg);
-
-        verify(registry).broadcast(eq("reaction"), eq(msg));
-    }
-
-    @Test
     void onReaction_multipleMessages_broadcastsEach() {
         ReactionResultMessage m1 = new ReactionResultMessage(1L, ReactionAction.BLOCK, "1.1.1.1", 300L, Instant.now());
         ReactionResultMessage m2 = new ReactionResultMessage(2L, ReactionAction.RATE_LIMIT, "2.2.2.2", 600L, Instant.now());

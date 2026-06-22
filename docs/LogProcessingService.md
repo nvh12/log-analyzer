@@ -48,7 +48,9 @@ graph TD
     JPA --> DB
     Worker --> Rabbit
     Rabbit --> RMQ
-    RetryScheduler --> Worker
+    RetryScheduler --> Parser
+    RetryScheduler --> JPA
+    RetryScheduler --> Rabbit
     RetryScheduler --> DB
 ```
 
@@ -69,7 +71,7 @@ log-processing/
 
 ---
 
-## 2. Core Components & Responsibilities
+## 3. Core Components & Responsibilities
 
 ### 2.1 CLF & Flow Parser (`domain/service/LogProcessingService.java`)
 -   **HTTP Parser**: Matches raw messages against CLF patterns. Converts matches into `NormalizedLog` entities containing timestamps, normalized paths, clean query strings, and request details.
@@ -88,7 +90,7 @@ The service implements two independent error paths to maximize system reliabilit
 
 ---
 
-## 3. Technology Stack Configurations
+## 4. Technology Stack Configurations
 
 -   **Spring AMQP**: The `log.raw` listener (`RawLogConsumer`) only enqueues into a Redis sorted set; actual processing concurrency comes from a separate `ThreadPoolTaskExecutor` (core: 4, max: 12) driven by `LogProcessingPoller`.
 -   **HikariCP Connection Pool**: Maintained at a maximum of 10 connections.

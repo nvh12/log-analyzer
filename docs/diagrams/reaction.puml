@@ -59,6 +59,7 @@ together {
     interface ReactionEventPort
     interface AlertChannel
     interface WhitelistService
+    interface DroppedReactionService
 
     ReactionService -[hidden]down- AlertService
     AlertService -[hidden]down- ReactionLogService
@@ -68,12 +69,14 @@ together {
     ScaleService -[hidden]down- ReactionEventPort
     ReactionEventPort -[hidden]down- AlertChannel
     AlertChannel -[hidden]down- WhitelistService
+    WhitelistService -[hidden]down- DroppedReactionService
   }
 }
 
 together {
   package presentation {
     class DetectionResultConsumer
+    class ReactionDeadLetterConsumer
   }
 }
 
@@ -93,6 +96,7 @@ together {
     class RedisRateLimitService
     class RedisScaleService
     class JpaReactionLogService
+    class JpaDroppedReactionService
     class Retry
     class SimulationWhitelistClient
 
@@ -109,7 +113,8 @@ together {
     RedisIpBlockService -[hidden]down- RedisRateLimitService
     RedisRateLimitService -[hidden]down- RedisScaleService
     RedisScaleService -[hidden]down- JpaReactionLogService
-    JpaReactionLogService -[hidden]down- Retry
+    JpaReactionLogService -[hidden]down- JpaDroppedReactionService
+    JpaDroppedReactionService -[hidden]down- Retry
     Retry -[hidden]down- SimulationWhitelistClient
   }
 }
@@ -121,10 +126,12 @@ together {
 
   package "infrastructure.persistence.repository" {
     interface ReactionLogRepository
+    interface DroppedReactionRepository
   }
 
   package "infrastructure.persistence.entity" {
     class ReactionLogEntity
+    class DroppedReactionEntity
   }
 
   package config {
@@ -153,6 +160,7 @@ presentation -[hidden]down- "service.impl"
 
 ' ---- presentation -> service ----
 DetectionResultConsumer --> ReactionService
+ReactionDeadLetterConsumer --> DroppedReactionService
 
 ' ---- service -> service.dto (package-level, kept minimal) ----
 service ..> "service.dto" : uses
@@ -208,10 +216,14 @@ JpaReactionLogService ..|> ReactionLogService
 JpaReactionLogService --> ReactionEventPort
 JpaReactionLogService --> ReactionLogRepository
 
+JpaDroppedReactionService ..|> DroppedReactionService
+JpaDroppedReactionService --> DroppedReactionRepository
+
 ReactionResultPublisher ..|> ReactionEventPort
 
 ' ---- persistence ----
 ReactionLogRepository --> ReactionLogEntity
+DroppedReactionRepository --> DroppedReactionEntity
 
 ' ---- config ----
 DiscordAlertService --> AlertProperties

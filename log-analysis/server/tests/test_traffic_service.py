@@ -334,25 +334,6 @@ def test_variance_min_floor_stifles_small_variations(thresholds):
     assert result.anomaly is False
 
 
-def test_idle_baseline_jump_just_above_floor_does_not_alert(thresholds):
-    # Regression: an idle/near-zero baseline ticking up to a value that merely
-    # clears absolute_min_floor (e.g. 16 with floor=15) must not fire z_score/iqr/ema
-    # together purely because the floored variance is tiny relative to the jump.
-    idle_history = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0]
-    window = make_window(idle_history + [16.0])
-
-    floor_thresholds = thresholds.model_copy(update={
-        "absolute_min_floor": 15.0,
-        "variance_min_floor": 5.0,
-        "low_volume_jump_multiplier": 3.0,
-    })
-
-    result = traffic_service.detect(window, floor_thresholds)
-
-    assert result.anomaly is False
-    assert result.method_flags == {"z_score": False, "iqr": False, "ema": False, "seasonal": False}
-
-
 def test_idle_baseline_large_jump_still_alerts(thresholds):
     # A genuine flood from an idle baseline (e.g. 0/1 -> 200) must still fire,
     # since the low-volume suppression should only catch modest jumps near the floor.

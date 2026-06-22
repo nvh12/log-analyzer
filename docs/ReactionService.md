@@ -8,7 +8,7 @@ The **Reaction Service** is a Spring Boot service responsible for processing det
 
 The Reaction Service implements a standard **Layered Architecture (Three-tier)** designed to sequentially flow detection verdicts into state evaluations and notification outputs:
 
--   **Presentation Layer (`presentation/`)**: The entry point. Houses message consumers (`DetectionResultConsumer`) that listen to incoming detection events from RabbitMQ.
+-   **Presentation Layer (`presentation/`)**: The entry point. Houses message consumers (`DetectionResultConsumer`, `ReactionDeadLetterConsumer`) that listen to incoming detection events and dead-lettered reactions from RabbitMQ.
 -   **Service Layer (`service/`)**: Contains the business logic orchestrating active security policies, IP block decisions, escalation logic, and notification composites.
 -   **Data Access / Infrastructure Layer (`infrastructure/` & `config/`)**: Manages external data adapters, providing access to PostgreSQL databases (via Spring Data JPA repositories) and Redis connection handles to execute IP blocks.
 
@@ -16,6 +16,7 @@ The Reaction Service implements a standard **Layered Architecture (Three-tier)**
 graph TD
     subgraph Presentation / Input
         Consumer[DetectionResultConsumer RabbitMQ]
+        DlqConsumer[ReactionDeadLetterConsumer RabbitMQ]
     end
 
     subgraph Service / Business Rules
@@ -27,6 +28,7 @@ graph TD
     subgraph Infrastructure & Data Access / Output
         RedisLua[Redis Template INCR_WITH_EXPIRE Lua]
         Postgres[(PostgreSQL JPA Write)]
+        DroppedPostgres[(PostgreSQL dropped_reactions)]
         Publisher[RabbitTemplate reaction.results]
         SMTP[JavaMail / SMTP Service]
         Resend[Resend API Client]
@@ -42,6 +44,9 @@ graph TD
     AlertComposite --> Discord
     Escalation --> Postgres
     Escalation --> Publisher
+    Consumer -. nack on failure -.-> DLX[reaction.dlx]
+    DLX --> DlqConsumer
+    DlqConsumer --> DroppedPostgres
 ```
 
 ---
@@ -83,7 +88,7 @@ reaction/
 
 ## 3. Communication & Messaging
 
--   **RabbitMQ Consumer**: Subscribes to the `detection.results.reaction` durable queue (bound to the `detection.results` fanout exchange). Uses **Manual Acknowledgment** via the message `Channel` (`DetectionResultConsumer`): the message is acked on success or on an intentional drop (malformed event, `NONE` severity, no handler registered), and `nack`ed without requeue (`basicNack(tag, false, false)`) if `ReactionService.handle()` throws — e.g. a Postgres or Redis write failure inside the escalation logic.
+-   **RabbitMQ Consumer**: Subscribes to the `detection.results.reaction` durable queue (bound to the `detection.results` fanout exchange). Uses **Manual Acknowledgment** via the message `Channel` (`DetectionResultConsumer`): the message is acked on success or on an intentional drop (malformed event, `NONE` severity, no handler registered), and `nack`ed without requeue (`basicNack(tag, false, false)`) if `ReactionService.handle()` throws. In practice this means an *unexpected* failure (e.g. a bug, or a non-`DataAccessException` runtime error) — the routine Redis writes (`RedisIpBlockService.block`, `RedisRateLimitService.limit`) and the Postgres write (`JpaReactionLogService.save`) each retry transient failures internally (`Retry.run`, 3 attempts) and only log on exhaustion rather than rethrowing, so a persistent Redis/Postgres outage is absorbed silently and does not by itself trigger a nack/DLQ entry.
 -   **Dead-Letter Path**: `detection.results.reaction` declares `x-dead-letter-exchange=reaction.dlx` / `x-dead-letter-routing-key=detection.results.reaction.dlq`, mirroring log-processing's DLX pattern. A nacked message is routed to the `detection.results.reaction.dlq` queue, consumed by a separate auto-ack `ReactionDeadLetterConsumer`, which extracts the `x-death` reason and writes an audit row to `reaction.dropped_reactions` (detection_type, source_ip, severity, detected_at, failure_reason, raw_payload) — so a failed reaction is recorded rather than silently lost. If the audit write itself fails, the full entry is logged at ERROR (no further requeue path, since this is the terminal leaf of the pipeline).
 -   **RabbitMQ Publisher**: Publishes actions to the `reaction.results` fanout exchange.
 -   **PostgreSQL Persistence**: Writes all reaction logs and active block actions to database tables, plus dropped-reaction audit rows via the dead-letter path above.

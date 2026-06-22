@@ -81,6 +81,7 @@ class DetectionControllerIT extends AbstractContainerIT {
         mockMvc.perform(get("/api/detections"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.total").value(0))
+                .andExpect(jsonPath("$.size").value(20))
                 .andExpect(jsonPath("$.content", hasSize(0)));
     }
 
@@ -134,13 +135,6 @@ class DetectionControllerIT extends AbstractContainerIT {
                 .andExpect(jsonPath("$.total").value(1))
                 .andExpect(jsonPath("$.content[0].detectionType").value("DDOS"))
                 .andExpect(jsonPath("$.content[0].severity").value("HIGH"));
-    }
-
-    @Test
-    void listDetections_defaultPagination_uses20PageSize() throws Exception {
-        mockMvc.perform(get("/api/detections"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.size").value(20));
     }
 
     private DetectionResultEntity detectionEntity(String type, String severity) {

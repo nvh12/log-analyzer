@@ -19,15 +19,17 @@ participant "ModelRepository" as ModelStore
 participant "ResultRepositoryPort" as ResultRepo
 participant "PublisherPort" as Publisher
 
-Runner -> UseCase : execute(WebAttackInput)
-UseCase -> UseCase : detect(WebAttackInput, ModelRepository)
+Runner -> UseCase : execute(WebAttackInput, window_start, window_end)
+UseCase -> UseCase : detect(WebAttackInput, ModelRepository, window_start, window_end)
 
-alt Layer 1 Anomaly
-    UseCase --> UseCase : WebAttackResult (anomaly=True, layer="rule_engine")
-else Layer 1 Clear (Has Payload)
+alt Layer 1 Anomaly (regex signature match)
+    UseCase --> UseCase : WebAttackResult (anomaly=True, layer_triggered="rule_engine:<signature>")
+else Layer 1 Clear, no query_string and no body
+    UseCase --> UseCase : WebAttackResult (anomaly=False, layer_triggered=None) — ML layer skipped, no payload to analyse
+else Layer 1 Clear, has query_string or body
     UseCase -> ModelStore : get(WEB_MODEL)
     ModelStore --> UseCase : Model Artifact (XGBoost, scaler, vocab)
-    UseCase -> UseCase : Extract features & run XGBoost model prediction
+    UseCase -> UseCase : Extract 12-d features (9 structural + 3 vocab) & run XGBoost prediction
 end
 
 alt Anomaly Detected (anomaly == True)

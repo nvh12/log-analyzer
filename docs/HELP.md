@@ -9,13 +9,13 @@ The following was discovered as part of building this project:
 For further reference, please consider the following sections:
 
 * [Official Gradle documentation](https://docs.gradle.org)
-* [Spring Boot Gradle Plugin Reference Guide](https://docs.spring.io/spring-boot/4.0.3/gradle-plugin)
-* [Create an OCI image](https://docs.spring.io/spring-boot/4.0.3/gradle-plugin/packaging-oci-image.html)
-* [Spring Data JPA](https://docs.spring.io/spring-boot/4.0.3/reference/data/sql.html#data.sql.jpa-and-spring-data)
-* [Spring Web](https://docs.spring.io/spring-boot/4.0.3/reference/web/servlet.html)
-* [Spring Boot Actuator](https://docs.spring.io/spring-boot/4.0.3/reference/actuator/index.html)
-* [Spring for RabbitMQ](https://docs.spring.io/spring-boot/4.0.3/reference/messaging/amqp.html)
-* [Spring Data Redis (Access+Driver)](https://docs.spring.io/spring-boot/4.0.3/reference/data/nosql.html#data.nosql.redis)
+* [Spring Boot Gradle Plugin Reference Guide](https://docs.spring.io/spring-boot/4.0.6/gradle-plugin)
+* [Create an OCI image](https://docs.spring.io/spring-boot/4.0.6/gradle-plugin/packaging-oci-image.html)
+* [Spring Data JPA](https://docs.spring.io/spring-boot/4.0.6/reference/data/sql.html#data.sql.jpa-and-spring-data)
+* [Spring Web](https://docs.spring.io/spring-boot/4.0.6/reference/web/servlet.html)
+* [Spring Boot Actuator](https://docs.spring.io/spring-boot/4.0.6/reference/actuator/index.html)
+* [Spring for RabbitMQ](https://docs.spring.io/spring-boot/4.0.6/reference/messaging/amqp.html)
+* [Spring Data Redis (Access+Driver)](https://docs.spring.io/spring-boot/4.0.6/reference/data/nosql.html#data.nosql.redis)
 
 ### Guides
 The following guides illustrate how to use some features concretely:

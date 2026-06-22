@@ -140,7 +140,7 @@ Single PostgreSQL instance (`log-analyzer` database) shared across all services.
 | `severity` | `detection_results`, `reaction_logs` | `NONE`, `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` |
 | `network_layer` | `detection_results` (VARCHAR 5) | `HTTP`, `FLOW` |
 | `network_layer` | `reaction_logs` (VARCHAR 10) | `HTTP`, `FLOW` |
-| `action` | `reaction_logs` | `RATE_LIMIT`, `BLOCK`, `SCALE_UP` |
+| `action` | `reaction_logs` | `RATE_LIMIT`, `BLOCK`, `SCALE_UP`, `WHITELISTED` |
 | `method` | `normalized_http` | `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`, `TRACE`, `CONNECT` |
 | `source` | `drop_audit` | `HTTP`, `FLOW` |
 | `drop_reason` | `drop_audit` | `RETRY_EXHAUSTED`, `DEAD_LETTERED`, `DLQ_OVERFLOW`, `DLQ_SAVE_FAILED` |
@@ -270,7 +270,7 @@ Records every automated reaction action taken in response to a detection. Writte
 | `detection_type` | VARCHAR(20) | No | — | Copied from the detection event: `TRAFFIC` \| `DDOS` \| `WEB_ATTACK` \| `BRUTE_FORCE` |
 | `source_ip` | VARCHAR(45) | Yes | — | IP address that was blocked or rate-limited; **null for TRAFFIC** (no per-IP action, only SCALE_UP) |
 | `severity` | VARCHAR(10) | No | — | Copied from the detection event |
-| `action` | VARCHAR(15) | No | — | `RATE_LIMIT` (DDoS/BruteForce, attempts 1–2) \| `BLOCK` (WEB_ATTACK always; DDoS/BruteForce at attempt ≥3) \| `SCALE_UP` (TRAFFIC only) |
+| `action` | VARCHAR(15) | No | — | `RATE_LIMIT` (DDoS/BruteForce, attempts 1–2) \| `BLOCK` (WEB_ATTACK always; DDoS/BruteForce at attempt ≥3) \| `SCALE_UP` (TRAFFIC only) \| `WHITELISTED` (DDoS/BruteForce/WEB_ATTACK, when `source_ip` is on the whitelist — escalation/block is skipped and no alert is sent, but the row is still saved) |
 | `network_layer` | VARCHAR(10) | No | — | Copied from the detection event: `HTTP` or `FLOW` |
 | `detected_at` | TIMESTAMPTZ | No | — | Copied from the detection event; when the anomaly was originally detected |
 | `window_start` | TIMESTAMPTZ | Yes | — | Copied from detection; non-null only for TRAFFIC reactions |
@@ -279,7 +279,7 @@ Records every automated reaction action taken in response to a detection. Writte
 
 ### 5.7 `reaction.dropped_reactions`
 
-Audit trail for detection events that Reaction received but failed to process (a Postgres or Redis write inside `ReactionService.handle()` threw). Populated by `ReactionDeadLetterConsumer`, which consumes the `detection.results.reaction.dlq` queue (reached via `reaction.dlx` after the main consumer `nack`s the message without requeue). Added in migration `V2__create_dropped_reactions.sql`.
+Audit trail for detection events that Reaction received but failed to process (`ReactionService.handle()` threw an unexpected/unretried error — routine Redis and Postgres write failures are retried internally and only logged on exhaustion, so they don't reach this path by themselves). Populated by `ReactionDeadLetterConsumer`, which consumes the `detection.results.reaction.dlq` queue (reached via `reaction.dlx` after the main consumer `nack`s the message without requeue). Added in migration `V2__create_dropped_reactions.sql`.
 
 | Column | Type | Nullable | Default | Description |
 |---|---|---|---|---|
@@ -536,4 +536,4 @@ Simulation ──► [log.raw MQ] ──► log-processing
                                 all 4 app tables)
 ```
 
-Failed raw logs at the log-processing stage write to `drop_audit` (permanent) or the Redis `failed-log-queue` list (transient retry buffer, not persisted to PostgreSQL). Detection events that Reaction fails to handle (Postgres/Redis write failure) are routed via `reaction.dlx` to `dropped_reactions` (permanent), instead of being lost on ack.
+Failed raw logs at the log-processing stage write to `drop_audit` (permanent) or the Redis `failed-log-queue` list (transient retry buffer, not persisted to PostgreSQL). Detection events that Reaction's `handle()` fails on (an unexpected error, not a routine retried Redis/Postgres write) are routed via `reaction.dlx` to `dropped_reactions` (permanent), instead of being lost on ack.

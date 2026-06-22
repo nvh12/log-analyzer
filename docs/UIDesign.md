@@ -86,11 +86,11 @@
 | Text chính | `text-gray-300` (#d1d5db) | Nội dung văn bản thông thường |
 | Text phụ / nhãn | `text-gray-400` / `text-gray-500` | Header card, placeholder, metadata |
 | Xanh lá (OK / Active) | `text-green-400`, `bg-green-900/30` | Trạng thái hoạt động, thành công |
-| Đỏ (Critical / Error) | `text-red-400`, `bg-red-950` | Cảnh báo nghiêm trọng, lỗi, block |
-| Vàng (Warning / Medium) | `text-yellow-400` | Mức độ MEDIUM, cảnh báo |
-| Cam (High severity) | `text-orange-400` | Mức độ HIGH |
-| Xanh dương (Info) | `text-blue-300`, `bg-blue-900` | Thông tin, DDOS type |
-| Tím (Web Attack) | `text-purple-300`, `bg-purple-900` | WEB_ATTACK type |
+| Đỏ (Critical / Error / DDOS) | `text-red-300`, `bg-red-900/50` (badge) / `text-red-400`, `bg-red-950` (banner) | Cảnh báo nghiêm trọng, lỗi, block, **DDOS type** (xem 2.6 — `Badge.jsx` tô DDOS màu đỏ, không phải xanh dương) |
+| Vàng (Warning / Medium / Brute Force) | `text-yellow-400` / `text-yellow-300` | Mức độ MEDIUM, cảnh báo, **BRUTE_FORCE type** (xem 2.6) |
+| Cam (Traffic / High severity) | `text-orange-400` / `text-orange-300` | Mức độ HIGH, **TRAFFIC type** |
+| Xanh dương (Info / Scale Up) | `text-blue-300`, `bg-blue-900/50` | Thông tin, **SCALE_UP action** (không phải DDOS — xem ghi chú ở trên) |
+| Tím (Web Attack) | `text-purple-300`, `bg-purple-900/50` | WEB_ATTACK type |
 | Trắng (LOW severity) | `text-gray-300` | Mức độ thấp |
 
 ### 2.4 Thiết Kế Nút (Buttons)
@@ -113,7 +113,7 @@ Tất cả input/select/datetime dùng class `.field`:
 
 ```
 bg-gray-800  border border-gray-700  rounded  px-2 py-1
-font-mono  text-gray-300  text-sm
+font-mono  text-gray-300  text-xs
 focus:border-gray-500  focus:outline-none
 ```
 
@@ -126,31 +126,35 @@ focus:border-gray-500  focus:outline-none
 
 Badge là thẻ màu nhỏ hiển thị loại/trạng thái, dùng `text-xs`, `px-1.5 py-0.5`, `rounded`.
 
+Bảng dưới đây khớp với `dashboard-fe/src/components/Badge.jsx` (`UcBadge`/`SeverityBadge`/`ActionBadge`), tất cả đều có thêm `border` cùng tông màu (ví dụ `border-red-700`):
+
 | Badge | Màu nền | Màu chữ | Hiển thị |
 |---|---|---|---|
-| TRAFFIC | `bg-gray-700` | `text-gray-200` | TRAFFIC |
-| DDOS | `bg-blue-900` | `text-blue-300` | DDOS |
-| WEB_ATTACK | `bg-purple-900` | `text-purple-300` | WEB_ATTACK |
-| BRUTE_FORCE | `bg-orange-900` | `text-orange-300` | BRUTE_FORCE |
-| CRITICAL | `bg-red-900` | `text-red-300` | CRITICAL |
-| HIGH | `bg-orange-900` | `text-orange-300` | HIGH |
-| MEDIUM | `bg-yellow-900` | `text-yellow-300` | MEDIUM |
-| LOW | `bg-gray-800` | `text-gray-300` | LOW |
-| BLOCK | `bg-red-900` | `text-red-300` | BLOCK |
-| RATE_LIMIT | `bg-yellow-900` | `text-yellow-300` | RATE_LIMIT |
-| SCALE_UP | `bg-green-900` | `text-green-300` | SCALE_UP |
+| TRAFFIC | `bg-orange-900/50` | `text-orange-300` | TRAFFIC |
+| DDOS | `bg-red-900/50` | `text-red-300` | DDOS |
+| WEB_ATTACK | `bg-purple-900/50` | `text-purple-300` | WEB_ATTACK |
+| BRUTE_FORCE | `bg-yellow-900/50` | `text-yellow-300` | BRUTE_FORCE |
+| CRITICAL | `bg-red-950/80` | `text-red-200` | CRITICAL |
+| HIGH | `bg-red-900/50` | `text-red-300` | HIGH |
+| MEDIUM | `bg-orange-900/50` | `text-orange-300` | MEDIUM |
+| LOW | `bg-yellow-900/50` | `text-yellow-300` | LOW |
+| NONE | `bg-gray-800` | `text-gray-400` | NONE |
+| BLOCK | `bg-red-900/50` | `text-red-300` | BLOCK |
+| RATE_LIMIT | `bg-orange-900/50` | `text-orange-300` | RATE_LIMIT |
+| SCALE_UP | `bg-blue-900/50` | `text-blue-300` | SCALE_UP |
+| WHITELISTED | `bg-green-900/50` | `text-green-300` | WHITELISTED |
 
 ### 2.7 Chỉ Số Trạng Thái (Status Dot)
 
-Hình tròn nhỏ 8×8 px, đặt inline trước text nhãn.
+Hình tròn nhỏ 8×8 px (`w-2 h-2`, `StatusDot.jsx`), đặt inline trước text nhãn.
 
 | Màu | Trạng thái |
 |---|---|
-| `bg-green-500` + `animate-pulse` | Đang hoạt động, kết nối ổn định |
+| `bg-green-500` + `animate-pulse` (khi `pulse`) | Đang hoạt động, kết nối ổn định |
 | `bg-red-500` | Lỗi, ngắt kết nối, bị block |
 | `bg-yellow-400` | Cảnh báo, đang kết nối lại |
-| `bg-orange-500` | Mức HIGH |
-| `bg-gray-500` | Không hoạt động / idle |
+| `bg-orange-500` | Mức HIGH / use case đang firing |
+| `bg-gray-600` | Không hoạt động / idle |
 
 ### 2.8 Vị Trí Hiển Thị Thông Điệp Phản Hồi
 

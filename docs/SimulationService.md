@@ -21,7 +21,7 @@ graph TD
     end
 
     subgraph Application
-        Manager[ScenarioManager]
+        Manager[SimulationUseCase]
         WorkerTask[Worker Tasks / Loops]
     end
 
@@ -34,7 +34,7 @@ graph TD
         Replayer[Flow Replay Loader MinIO]
         Publisher[RabbitMQ aio-pika Publisher]
         Redis[Redis Cache & Blocklist]
-        Scaler[Dynamic Scaler SIGUSR]
+        Scaler[Dynamic Scaler SIGTTIN/SIGTTOU]
     end
 
     Router --> Manager
@@ -57,6 +57,7 @@ simulation/
 ├── domain/              # Core business rules, scenario models, log templates
 ├── infrastructure/      # System bindings (Redis client, RabbitMQ, Scaling)
 ├── presentation/        # FastAPI HTTP Routers & Endpoints
+├── dependencies/        # DI container (Container) & admin-key auth dependency
 ├── Dockerfile           # Docker image setup
 ├── main.py              # Application lifecycle & lifespan handlers
 └── requirements.txt     # Service dependencies
@@ -69,8 +70,11 @@ simulation/
 ### 2.1 Scenario & Traffic Generators
 -   **Poisson Traffic Generator**: Simulates normal background traffic patterns using Poisson distribution models to simulate realistic inter-arrival times between benign requests.
 -   **Spike/Web Attack Generator**: Generates synthetic malicious HTTP CLF records containing SQLi, XSS, and Path Traversal signatures.
--   **Flow Replay Loader** (`infrastructure/replay_loader.py`): Reads structured network flow records (CICIDS2017 CSV rows) from MinIO on demand for the `/simulate/replay` endpoint — an infrastructure-layer I/O adapter, not domain logic, since it talks directly to the MinIO client.
--   **Distributed Simulation Lock**: A Redis lock (key `{namespace}:lock`, TTL 300s, refreshed every 60s) acquired via `SETNX` prevents concurrent scenario runs across workers. Released in a `finally` block on stop; startup no longer force-clears a stale lock (to avoid a TOCTOU race against a live worker) — `start()`/`replay()` rely solely on the atomic `SETNX` and surface a `RuntimeError` if the lock is already held.
+-   **Flow Replay Loader** (`infrastructure/replay_loader.py` — `ReplayLoader`): Reads structured network flow records (CICIDS2017 CSV rows) from MinIO on demand for the `/simulate/replay` endpoint — an infrastructure-layer I/O adapter, not domain logic, since it talks directly to the MinIO client. Drops non-feature columns (`label`, `label_orig`, `attack_type`, `Timestamp`) and coerces non-numeric values to `0.0`.
+-   **Flow Stats Loader** (`infrastructure/flow_stats.py` — `FlowStatsLoader`): Loaded once at startup (`main.py` lifespan, only if `MINIO_ACCESS_KEY` is set) from `flow/ddos/class_stats.json` and `flow/bruteforce/class_stats.json` in MinIO. Provides per-class (`benign`/`attack`) feature percentile/sample data that `log_generator._flow_features_from_stats()` uses to synthesize realistic FLOW records; falls back to hand-tuned hardcoded ranges (`_flow_features_hardcoded`) when stats are unavailable.
+-   **Distributed Simulation Lock** (`infrastructure/redis_lock.py` — `RedisLock`): A Redis lock (key `{namespace}:lock`, TTL 300s, refreshed every 60s) acquired via `SETNX` (`acquire`) prevents concurrent scenario runs across workers. `start()`/`replay()` rely solely on the atomic `SETNX` and surface a `RuntimeError` if the lock is already held — there is no startup force-clear of a stale lock (that would be a TOCTOU race against a live worker). Refresh and release are ownership-checked via atomic Lua scripts (`refresh_if_owner`, `release_if_owner`) comparing the stored value to the caller's `owner_id` (a per-task UUID) before mutating — a blind `EXPIRE`/`DEL` could otherwise stomp on a different worker that has since acquired the lock after a lapsed TTL. The run loop's `finally` block only calls `release_if_owner` if it still believes it owns the lock; losing the lock (a failed refresh) sets `owner = False` and skips the release instead of deleting the new holder's lock.
+-   **Always-on NORMAL Baseline**: `main.py`'s `lifespan` auto-starts a `SimulationUseCase` instance (`Container.baseline_use_case()`, namespace `baseline`) running `SimulationScenario.NORMAL` / `LogType.MIXED` indefinitely (`count=0`) when `AUTO_START_NORMAL=true`. Only one Gunicorn worker process can win the namespaced lock's `SETNX`; the rest catch the resulting `RuntimeError` and skip, so exactly one worker runs the baseline loop. Each worker tracks a **local** `baseline_started` flag — `True` only if its own `start()` call actually won the lock. On shutdown, a worker calls `baseline_uc.stop()` (which sets a `stop_signal` key telling the run loop to exit) **only if `baseline_started` is `True` for that worker**; a worker that lost the race at startup must not stop the baseline, since `stop_signal` is a single global key shared by whichever worker is actually running the loop. After signalling stop, the owning worker polls `baseline_uc.status()` for up to 5s (50 × 100ms) waiting for `state` to leave `"running"`, confirming the loop released its lock before the process exits — this avoids a restart racing the lock's 300s TTL. This fixes a prior bug where every worker fired the global `stop_signal` unconditionally on its own shutdown, letting a non-owning worker's death (e.g. a `SIGTTOU` scale-down) silently kill the real owner's still-running baseline with no automatic recovery.
+-   **NORMAL is not REST-triggerable**: `StartSimulationRequest`'s `scenario` validator rejects `SimulationScenario.NORMAL` outright (`ValueError`), and there is no `/simulate/baseline/stop` route — the only baseline-related route is the read-only `GET /simulate/baseline` (returns `baseline_uc.status()`). The baseline runs for the lifetime of the service; REST callers can only layer attack/anomaly scenarios on top of it via `/simulate/start`.
 
 ### 2.2 Dynamic Scaling Engine (`infrastructure/scaler.py`)
 -   Acts as the execution target for scale actions triggered by the **Reaction Service**.
@@ -97,7 +101,7 @@ simulation/
 
 ## 3. Communication & Messaging
 
--   **RabbitMQ Publisher**: Publishes generated raw log entries to the `log.raw` exchange:
+-   **RabbitMQ Publisher**: Publishes generated raw log entries via the default exchange, routed by the `log.raw` queue name (`RabbitMQPublisherAdapter.publish()` calls `channel.default_exchange.publish(..., routing_key=settings.QUEUE_RAW)`):
     ```json
     {
       "id": "uuid",
@@ -108,6 +112,6 @@ simulation/
     }
     ```
 -   **Redis Cache**: Shared state storage for:
-    -   Dynamic IP blocklists (`blocklist:<ip>`).
-    -   Rate limiting buckets.
-    -   Current worker count metadata.
+    -   Dynamic IP blocklists (`blocklist:ip:<ip>` per-IP metadata + `blocklist:ips` set for enumeration).
+    -   Rate limiting buckets (`ratelimit:ip:<ip>`, `ratelimit:ip:<ip>:limit`, `ratelimit:ip:<ip>:window_end`).
+    -   Current worker count metadata (`scale:current_workers`, `scale:replicas`, `scale:scaler_lock`).

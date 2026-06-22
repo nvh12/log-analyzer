@@ -1,4 +1,9 @@
 @startuml feature-traffic-spike-uc1
+' Note: TrafficService and EnsembleRuleEngine are not classes — both represent
+' domain/services/traffic_service.py, a module whose detect() function runs the EMA/
+' Z-Score/IQR/Seasonal calculations and weighted-vote aggregation inline (no separate
+' EnsembleRuleEngine class exists). Shown as two boxes here only to separate the two
+' logical responsibilities (per-detector scoring vs. weighted aggregation).
 top to bottom direction
 
 skinparam packageStyle folder
@@ -39,7 +44,7 @@ together {
 }
 
 together {
-  package "domain.services.detection" {
+  package "domain.services" {
     class TrafficService
     class LogWindowAggregator
     class EnsembleRuleEngine
@@ -82,10 +87,10 @@ together {
 ' ---- Layer Order ----
 "presentation.consumers" -[hidden]down- "application"
 "application" -[hidden]down- "application.ports"
-"application.ports" -[hidden]down- "domain.services.detection"
-"domain.services.detection" -[hidden]down- "infrastructure.adapters"
+"application.ports" -[hidden]down- "domain.services"
+"domain.services" -[hidden]down- "infrastructure.adapters"
 
-"domain.services.detection" -[hidden]right- "domain.models"
+"domain.services" -[hidden]right- "domain.models"
 
 ' ---- Interactions / Relationships ----
 HttpLogConsumer o-- WindowPort
