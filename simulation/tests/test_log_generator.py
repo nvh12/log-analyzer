@@ -24,15 +24,13 @@ _TARGET_IP = "10.0.0.100"
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("scenario", _ALL_SCENARIOS)
-def test_http_log_type_returns_http_source(scenario):
-    log = log_generator.generate(scenario, LogType.HTTP, target_ip=_TARGET_IP)
-    assert log.source == LogSource.HTTP
-
-
-@pytest.mark.parametrize("scenario", _ALL_SCENARIOS)
-def test_flow_log_type_returns_flow_source(scenario):
-    log = log_generator.generate(scenario, LogType.FLOW, target_ip=_TARGET_IP)
-    assert log.source == LogSource.FLOW
+@pytest.mark.parametrize("log_type,expected_source", [
+    (LogType.HTTP, LogSource.HTTP),
+    (LogType.FLOW, LogSource.FLOW),
+])
+def test_single_log_type_returns_matching_source(scenario, log_type, expected_source):
+    log = log_generator.generate(scenario, log_type, target_ip=_TARGET_IP)
+    assert log.source == expected_source
 
 
 @pytest.mark.parametrize("scenario", _ALL_SCENARIOS)

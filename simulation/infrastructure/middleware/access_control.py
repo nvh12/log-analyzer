@@ -1,4 +1,5 @@
 import logging
+from ipaddress import ip_address, IPv6Address
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -14,6 +15,21 @@ _BLOCK_PREFIX = "blocklist:ip:"
 _LIMIT_PREFIX = "ratelimit:ip:"
 _LIMIT_SUFFIX = ":limit"
 _WINDOW_SECONDS = 60
+
+
+def _normalize_ip(raw: str) -> str:
+    # "localhost" often resolves to the IPv6 loopback (::1) rather than 127.0.0.1,
+    # which would otherwise let a request bypass a block set against the IPv4 form.
+    try:
+        addr = ip_address(raw)
+    except ValueError:
+        return raw
+    if isinstance(addr, IPv6Address):
+        if addr.ipv4_mapped:
+            return str(addr.ipv4_mapped)
+        if addr.is_loopback:
+            return "127.0.0.1"
+    return str(addr)
 
 
 class AccessControlMiddleware(BaseHTTPMiddleware):

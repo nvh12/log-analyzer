@@ -23,14 +23,17 @@ from locust import HttpUser, task, between, events
 # CLI Argument Registration
 # ---------------------------------------------------------------------------
 
-@events.init_command_line_parser.connect
+@events.init_command_line_parser.add_listener
 def _(parser):
     parser.add_argument(
         "--source-ip",
         type=str,
         env_var="LOCUST_SOURCE_IP",
-        default="127.0.0.1",
-        help="The source IP of the Locust runner to block/rate-limit in the simulation service."
+        default=None,
+        help="The IP to block/rate-limit in the simulation service. If omitted, it is "
+             "auto-detected via GET /admin/whoami — required when the target is reached "
+             "through Docker's published-port forwarding, where the container sees the "
+             "bridge gateway IP rather than the runner's own loopback address."
     )
     parser.add_argument(
         "--admin-key",
@@ -49,68 +52,192 @@ def _(parser):
 
 
 # ---------------------------------------------------------------------------
+# Source IP resolution
+# ---------------------------------------------------------------------------
+
+_resolved_source_ip = {"value": None}
+
+
+def _resolve_source_ip(host, override, admin_key):
+    """Returns the IP to block/rate-limit, auto-detecting it via /admin/whoami if
+    --source-ip wasn't given. Docker's published-port forwarding means the IP a
+    runner connects *from* is not necessarily the IP the container sees, so guessing
+    127.0.0.1 silently no-ops the demo instead of failing loudly."""
+    if override:
+        return override
+    if _resolved_source_ip["value"] is None:
+        resp = requests.get(f"{host}/admin/whoami", headers={"x-admin-key": admin_key}, timeout=5)
+        resp.raise_for_status()
+        ip = resp.json()["blocklist_ip"]
+        print(f"\n[Demo Setup] Auto-detected source IP as seen by {host}: {ip}")
+        _resolved_source_ip["value"] = ip
+    return _resolved_source_ip["value"]
+
+
+# ---------------------------------------------------------------------------
 # Event Hooks for Setup and Teardown
 # ---------------------------------------------------------------------------
 
 @events.test_start.add_listener
 def on_test_start(environment, **kwargs):
     host = environment.host
-    source_ip = environment.parsed_options.source_ip
     admin_key = environment.parsed_options.admin_key
     demo_type = environment.parsed_options.demo_type
+    source_ip = _resolve_source_ip(host, environment.parsed_options.source_ip, admin_key)
 
     print(f"\n[Demo Setup] Initializing {demo_type} for IP: {source_ip} on host: {host}")
-
-    headers = {"x-admin-key": admin_key}
-    
-    if demo_type == "block":
-        url = f"{host}/admin/blocklist/{source_ip}"
-        print(f"[Demo Setup] Posting block request to {url}")
-        resp = requests.post(url, json={"severity": "MEDIUM"}, headers=headers)
-        if resp.status_code == 201:
-            print(f"[Demo Setup] Successfully blocked IP {source_ip} (HTTP 201)")
-        else:
-            print(f"[Demo Setup] Failed to block IP {source_ip}: {resp.status_code} - {resp.text}")
-            environment.runner.quit()
-
-    elif demo_type == "ratelimit":
-        # Severity MEDIUM corresponds to 10 RPM (requests per minute)
-        url = f"{host}/admin/ratelimit/{source_ip}"
-        print(f"[Demo Setup] Posting rate limit request to {url}")
-        resp = requests.post(url, json={"severity": "MEDIUM"}, headers=headers)
-        if resp.status_code == 201:
-            print(f"[Demo Setup] Successfully set rate limit for IP {source_ip} (HTTP 201)")
-        else:
-            print(f"[Demo Setup] Failed to set rate limit for IP {source_ip}: {resp.status_code} - {resp.text}")
-            environment.runner.quit()
 
 
 @events.test_stop.add_listener
 def on_test_stop(environment, **kwargs):
     host = environment.host
-    source_ip = environment.parsed_options.source_ip
     admin_key = environment.parsed_options.admin_key
     demo_type = environment.parsed_options.demo_type
+    source_ip = _resolve_source_ip(host, environment.parsed_options.source_ip, admin_key)
 
-    print(f"\n[Demo Teardown] Cleaning up access control rule for IP: {source_ip}")
-
+    print(f"\n[Demo Teardown] Automatically cleaning up access control rule for IP: {source_ip}")
     headers = {"x-admin-key": admin_key}
-    
-    if demo_type == "block":
-        url = f"{host}/admin/blocklist/{source_ip}"
-        resp = requests.delete(url, headers=headers)
-        if resp.status_code == 200:
-            print(f"[Demo Teardown] Successfully unblocked IP {source_ip}")
-        else:
-            print(f"[Demo Teardown] Failed to unblock IP {source_ip}: {resp.status_code} - {resp.text}")
+    url = f"{host}/admin/blocklist/{source_ip}"
+    requests.delete(url, headers=headers)
+    url_rl = f"{host}/admin/ratelimit/{source_ip}"
+    requests.delete(url_rl, headers=headers)
 
-    elif demo_type == "ratelimit":
+
+# ---------------------------------------------------------------------------
+# Manual Control Panel via Locust Custom Web Routes
+# ---------------------------------------------------------------------------
+
+@events.init.add_listener
+def on_locust_init(environment, **kwargs):
+    if not environment.web_ui:
+        return
+
+    @environment.web_ui.app.route("/manual")
+    def manual_panel():
+        host = environment.host
+        admin_key = environment.parsed_options.admin_key
+        demo_type = environment.parsed_options.demo_type
+        try:
+            source_ip = _resolve_source_ip(host, environment.parsed_options.source_ip, admin_key)
+        except Exception as e:
+            source_ip = f"<could not auto-detect: {e}>"
+        
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Access Control Demo Panel</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 30px; background-color: #f4f7f6; color: #333; }}
+                h1 {{ color: #007bff; }}
+                .card {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; max-width: 600px; }}
+                button {{ background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-right: 10px; }}
+                button:hover {{ background-color: #0056b3; }}
+                button.danger {{ background-color: #dc3545; }}
+                button.danger:hover {{ background-color: #bd2130; }}
+                button.success {{ background-color: #28a745; }}
+                button.success:hover {{ background-color: #218838; }}
+                pre {{ background: #eee; padding: 15px; border-radius: 4px; overflow-x: auto; max-height: 250px; }}
+                .status {{ font-weight: bold; margin-top: 15px; }}
+            </style>
+            <script>
+                async function defCall(action) {{
+                    const statusDiv = document.getElementById("status");
+                    const resDiv = document.getElementById("result");
+                    statusDiv.innerText = "Executing " + action + "...";
+                    resDiv.innerText = "";
+                    try {{
+                        const response = await fetch("/manual/" + action, {{ method: "POST" }});
+                        const text = await response.text();
+                        statusDiv.innerText = "Status: " + response.status + " " + response.statusText;
+                        resDiv.innerText = text;
+                    }} catch (err) {{
+                        statusDiv.innerText = "Error contacting runner";
+                        resDiv.innerText = err;
+                    }}
+                }}
+            </script>
+        </head>
+        <body>
+            <h1>Access Control Demo Panel</h1>
+            <div class="card">
+                <p><strong>Locust Runner Target:</strong> {host}</p>
+                <p><strong>Configured Source IP to Block/Limit:</strong> <code>{source_ip}</code></p>
+                <p><strong>Demo Mode:</strong> <code>{demo_type}</code></p>
+            </div>
+            
+            <div class="card">
+                <h3>Actions</h3>
+                <button onclick="defCall('block')" class="danger">Manual Block IP</button>
+                <button onclick="defCall('ratelimit')">Manual Rate Limit IP</button>
+                <button onclick="defCall('unblock')" class="success">Manual Unblock/Clear IP</button>
+                <button onclick="defCall('request')" class="success" style="margin-top: 10px; display: block;">Send Request to Target (/) </button>
+            </div>
+
+            <div class="card">
+                <h3>Response</h3>
+                <div id="status" class="status">Idle</div>
+                <pre id="result">No actions executed yet.</pre>
+            </div>
+            
+            <p><a href="/">&larr; Back to Locust Stats</a></p>
+        </body>
+        </html>
+        """
+        return html
+
+    @environment.web_ui.app.route("/manual/block", methods=["POST"])
+    def manual_block():
+        host = environment.host
+        admin_key = environment.parsed_options.admin_key
+        source_ip = _resolve_source_ip(host, environment.parsed_options.source_ip, admin_key)
+        headers = {"x-admin-key": admin_key}
+        url = f"{host}/admin/blocklist/{source_ip}"
+        
+        resp = requests.post(url, json={"severity": "MEDIUM"}, headers=headers)
+        return f"Block request sent to {url}\nResponse: {resp.status_code}\nBody: {resp.text}"
+
+    @environment.web_ui.app.route("/manual/ratelimit", methods=["POST"])
+    def manual_ratelimit():
+        host = environment.host
+        admin_key = environment.parsed_options.admin_key
+        source_ip = _resolve_source_ip(host, environment.parsed_options.source_ip, admin_key)
+        headers = {"x-admin-key": admin_key}
         url = f"{host}/admin/ratelimit/{source_ip}"
-        resp = requests.delete(url, headers=headers)
-        if resp.status_code == 200:
-            print(f"[Demo Teardown] Successfully cleared rate limit for IP {source_ip}")
-        else:
-            print(f"[Demo Teardown] Failed to clear rate limit for IP {source_ip}: {resp.status_code} - {resp.text}")
+        
+        resp = requests.post(url, json={"severity": "MEDIUM"}, headers=headers)
+        return f"Rate Limit request sent to {url}\nResponse: {resp.status_code}\nBody: {resp.text}"
+
+    @environment.web_ui.app.route("/manual/unblock", methods=["POST"])
+    def manual_unblock():
+        host = environment.host
+        admin_key = environment.parsed_options.admin_key
+        source_ip = _resolve_source_ip(host, environment.parsed_options.source_ip, admin_key)
+        headers = {"x-admin-key": admin_key}
+        
+        # Clear both block and rate limit
+        url_block = f"{host}/admin/blocklist/{source_ip}"
+        resp_block = requests.delete(url_block, headers=headers)
+        
+        url_rl = f"{host}/admin/ratelimit/{source_ip}"
+        resp_rl = requests.delete(url_rl, headers=headers)
+        
+        return (
+            f"Unblock request sent to {url_block}\nResponse: {resp_block.status_code}\n\n"
+            f"Clear rate limit request sent to {url_rl}\nResponse: {resp_rl.status_code}"
+        )
+
+    @environment.web_ui.app.route("/manual/request", methods=["POST"])
+    def manual_request():
+        host = environment.host
+        # Note: We send requests from the Locust host itself.
+        # It hits the target endpoint `/` which is protected by the AccessControlMiddleware.
+        url = f"{host}/"
+        try:
+            resp = requests.get(url, timeout=5)
+            return f"GET request sent to {url}\nResponse Code: {resp.status_code}\n\nHeaders:\n{resp.headers}\n\nBody:\n{resp.text}"
+        except Exception as e:
+            return f"Error sending request: {e}"
 
 
 # ---------------------------------------------------------------------------
@@ -125,17 +252,16 @@ class AccessControlUser(HttpUser):
         demo_type = self.environment.parsed_options.demo_type
         
         # Requesting a target path which is covered by the AccessControlMiddleware
+        # If the user has manually blocked/unblocked, this task will reflect the changes.
         with self.client.get("/", catch_response=True) as response:
-            if demo_type == "block":
-                if response.status_code == 403:
-                    response.success()
-                else:
-                    response.failure(f"Expected HTTP 403 Forbidden since IP is blocked, got {response.status_code}")
-            
-            elif demo_type == "ratelimit":
-                # For rate limit, we expect HTTP 200 for initial requests, 
-                # then HTTP 429 once the rate limit threshold is crossed.
-                if response.status_code in [200, 429]:
-                    response.success()
-                else:
-                    response.failure(f"Expected HTTP 200 or 429 for rate limit demo, got {response.status_code}")
+            if response.status_code == 200:
+                response.success()
+            elif response.status_code == 403:
+                # Permitted if the user manually blocked it
+                response.success()
+            elif response.status_code == 429:
+                # Permitted if the user manually rate-limited it
+                response.success()
+            else:
+                response.failure(f"Unexpected response code: {response.status_code}")
+

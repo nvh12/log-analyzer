@@ -1,8 +1,8 @@
 import time
 from datetime import datetime, timezone
-from ipaddress import ip_address
+from ipaddress import ip_address, IPv6Address
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from dependencies.admin_auth import require_admin_key
 from infrastructure.config.redis import redis_client
@@ -13,10 +13,31 @@ router = APIRouter(dependencies=[Depends(require_admin_key)])
 
 def _parse_ip(ip: str) -> str:
     try:
-        ip_address(ip)
+        addr = ip_address(ip)
     except ValueError:
         raise HTTPException(status_code=422, detail=f"Invalid IP address: {ip!r}")
-    return ip
+    # Normalize IPv6 loopback/IPv4-mapped forms to their IPv4 equivalent so a block
+    # set here matches what AccessControlMiddleware sees on request.client.host,
+    # regardless of which address family the client actually connects over.
+    if isinstance(addr, IPv6Address):
+        if addr.ipv4_mapped:
+            return str(addr.ipv4_mapped)
+        if addr.is_loopback:
+            return "127.0.0.1"
+    return str(addr)
+
+@router.get("/whoami")
+async def whoami(request: Request) -> dict:
+    """Returns the IP AccessControlMiddleware will actually check for this caller.
+
+    Behind Docker's published-port forwarding, the address a client connects
+    *from* (e.g. 127.0.0.1 on the host) is not the address the container sees
+    request.client.host as (typically the bridge gateway IP) — blocking the
+    wrong one silently no-ops. Callers should block whatever this returns.
+    """
+    raw = request.client.host if request.client else None
+    return {"raw_ip": raw, "blocklist_ip": _parse_ip(raw) if raw else None}
+
 
 _WHITELIST_KEY = "whitelist:ips"
 _BLOCKLIST_SET_KEY = "blocklist:ips"
