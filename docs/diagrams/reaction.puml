@@ -81,7 +81,7 @@ together {
 }
 
 together {
-  package "service.impl" {
+  package "infrastructure.service.impl" {
     abstract class EscalatingIpReactionService
     class BruteForceReactionService
     class DDoSReactionService
@@ -151,8 +151,8 @@ together {
 ' ---- Layer Order ----
 "service.dto" -[hidden]down- service
 service -[hidden]down- presentation
-presentation -[hidden]down- "service.impl"
-"service.impl" -[hidden]down- "infrastructure.mq"
+presentation -[hidden]down- "infrastructure.service.impl"
+"infrastructure.service.impl" -[hidden]down- "infrastructure.mq"
 
 "infrastructure.mq" -[hidden]right- "infrastructure.persistence.repository"
 "infrastructure.persistence.repository" -[hidden]right- "infrastructure.persistence.entity"
@@ -169,7 +169,7 @@ service ..> "service.dto" : uses
 ReactionService --> AlertService
 ReactionService --> ReactionLogService
 
-' ---- service.impl reaction hierarchy ----
+' ---- infrastructure.service.impl reaction hierarchy ----
 EscalatingIpReactionService --|> ReactionService
 EscalatingIpReactionService --> IpBlockService
 EscalatingIpReactionService --> RateLimitService

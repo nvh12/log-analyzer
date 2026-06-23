@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from unittest.mock import AsyncMock, patch
 
@@ -41,4 +43,23 @@ async def test_shutdown_stops_baseline_when_this_worker_owns_it():
         async with main.lifespan(main.app):
             pass
 
+    baseline_uc.stop.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_watchdog_resumes_baseline_after_owner_is_reaped():
+    """This worker loses the start() race at boot, but the owner is later
+    reaped by a scale-down (e.g. SIGTTOU picks the baseline-owning worker) and
+    never comes back. The watchdog's next poll must notice the lock is free,
+    retake it, and shutdown must then stop the baseline this worker now owns."""
+    baseline_uc = AsyncMock()
+    baseline_uc.start.side_effect = [RuntimeError("Simulation already running"), None]
+    baseline_uc.status.return_value = {"state": "idle"}
+
+    with patch.object(main.settings, "SCALE_POLL_INTERVAL_SECONDS", 0.01), \
+         patch.object(main.container, "baseline_use_case", return_value=baseline_uc):
+        async with main.lifespan(main.app):
+            await asyncio.sleep(0.05)
+
+    assert baseline_uc.start.call_count == 2
     baseline_uc.stop.assert_called_once()

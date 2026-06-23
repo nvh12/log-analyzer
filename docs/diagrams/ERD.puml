@@ -1,0 +1,156 @@
+@startchen log_analyzer_erd
+
+left to right direction
+
+' ============================================================
+' STYLING
+' ============================================================
+
+skinparam RankSep 35
+skinparam NodeSep 18
+skinparam DefaultFontSize 16
+
+' ============================================================
+'  SCHEMA: log_processing — STAGE 1 — INGEST
+' ============================================================
+
+entity "normalized_http" as NH {
+  id <<key>>
+  timestamp
+  ip
+  method
+  url
+  status_code
+  response_size
+  query_string
+  headers
+  user_agent
+  referer
+  processed_at
+  source_log_id
+}
+
+entity "normalized_flow" as NF {
+  id <<key>>
+  timestamp
+  source_ip
+  dest_ip
+  source_port
+  dest_port
+  features
+  processed_at
+  source_log_id
+}
+
+entity "drop_audit" as DA {
+  id <<key>>
+  log_id
+  source
+  raw_message
+  received_at
+  drop_reason
+  failure_reason
+  retry_count
+  failed_at
+  dropped_at
+}
+
+' ============================================================
+'  SCHEMA: analysis — STAGE 2 — DETECTION
+' ============================================================
+
+entity "detection_results" as DR {
+  id <<key>>
+  detection_type
+  severity
+  anomaly
+  confidence
+  network_layer
+  source_ip
+  dest_ip
+  dest_port
+  method_flags
+  log_timestamp
+  window_start
+  window_end
+  detected_at
+  layer_triggered
+}
+
+entity "schema_migrations" as SM {
+  version <<key>>
+  applied_at
+}
+
+' ============================================================
+'  SCHEMA: reaction — STAGE 3 — REACTION
+' ============================================================
+
+entity "reaction_logs" as RL {
+  id <<key>>
+  detection_type
+  source_ip
+  severity
+  action
+  network_layer
+  detected_at
+  window_start
+  window_end
+  reacted_at
+}
+
+entity "dropped_reactions" as DRX {
+  id <<key>>
+  detection_type
+  source_ip
+  severity
+  detected_at
+  failure_reason
+  raw_payload
+  dropped_at
+}
+
+' ============================================================
+'  RELATIONSHIPS
+' ============================================================
+
+relationship "produces" as R_HTTP {
+}
+
+relationship "produces" as R_FLOW {
+}
+
+relationship "triggers" as R_REACT {
+}
+
+relationship "audits" as R_DROP {
+}
+
+relationship "drops" as R_DROPRX {
+}
+
+' ---- ingest → detection ----
+
+NH -N- R_HTTP
+R_HTTP -1- DR
+
+NF -N- R_FLOW
+R_FLOW -1- DR
+
+' ---- detection → reaction ----
+
+DR -1- R_REACT
+R_REACT -(0,1)- RL
+
+' ---- detection → dropped reaction (DLQ audit path) ----
+
+DR -1- R_DROPRX
+R_DROPRX -(0,1)- DRX
+
+' ---- ingest → audit (failed raw logs, either source) ----
+
+NH -N- R_DROP
+NF -N- R_DROP
+R_DROP -N- DA
+
+@endchen

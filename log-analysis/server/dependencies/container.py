@@ -31,7 +31,6 @@ def create_traffic_thresholds(data: dict, settings) -> TrafficThresholds:
         ema_alpha=settings.TRAFFIC_EMA_ALPHA,
         ema_dev_threshold=t.get("ema", settings.TRAFFIC_EMA_DEV_THRESHOLD),
         min_history=settings.TRAFFIC_MIN_HISTORY,
-        ema_warmup=settings.TRAFFIC_EMA_WARMUP,
         seasonal_z_threshold=t.get("seasonal", settings.TRAFFIC_SEASONAL_Z_THRESHOLD),
         seasonal_min_bucket_size=settings.TRAFFIC_SEASONAL_MIN_BUCKET_SIZE,
         min_weighted_chosen=data.get("min_weighted_chosen", settings.TRAFFIC_MIN_WEIGHTED_CHOSEN),
@@ -40,7 +39,10 @@ def create_traffic_thresholds(data: dict, settings) -> TrafficThresholds:
         weight_iqr=w.get("iqr", settings.TRAFFIC_WEIGHT_IQR),
         weight_seasonal=w.get("seasonal", settings.TRAFFIC_WEIGHT_SEASONAL),
         absolute_min_floor=t.get("absolute_min_floor", settings.TRAFFIC_ABSOLUTE_MIN_FLOOR),
-        variance_min_floor=t.get("variance_min_floor", settings.TRAFFIC_VARIANCE_MIN_FLOOR),
+        z_score_variance_floor=t.get("z_score_variance_floor", settings.TRAFFIC_Z_SCORE_VARIANCE_FLOOR),
+        iqr_variance_floor=t.get("iqr_variance_floor", settings.TRAFFIC_IQR_VARIANCE_FLOOR),
+        ema_variance_floor=t.get("ema_variance_floor", settings.TRAFFIC_EMA_VARIANCE_FLOOR),
+        seasonal_scale_floor=t.get("seasonal_scale_floor", settings.TRAFFIC_SEASONAL_SCALE_FLOOR),
         low_volume_jump_multiplier=t.get(
             "low_volume_jump_multiplier", settings.TRAFFIC_LOW_VOLUME_JUMP_MULTIPLIER
         ),
@@ -61,6 +63,7 @@ class Container(containers.DeclarativeContainer):
 
     _traffic_history_key = f"{settings.REDIS_NAMESPACE}:traffic"
     _seasonal_history_key = f"{settings.REDIS_NAMESPACE}:traffic_seasonal"
+    _traffic_ema_key = f"{settings.REDIS_NAMESPACE}:traffic_ema"
 
     # Infrastructure components
     repository = providers.Object(store)
@@ -122,4 +125,5 @@ class Container(containers.DeclarativeContainer):
         web_attack_use_case=web_attack_use_case,
         traffic_history_key=_traffic_history_key,
         seasonal_history_key=_seasonal_history_key,
+        traffic_ema_key=_traffic_ema_key,
     )

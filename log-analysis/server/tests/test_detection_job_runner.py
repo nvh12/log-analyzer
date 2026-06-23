@@ -17,6 +17,7 @@ def make_runner(**overrides):
         web_attack_use_case=AsyncMock(),
         traffic_history_key="traffic:history",
         seasonal_history_key="traffic:seasonal",
+        traffic_ema_key="traffic:ema",
     )
     defaults.update(overrides)
     return DetectionJobRunner(**defaults)
@@ -41,6 +42,8 @@ async def test_run_traffic_emptyWindow_returnsEarlyWithoutPublishing():
 
     runner._traffic_use_case.execute.assert_not_called()
     runner._history_adapter.update_history.assert_not_called()
+    runner._history_adapter.get_ema_state.assert_not_called()
+    runner._history_adapter.update_ema_state.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -51,15 +54,19 @@ async def test_run_traffic_normalRun_executesAndUpdatesHistory():
     runner._window_adapter.get_window.return_value = [make_log(ts)]
     runner._history_adapter.get_history.return_value = [100.0, 101.0]
     runner._history_adapter.get_seasonal_bucket.return_value = [(95.0, 1.0)]
+    runner._history_adapter.get_ema_state.return_value = 99.0
+    runner._traffic_use_case.execute.return_value = 100.5
 
     await runner._run_traffic()
 
     runner._traffic_use_case.execute.assert_awaited_once()
     _, kwargs = runner._traffic_use_case.execute.call_args
     assert kwargs["seasonal_summaries"] == [(95.0, 1.0)]
+    assert kwargs["prev_ema"] == 99.0
     runner._history_adapter.update_history.assert_awaited_once_with(
         "traffic:history", [100.0, 101.0, 1.0], limit=60)
     runner._history_adapter.update_timed_history.assert_not_called()
+    runner._history_adapter.update_ema_state.assert_awaited_once_with("traffic:ema", 100.5)
 
 
 @pytest.mark.asyncio

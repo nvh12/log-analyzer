@@ -12,7 +12,7 @@ Single PostgreSQL instance (`log-analyzer` database) shared across all services.
 | `analysis` | Custom SQL runner (asyncpg) | log-analysis (Python) | `detection_results`, `schema_migrations` |
 | `reaction` | Flyway | reaction (Java) | `reaction_logs`, `dropped_reactions` |
 
-**Cross-schema read access:** The dashboard service reads all tables across all three schemas (read-only via JPA). No foreign key constraints cross schema boundaries — all inter-table relationships are application-level (logical).
+**Cross-schema read access:** The dashboard service reads across all three schemas (read-only via JPA), but not every table — it maps `normalized_http`, `normalized_flow`, `detection_results`, and `reaction_logs`. The audit tables (`drop_audit`, `dropped_reactions`) and `analysis.schema_migrations` have no dashboard entity and are not exposed. No foreign key constraints cross schema boundaries — all inter-table relationships are application-level (logical).
 
 ---
 
@@ -249,7 +249,7 @@ Stores anomaly verdicts from all four detection pipelines. **Only anomalies are 
 | `window_start` | TIMESTAMPTZ | Yes | — | Start of the 60-second analysis window; **non-null only for TRAFFIC** |
 | `window_end` | TIMESTAMPTZ | Yes | — | End of the 60-second analysis window; **non-null only for TRAFFIC** |
 | `detected_at` | TIMESTAMPTZ | No | — | UTC timestamp when the detection pipeline produced this result |
-| `layer_triggered` | VARCHAR(32) | Yes | — | `"rule_engine"` \| `"xgboost"`; **non-null only for WEB_ATTACK** (added in migration `0002`) |
+| `layer_triggered` | VARCHAR(32) | Yes | — | `"rule_engine:sqli"` \| `"rule_engine:xss"` \| `"rule_engine:path_traversal"` \| `"rule_engine:rce"` \| `"xgboost"`; **non-null only for WEB_ATTACK** (added in migration `0002`) |
 
 ### 5.5 `analysis.schema_migrations`
 

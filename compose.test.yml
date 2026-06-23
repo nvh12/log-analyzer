@@ -144,9 +144,14 @@ services:
       MINIO_BUCKET: models
       MINIO_SECURE: "false"
       POSTGRES_DSN: postgresql://testuser:testpass@postgres-db:5432/log-analyzer
-      # Run detection jobs every 2 seconds so tests complete quickly
+      # Run detection jobs every 2 seconds so tests complete quickly. WINDOW_SECONDS
+      # must match CRON_TRAFFIC's interval so each tick's window is disjoint from the
+      # last (see detection_job.py's _run_traffic) — otherwise a single burst stays
+      # visible across ~30 overlapping ticks (60s default window / 2s cron) and
+      # contaminates the rolling history baseline before MIN_HISTORY samples accumulate.
       CRON_TRAFFIC: "*/2 * * * * *"
       CRON_WEB_ATTACK: "*/2 * * * * *"
+      WINDOW_SECONDS: "2"
     depends_on:
       rabbitmq:
         condition: service_healthy

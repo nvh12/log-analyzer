@@ -11,7 +11,6 @@ class TrafficThresholds(BaseModel):
     ema_alpha: float = Field(gt=0, le=1)
     ema_dev_threshold: float = Field(gt=0)
     min_history: int = Field(ge=1)
-    ema_warmup: int = Field(ge=1)
     seasonal_z_threshold: float = Field(gt=0)
     seasonal_min_bucket_size: int = Field(ge=1)
     min_weighted_chosen: float = Field(gt=0)
@@ -20,7 +19,10 @@ class TrafficThresholds(BaseModel):
     weight_iqr: float = Field(ge=0)
     weight_seasonal: float = Field(ge=0)
     absolute_min_floor: float = Field(default=15.0, ge=0)
-    variance_min_floor: float = Field(default=5.0, ge=0)
+    z_score_variance_floor: float = Field(default=5.0, ge=0)
+    iqr_variance_floor: float = Field(default=5.0, ge=0)
+    ema_variance_floor: float = Field(default=5.0, ge=0)
+    seasonal_scale_floor: float = Field(default=5.0, ge=0)
     low_volume_jump_multiplier: float = Field(default=3.0, gt=0)
 
 

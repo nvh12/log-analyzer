@@ -23,3 +23,13 @@ class HistoryPort(ABC):
     async def update_timed_history(self, key: str, new_ts: float, median: float, iqr: float, max_entries: int = 1008) -> None:
         """Upsert a (timestamp, median, iqr) summary keyed by hour bucket."""
         pass
+
+    @abstractmethod
+    async def get_ema_state(self, key: str) -> float | None:
+        """Fetch the EMA value carried from the previous detection tick, or None on cold start."""
+        pass
+
+    @abstractmethod
+    async def update_ema_state(self, key: str, value: float) -> None:
+        """Persist the updated EMA value, carried forward to the next detection tick."""
+        pass

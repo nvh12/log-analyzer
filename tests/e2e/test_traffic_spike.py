@@ -19,9 +19,12 @@ TRAFFIC_HISTORY_KEY = "history:detection:traffic"
 #   Full key: "history:detection:traffic_seasonal"
 SEASONAL_HISTORY_KEY = "history:detection:traffic_seasonal"
 
-# Seed 10 baseline samples that represent quiet traffic (2–6 req/window).
-# This gives Z-score and IQR a non-zero variance to compare the spike against.
-BASELINE_HISTORY = [3.0, 4.0, 2.0, 5.0, 3.0, 4.0, 3.0, 2.0, 4.0, 3.0]
+# Seed 19 baseline samples (TRAFFIC_MIN_HISTORY=20, so the gate opens on the very
+# first post-seed tick instead of needing 10 more disjoint ticks — by which point
+# the burst would already have scrolled out of relevance). Quiet traffic (2-6
+# req/window) gives Z-score and IQR a non-zero variance to compare the spike against.
+BASELINE_HISTORY = [3.0, 4.0, 2.0, 5.0, 3.0, 4.0, 3.0, 2.0, 4.0, 3.0,
+                     4.0, 2.0, 5.0, 3.0, 4.0, 3.0, 2.0, 4.0, 3.0]
 
 
 def _make_seasonal_entries() -> list[dict]:

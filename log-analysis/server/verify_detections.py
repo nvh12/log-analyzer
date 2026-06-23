@@ -137,7 +137,6 @@ class TestDetectionPipelines(unittest.TestCase):
             z_score_flag=2.0,
             iqr_multiplier=1.5,
             ema_alpha=0.3,
-            ema_warmup=3,
             ema_dev_threshold=2.0,
             seasonal_z_threshold=2.5,
             seasonal_min_bucket_size=3,
@@ -147,14 +146,17 @@ class TestDetectionPipelines(unittest.TestCase):
             weight_ema=0.5,
             weight_seasonal=1.0,
             absolute_min_floor=15.0,
-            variance_min_floor=5.0
+            z_score_variance_floor=5.0,
+            iqr_variance_floor=5.0,
+            ema_variance_floor=5.0,
+            seasonal_scale_floor=5.0,
         )
 
         # Seasonal bucket: (median, iqr) summaries for the same hour-of-week slot.
         # median-of-medians=10, median-of-iqrs=2 -> robust_z = (100-10) / (0.7413*2) = 60.7
         seasonal_bucket = [(10.0, 2.0), (10.0, 2.0), (10.0, 2.0)]
 
-        result = detect_traffic(inp, thresholds, seasonal_bucket)
+        result, _ = detect_traffic(inp, thresholds, seasonal_bucket)
 
         self.assertTrue(result.anomaly)
         self.assertIn("z_score", result.method_flags)

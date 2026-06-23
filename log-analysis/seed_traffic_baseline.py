@@ -11,10 +11,10 @@ The traffic spike detector (UC1) needs two Redis keys to function in a fresh env
 
   history:{NS}:traffic            — rolling list of per-job-run request counts used by the
                                     short-term detectors (z-score, IQR, EMA).  Requires
-                                    >= TRAFFIC_MIN_HISTORY (5) entries before detect() fires.
+                                    >= TRAFFIC_MIN_HISTORY (20) entries before detect() fires.
 
 Both keys are written by the log-analysis detection job at runtime.  Without a seed they
-remain empty until enough real traffic has accumulated (hours for seasonal, ~5 minutes for
+remain empty until enough real traffic has accumulated (hours for seasonal, ~20 minutes for
 short-term), making the TRAFFIC_SPIKE simulation scenario impossible to demo on a fresh stack.
 
 Baseline values represent ~5 req/s sustained through a 60-second window (~300 logs/window),
@@ -63,7 +63,7 @@ BASELINE_MEDIAN = 300.0
 BASELINE_IQR    =  60.0
 
 SEASONAL_WEEKS  = 3    # 3 × 168 hours = 504 entries → ≥ 3 per (hour, is_weekend) bucket
-SHORT_TERM_SEED = 10   # entries in the rolling short-term history (min_history = 5)
+SHORT_TERM_SEED = 20   # entries in the rolling short-term history (min_history = 20)
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +102,7 @@ def seed_short_term(r: redis.Redis, key: str) -> int:
     """Write SHORT_TERM_SEED baseline counts so z-score/IQR/EMA can fire immediately.
 
     Without this the short-term history list is empty on a fresh stack and
-    detect() returns early (len(vals) < TRAFFIC_MIN_HISTORY = 5).
+    detect() returns early (len(vals) < TRAFFIC_MIN_HISTORY = 20).
     """
     counts = [_jitter(BASELINE_MEDIAN, 0.1) for _ in range(SHORT_TERM_SEED)]
     r.set(key, json.dumps(counts), ex=HISTORY_TTL)

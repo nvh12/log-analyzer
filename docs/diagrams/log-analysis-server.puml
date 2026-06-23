@@ -1,4 +1,9 @@
 @startuml log-analysis-server
+' Note: HttpLogConsumer, FlowConsumer, MigrationRunner, Postgres, Rabbitmq, and Redis are
+' modules with module-level functions/globals (presentation/consumers/consumer.py::handle_message(),
+' flow_consumer.py::handle_flow_message(), infrastructure/migrations/runner.py::run(),
+' infrastructure/config/{postgres,rabbitmq,redis}.py::connect()/close()), not classes.
+' Shown as boxes here purely to depict logical responsibility/data flow at the package level.
 top to bottom direction
 
 skinparam packageStyle folder

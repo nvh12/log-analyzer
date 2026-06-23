@@ -97,3 +97,18 @@ class RedisHistoryAdapter(HistoryPort):
             entries = entries[-max_entries:]
 
         await redis_client.set(self._get_key(key), json.dumps(entries), ex=self._ttl)
+
+    async def get_ema_state(self, key: str) -> float | None:
+        """Retrieve the EMA value carried from the previous detection tick."""
+        raw = await redis_client.get(self._get_key(key))
+        if raw is None:
+            return None
+        try:
+            return float(raw)
+        except (ValueError, TypeError):
+            logger.warning("Corrupted EMA state for key %s — resetting", key)
+            return None
+
+    async def update_ema_state(self, key: str, value: float) -> None:
+        """Persist the updated EMA value, carried forward to the next detection tick."""
+        await redis_client.set(self._get_key(key), str(value), ex=self._ttl)

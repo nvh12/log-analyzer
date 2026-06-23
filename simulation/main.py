@@ -41,15 +41,14 @@ async def lifespan(app: FastAPI):
         init_flow_stats(stats)
 
     baseline_uc = container.baseline_use_case() if settings.AUTO_START_NORMAL else None
-    baseline_started = False
-    if baseline_uc is not None:
-        # Only one worker should run the baseline loop. start() acquires a Redis
-        # lock via SETNX — if another worker (or a previous run whose lock hasn't
-        # expired yet) already holds it, skip rather than spawning a duplicate
-        # overlapping task. stop_signal is a single global Redis key, not
-        # per-worker, so only the worker that actually won the lock here may
-        # signal it to stop on shutdown — otherwise a losing worker's own
-        # shutdown would stop the *other* worker's still-running baseline.
+    # Mutable cell (not a plain bool) because ownership can change after startup:
+    # the watchdog below may hand this worker ownership later if the original
+    # owner is reaped, and shutdown must stop the baseline iff *this* worker
+    # currently owns it at that moment, not iff it won the race at boot.
+    owns_baseline = {"value": False}
+    baseline_watchdog_task = None
+
+    async def _start_baseline() -> bool:
         try:
             await baseline_uc.start(
                 scenario=SimulationScenario.NORMAL,
@@ -58,12 +57,38 @@ async def lifespan(app: FastAPI):
                 rate_per_second=settings.AUTO_START_RATE,
                 target_ip="192.168.100.100",   # unused by NORMAL (always _random_ip)
             )
-            baseline_started = True
+            return True
+        except RuntimeError:
+            return False
+
+    async def _baseline_watchdog() -> None:
+        # Only one worker should run the baseline loop. start() acquires a Redis
+        # lock via SETNX — if another worker already holds it, this is a no-op.
+        # But the lock's owner can be reaped at any time (scale-down picks an
+        # arbitrary gunicorn worker to kill, including the one running baseline),
+        # and nothing else ever re-attempts start() once boot is over — so
+        # without this loop, losing the owner permanently kills baseline traffic
+        # even though the lock it held is now free. Poll periodically so some
+        # surviving worker picks it back up within one interval.
+        while True:
+            await asyncio.sleep(settings.SCALE_POLL_INTERVAL_SECONDS)
+            if owns_baseline["value"]:
+                continue
+            if await _start_baseline():
+                owns_baseline["value"] = True
+                logger.info(
+                    "Baseline NORMAL traffic resumed by this worker (previous owner stopped)"
+                )
+
+    if baseline_uc is not None:
+        if await _start_baseline():
+            owns_baseline["value"] = True
             logger.info(
                 "Baseline NORMAL traffic started at %.1f logs/s", settings.AUTO_START_RATE
             )
-        except RuntimeError:
+        else:
             logger.info("Baseline NORMAL traffic already running in another worker — skipping")
+        baseline_watchdog_task = asyncio.create_task(_baseline_watchdog())
 
     # Reset tracked worker count so a stale Redis value from a previous run
     # doesn't cause the scaler to miscalculate deltas on startup.
@@ -79,7 +104,12 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    if baseline_started:
+    if baseline_watchdog_task is not None:
+        baseline_watchdog_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await baseline_watchdog_task
+
+    if owns_baseline["value"]:
         # Tell the baseline run loop to stop and wait (briefly) for it to release
         # its Redis lock — otherwise a container restart races the lock's 300s TTL:
         # the new process's SETNX fails against a lock whose only owner is this

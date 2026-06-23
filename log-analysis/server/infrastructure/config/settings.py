@@ -45,8 +45,13 @@ class Settings(BaseSettings):
     TRAFFIC_IQR_MULTIPLIER: float = 2.288
     TRAFFIC_EMA_ALPHA: float = 0.1
     TRAFFIC_EMA_DEV_THRESHOLD: float = 3.190
-    TRAFFIC_MIN_HISTORY: int = 5
-    TRAFFIC_EMA_WARMUP: int = 5
+    # 5 was too few to estimate variance reliably: with a near-flat baseline (req
+    # counts barely varying minute to minute), a handful of samples can land on a
+    # sample std well below the true population std purely by chance, which then
+    # makes z-score/IQR/EMA (each clamped to its own *_VARIANCE_FLOOR once measured
+    # std drops that low) flag an ordinary ~5-10% fluctuation as a spike. More
+    # samples make the variance estimate — and therefore these thresholds — stable.
+    TRAFFIC_MIN_HISTORY: int = 20
     TRAFFIC_SEASONAL_Z_THRESHOLD: float = 4.047
     TRAFFIC_SEASONAL_MIN_BUCKET_SIZE: int = 3
     TRAFFIC_MIN_WEIGHTED_CHOSEN: float = 1.5
@@ -55,7 +60,14 @@ class Settings(BaseSettings):
     TRAFFIC_WEIGHT_IQR: float = 1.0
     TRAFFIC_WEIGHT_SEASONAL: float = 1.0
     TRAFFIC_ABSOLUTE_MIN_FLOOR: float = 15.0
-    TRAFFIC_VARIANCE_MIN_FLOOR: float = 5.0
+    # Each non-seasonal detector gets its own variance floor (rather than one
+    # shared value) since z-score/IQR/EMA can have different natural noise
+    # scales on the same traffic — see Z_SCORE_VARIANCE_FLOOR / IQR_VARIANCE_FLOOR
+    # / EMA_VARIANCE_FLOOR in traffic_spike_ensemble_rule.ipynb (cell 1).
+    TRAFFIC_Z_SCORE_VARIANCE_FLOOR: float = 5.0
+    TRAFFIC_IQR_VARIANCE_FLOOR: float = 5.0
+    TRAFFIC_EMA_VARIANCE_FLOOR: float = 5.0
+    TRAFFIC_SEASONAL_SCALE_FLOOR: float = 5.0
     TRAFFIC_LOW_VOLUME_JUMP_MULTIPLIER: float = 3.0
 
 

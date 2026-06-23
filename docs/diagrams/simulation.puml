@@ -102,6 +102,10 @@ together {
 
     Container -[hidden]down- AdminAuth
   }
+
+  package "main" {
+    class "main" as Main <<module>>
+  }
 }
 
 ' ---- Layer Order ----
@@ -144,8 +148,20 @@ Scaler --> Redis
 Scaler --> RedisLock
 
 ' ---- DI container wiring ----
-Container --> SimulationUseCase
+' Container declares two independent singleton SimulationUseCase providers,
+' each with its own namespaced RedisLock (simulation:lock vs baseline:lock):
+' simulation_use_case (namespace "simulation") and baseline_use_case (namespace "baseline").
+Container --> SimulationUseCase : simulation_use_case
+Container --> SimulationUseCase : baseline_use_case
 Container --> RabbitMQPublisherAdapter
 Container --> Settings
+
+' ---- main.py lifespan orchestration ----
+' Owns startup (FlowStatsLoader/init_flow_stats), the scaler background task, and
+' shutdown — only the worker that actually won the baseline lock calls baseline stop().
+Main --> Container
+Main --> FlowStatsLoader
+Main --> Scaler
+Main --> SimulationUseCase : baseline_use_case\n(start/stop, lock-ownership-aware)
 
 @enduml

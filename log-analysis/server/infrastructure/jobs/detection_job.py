@@ -30,6 +30,7 @@ class DetectionJobRunner:
         web_attack_use_case: WebAttackUseCase,
         traffic_history_key: str,
         seasonal_history_key: str,
+        traffic_ema_key: str,
     ):
         self._window_adapter = window_adapter
         self._history_adapter = history_adapter
@@ -38,6 +39,7 @@ class DetectionJobRunner:
         self._web_attack_use_case = web_attack_use_case
         self._traffic_history_key = traffic_history_key
         self._seasonal_history_key = seasonal_history_key
+        self._traffic_ema_key = traffic_ema_key
         self._last_web_attack_run: float = 0.0
         self._last_traffic_hour: int = datetime.now(timezone.utc).hour
 
@@ -134,8 +136,15 @@ class DetectionJobRunner:
         seasonal_summaries: list[tuple[float, float]] = await self._history_adapter.get_seasonal_bucket(
             self._seasonal_history_key, current_ts
         )
+        prev_ema = await self._history_adapter.get_ema_state(self._traffic_ema_key)
 
-        await self._traffic_use_case.execute(input_data, seasonal_summaries=seasonal_summaries)
+        updated_ema = await self._traffic_use_case.execute(
+            input_data, seasonal_summaries=seasonal_summaries, prev_ema=prev_ema
+        )
+        # Carry the EMA forward regardless of the detection outcome above, so
+        # the recursion stays continuous across ticks instead of re-seeding
+        # from this window's history every time (see traffic_service.detect()).
+        await self._history_adapter.update_ema_state(self._traffic_ema_key, updated_ema)
 
         # Update rolling history (limit=60 = 1 hour of 60s samples, matching ROLL_WINDOW=60 mins).
         # Tick interval is deliberately equal to WINDOW_SECONDS so each tick's window is

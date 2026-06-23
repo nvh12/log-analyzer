@@ -3,24 +3,12 @@ from domain.models.input import TrafficInput, TrafficThresholds
 from domain.models.results import TrafficResult, Severity
 
 
-def _ema(values: list[float], thresholds: TrafficThresholds) -> list[float]:
-    """Computes exponential moving average with warm-up seeding."""
-    if len(values) <= thresholds.ema_warmup:
-        seed = np.mean(values)
-    else:
-        seed = np.mean(values[:thresholds.ema_warmup])
-    result = [seed]
-    for v in values:
-        result.append(thresholds.ema_alpha * v + (1 - thresholds.ema_alpha) * result[-1])
-    return result[1:]  # trim to match input length
-
-
 def _z_score(values: np.ndarray, thresholds: TrafficThresholds) -> float:
     """Computes z-score of current value against history-only baseline."""
     history = values[:-1]
     if len(history) < 2:
         return 0.0
-    std = max(history.std(ddof=1), thresholds.variance_min_floor)
+    std = max(history.std(ddof=1), thresholds.z_score_variance_floor)
     if std == 0.0:
         return 0.0
     return float((values[-1] - history.mean()) / std)
@@ -32,21 +20,41 @@ def _iqr_flag(values: np.ndarray, thresholds: TrafficThresholds) -> bool:
     if len(history) < 4:
         return False
     q1, q3 = np.percentile(history, [25, 75])
-    iqr = max(q3 - q1, thresholds.variance_min_floor)
+    iqr = max(q3 - q1, thresholds.iqr_variance_floor)
     upper = q3 + thresholds.iqr_multiplier * iqr
     return bool(values[-1] > upper)
 
 
-def _ema_deviation(values: list[float], thresholds: TrafficThresholds) -> float:
-    """Compares x_t against EMA computed strictly on history."""
-    history = values[:-1]
+def _ema_deviation(
+    current_count: float,
+    prev_ema: float | None,
+    history: np.ndarray,
+    thresholds: TrafficThresholds,
+) -> tuple[float, float]:
+    """Compares current_count against an EMA carried continuously across ticks.
+
+    prev_ema is the EMA as of the end of the previous tick — it already
+    excludes current_count, so no separate history-only recomputation is
+    needed (unlike z-score/IQR, which must derive their baseline fresh from
+    the rolling window each call). Carrying the EMA forward rather than
+    re-seeding it from this window's history on every call keeps it on the
+    same continuous recursion the calibration notebook uses (full-series
+    `s.ewm(adjust=False)`), instead of a fresh warm-up transient each tick.
+
+    Returns (ema_deviation, updated_ema) — the caller persists updated_ema
+    so the next tick can carry it forward in turn.
+    """
+    if prev_ema is None:
+        # Cold start: no prior EMA to compare against yet. Seed from the
+        # current value so the recursion has continuity from here on.
+        return 0.0, current_count
+
+    updated_ema = thresholds.ema_alpha * current_count + (1 - thresholds.ema_alpha) * prev_ema
+
     if len(history) < 2:
-        return 0.0
-    ema_history = _ema(history, thresholds)
-    std = max(np.std(history, ddof=1), thresholds.variance_min_floor)
-    if std == 0.0:
-        return 0.0
-    return float((values[-1] - ema_history[-1]) / std)
+        return 0.0, updated_ema
+    std = max(np.std(history, ddof=1), thresholds.ema_variance_floor)
+    return float((current_count - prev_ema) / std), updated_ema
 
 
 
@@ -72,7 +80,7 @@ def _seasonal_flag(
     avg_iqr = np.median(historical_iqrs)
 
     # 0.7413 * IQR is the standard robust estimator for standard deviation
-    scale = 0.7413 * max(avg_iqr, thresholds.variance_min_floor)
+    scale = 0.7413 * max(avg_iqr, thresholds.seasonal_scale_floor)
     robust_z = float((current_count - baseline) / (scale + 1e-6))
 
     return robust_z > thresholds.seasonal_z_threshold, robust_z
@@ -83,19 +91,28 @@ def detect(
     window: TrafficInput,
     thresholds: TrafficThresholds,
     seasonal_summaries: list[tuple[float, float]] | None = None,
-) -> TrafficResult:
+    prev_ema: float | None = None,
+) -> tuple[TrafficResult, float]:
     """Detects traffic spikes using 4-method ensemble (upward spikes only).
 
     Detectors: EMA deviation, Z-Score, IQR, Seasonal Baseline.
     Severity follows k-of-4 voting combined with z-score magnitude.
     seasonal_summaries: historical (median, iqr) pairs for the same (hour, is_weekend) slot,
     pre-extracted by the caller via HistoryPort.get_seasonal_bucket().
+    prev_ema: EMA carried from the previous tick (via HistoryPort.get_ema_state()),
+    or None on cold start. Returns the updated EMA alongside the result — the
+    caller must persist it (HistoryPort.update_ema_state()) regardless of the
+    anomaly/low-volume outcome below, so the EMA recursion stays continuous
+    across ticks even through quiet windows.
     """
     scored = bool(seasonal_summaries)
 
     vals = np.array(window.req_counts)
     current_count = window.req_counts[-1] if window.req_counts else 0.0
     history = vals[:-1]
+
+    ema_dev, updated_ema = _ema_deviation(current_count, prev_ema, history, thresholds)
+
     # An idle/near-zero baseline only justifies running detection once current_count
     # represents a real jump, not just a tick that happens to clear absolute_min_floor.
     low_volume = (
@@ -112,11 +129,10 @@ def detect(
             log_timestamp=window.window_end,
             window_start=window.window_start,
             window_end=window.window_end,
-        )
+        ), updated_ema
 
     z = _z_score(vals, thresholds)
     iqr = _iqr_flag(vals, thresholds)
-    ema_dev = _ema_deviation(window.req_counts, thresholds)
     seasonal_anomaly, _ = _seasonal_flag(
         window.req_counts[-1], seasonal_summaries or [], thresholds
     )
@@ -167,4 +183,4 @@ def detect(
         log_timestamp=window.window_end,
         window_start=window.window_start,
         window_end=window.window_end,
-    )
+    ), updated_ema
