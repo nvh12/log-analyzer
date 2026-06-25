@@ -8,8 +8,6 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 
-import java.time.Duration;
-
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.awaitility.Awaitility.await;
 import static org.hamcrest.Matchers.*;
@@ -27,29 +25,31 @@ class SystemControllerIT extends AbstractContainerIT {
         mockMvc.perform(get("/api/system/health"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.queue_depths").isArray())
-                .andExpect(jsonPath("$.redis").isMap())
-                .andExpect(jsonPath("$.redis.keyspace_hits").isNumber())
-                .andExpect(jsonPath("$.redis.keyspace_misses").isNumber())
-                .andExpect(jsonPath("$.redis.hit_rate").isNumber());
+                .andExpect(jsonPath("$.workers").isMap())
+                .andExpect(jsonPath("$.workers.current").isNumber())
+                .andExpect(jsonPath("$.workers.target").isNumber())
+                .andExpect(jsonPath("$.workers.available").isNumber());
     }
 
     @Test
-    void health_redisStats_hitRateIsZeroWhenNoActivity() throws Exception {
-        // Fresh container, no keyspace activity yet
+    void health_workerScale_fallsBackToDefaultsWhenSimulationAndRedisUnavailable() throws Exception {
+        // No simulation service and no scale:* keys in the test env — current/target/min/max default to 0
         mockMvc.perform(get("/api/system/health"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.redis.hit_rate").value(0.0));
+                .andExpect(jsonPath("$.workers.current").value(0))
+                .andExpect(jsonPath("$.workers.min").value(0))
+                .andExpect(jsonPath("$.workers.max").value(0));
     }
 
     @Test
-    void health_redisStats_recordsHitsAfterCacheReads() throws Exception {
-        redisTemplate.opsForValue().set("test:key", "val", Duration.ofSeconds(30));
-        redisTemplate.opsForValue().get("test:key"); // hit
-        redisTemplate.opsForValue().get("test:key"); // hit
+    void health_workerScale_readsCurrentAndTargetFromRedis() throws Exception {
+        redisTemplate.opsForValue().set("scale:current_workers", "3");
+        redisTemplate.opsForValue().set("scale:replicas", "5");
 
         mockMvc.perform(get("/api/system/health"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.redis.keyspace_hits").value(greaterThan(0)));
+                .andExpect(jsonPath("$.workers.current").value(3))
+                .andExpect(jsonPath("$.workers.target").value(5));
     }
 
     @Test

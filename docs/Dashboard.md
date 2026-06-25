@@ -110,7 +110,7 @@ Filter rail + table, with filters on `detectionType` (`TRAFFIC`/`DDOS`/`WEB_ATTA
 
 ### 3.5 System
 
-**As implemented**, `GET /api/system/config` returns only Detection's thresholds config (proxied), and `GET /api/system/health` returns RabbitMQ queue depths (for a fixed allowlist: `log.raw`, `log.raw.dlq`, `log.normalized.http`, `log.normalized.flow`, `detection.results.reaction` — not `detection.results`/`reaction.results`, which are exchanges, not queues) plus Redis hit-rate stats. There is no Reaction config endpoint, no Postgres connection-pool usage, and no Detection inference-latency metric exposed. See §7.5 for the backend implementation detail.
+**As implemented**, `GET /api/system/config` returns only Detection's thresholds config (proxied), and `GET /api/system/health` returns RabbitMQ queue depths (for a fixed allowlist: `log.raw`, `log.raw.dlq`, `log.normalized.http`, `log.normalized.flow`, `detection.results.reaction` — not `detection.results`/`reaction.results`, which are exchanges, not queues) plus worker-scale stats (current/target/min/max/available workers). There is no Reaction config endpoint, no Postgres connection-pool usage, and no Detection inference-latency metric exposed. See §7.5 for the backend implementation detail.
 
 ---
 
@@ -177,7 +177,7 @@ GET  /api/reactions/whitelist             # proxies to Simulation's GET /admin/w
 PUT  /api/reactions/whitelist             # proxies to Simulation's PUT /admin/whitelist
 
 GET  /api/system/config                   # detection thresholds (proxied from Detection's /config)
-GET  /api/system/health                   # RabbitMQ queue depths + Redis hit-rate stats
+GET  /api/system/health                   # RabbitMQ queue depths + worker scale status
 ```
 
 Query parameter names are camelCase to match Spring `@RequestParam` binding (`srcIp`, `dstPort`, `detectionType`), not the snake_case shown in earlier drafts of this plan.
@@ -304,7 +304,7 @@ Divide by 2 for per-second rates. This decouples the throughput indicator from P
 As implemented in `SystemMetricsAdapter` / `GET /api/system/health`, this is narrower than originally planned:
 
 - **RabbitMQ queue depths:** HTTP API to the RabbitMQ management plugin (`GET {rabbitmqManagementUrl}/api/queues/%2F`, basic-auth via `DashboardProperties.rabbitmqManagementUser`/`rabbitmqManagementPassword`), filtered down to a fixed tracked-queue allowlist (`log.raw`, `log.raw.dlq`, `log.normalized.http`, `log.normalized.flow`, `detection.results.reaction`). Dashboard's own anonymous SSE-consumer queues are not trackable by name and are intentionally omitted.
-- **Redis:** `INFO stats` via the Lettuce-backed `RedisTemplate`, reduced to `keyspace_hits`/`keyspace_misses`/`hit_rate`.
+- **Worker scale:** `current`/`target` worker counts read from Redis (`scale:current_workers`/`scale:replicas`, written by the simulation service's `scaler.py`) plus `min`/`max` bounds proxied from the simulation service's `GET /config`. `available` (`max - current`) drives the "more workers available" suggestion on the System page.
 - **Postgres pool usage and Detection inference latency (p50/p95) are not implemented** — there is no HikariCP MBean exposure and no Prometheus scrape of Detection's `/metrics` in the current code. `GET /api/system/config` proxies Detection's config endpoint (`detectionMetricsUrl` with `/metrics` replaced by `/config`) but no latency metrics are surfaced.
 
 ---

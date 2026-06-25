@@ -17,8 +17,9 @@ export default function System() {
   const { data: health, loading: healthLoading, error: healthError, reload: reloadHealth } = useData(() => api.getSystemHealth())
   const { data: config, loading: configLoading, error: configError, reload: reloadConfig } = useData(() => api.getSystemConfig())
 
-  const queues = health?.queue_depths ?? []
-  const redis  = health?.redis        ?? {}
+  const queues  = health?.queue_depths ?? []
+  const workers = health?.workers      ?? {}
+  const hasScaleInfo = workers.max != null && workers.max > 0
 
   function prettyConfig(raw) {
     if (!raw) return null
@@ -55,12 +56,22 @@ export default function System() {
             )}
           </Card>
 
-          <Card title="Redis">
-            {healthLoading ? <Loading padded /> : (
+          <Card title="Worker scale">
+            {healthLoading ? <Loading padded /> : !hasScaleInfo ? (
+              <Empty message="Simulation service unavailable" />
+            ) : (
               <div className="p-4">
-                <Metric label="Keyspace hits"   value={redis.keyspace_hits} />
-                <Metric label="Keyspace misses" value={redis.keyspace_misses} />
-                <Metric label="Hit rate"        value={redis.hit_rate != null ? (redis.hit_rate * 100).toFixed(1) : null} unit="%" />
+                <Metric label="Current workers" value={workers.current} />
+                {workers.target !== workers.current && (
+                  <Metric label="Target workers" value={workers.target} />
+                )}
+                <Metric label="Min" value={workers.min} />
+                <Metric label="Max" value={workers.max} />
+                <p className="text-xs text-gray-400 pt-2">
+                  {workers.available > 0
+                    ? `${workers.available} more worker${workers.available === 1 ? '' : 's'} available — scale up?`
+                    : 'At max capacity'}
+                </p>
               </div>
             )}
           </Card>

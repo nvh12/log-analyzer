@@ -42,6 +42,9 @@ def create_traffic_thresholds(data: dict, settings) -> TrafficThresholds:
         z_score_variance_floor=t.get("z_score_variance_floor", settings.TRAFFIC_Z_SCORE_VARIANCE_FLOOR),
         iqr_variance_floor=t.get("iqr_variance_floor", settings.TRAFFIC_IQR_VARIANCE_FLOOR),
         ema_variance_floor=t.get("ema_variance_floor", settings.TRAFFIC_EMA_VARIANCE_FLOOR),
+        z_score_variance_floor_pct=t.get("z_score_variance_floor_pct", settings.TRAFFIC_Z_SCORE_VARIANCE_FLOOR_PCT),
+        iqr_variance_floor_pct=t.get("iqr_variance_floor_pct", settings.TRAFFIC_IQR_VARIANCE_FLOOR_PCT),
+        ema_variance_floor_pct=t.get("ema_variance_floor_pct", settings.TRAFFIC_EMA_VARIANCE_FLOOR_PCT),
         seasonal_scale_floor=t.get("seasonal_scale_floor", settings.TRAFFIC_SEASONAL_SCALE_FLOOR),
         low_volume_jump_multiplier=t.get(
             "low_volume_jump_multiplier", settings.TRAFFIC_LOW_VOLUME_JUMP_MULTIPLIER

@@ -18,12 +18,12 @@ The log-analyzer system is deployed as a multi-container stack orchestrated via 
 | **`minio`** | — | `minio/minio:RELEASE.2025-09-07...` | `log-analyzer` | `127.0.0.1:${MINIO_PORT:-9000}:9000`<br>`127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001` | `minio-data:/data` |
 | **`log-processing`** | `gradle:9.4.1-jdk21-alpine` | `eclipse-temurin:21-jre-alpine` | `log-analyzer` | `127.0.0.1:${APP_PORT:-8080}:8080` | N/A (Ephemeral) |
 | **`log-analysis`** | `python:3.12-slim` | `python:3.12-slim` | `log-analyzer` | `127.0.0.1:${DETECTION_PORT:-8000}:8000` | N/A (Ephemeral) |
-| **`simulation`** | `python:3.12-slim` | `python:3.12-slim` | `log-analyzer` | `127.0.0.1:${SIMULATION_PORT:-8001}:8001` | N/A (Ephemeral) |
+| **`simulation`** | `python:3.12-slim` | `python:3.12-slim` | `log-analyzer` | not published — reachable only on the internal `log-analyzer` network as `simulation:8001`, fronted publicly through `dashboard-fe`'s nginx (see below) | N/A (Ephemeral) |
 | **`reaction`** | `gradle:9.4.1-jdk21-alpine` | `eclipse-temurin:21-jre-alpine` | `log-analyzer` | `127.0.0.1:${REACTION_PORT:-8082}:8080` | N/A (Ephemeral) |
 | **`dashboard`** | `gradle:9.4.1-jdk21-alpine` | `eclipse-temurin:21-jre-alpine` | `log-analyzer` | `127.0.0.1:${DASHBOARD_PORT:-8083}:8080` | N/A (Ephemeral) |
-| **`dashboard-fe`** | `node:22` | `nginx:1.27-alpine` (built with `SSL=true`) | `log-analyzer` | `${FRONTEND_HTTP_PORT:-80}:80`<br>`${FRONTEND_PORT:-443}:443` | `/etc/letsencrypt/live/${DOMAIN}/fullchain.pem` and `privkey.pem` mounted read-only as the Nginx TLS cert/key |
+| **`dashboard-fe`** | `node:22` | `nginx:1.27-alpine` (built with `SSL=true`) | `log-analyzer` | `${FRONTEND_HTTP_PORT:-80}:80`<br>`${FRONTEND_PORT:-443}:443`<br>`${SIMULATION_PORT:-8001}:8001` | `/etc/letsencrypt/live/${DOMAIN}/fullchain.pem` and `privkey.pem` mounted read-only as the Nginx TLS cert/key |
 
-*Note: In Deploy Mode, all internal services bind exclusively to localhost (`127.0.0.1`) to ensure network isolation, leaving Nginx (`dashboard-fe`) as the single entrypoint for external clients. All `*_PORT` values and `DOMAIN` are configured via `.env`.*
+*Note: In Deploy Mode, internal services bind to localhost (`127.0.0.1`) to ensure network isolation, leaving Nginx (`dashboard-fe`) as the single entrypoint for external clients. `simulation` has no published port of its own — its target endpoints (the simulated website, for traffic-generator tools) are made reachable by an additional plain-HTTP `listen 8001` server block inside `dashboard-fe`'s nginx config (`nginx.conf`/`nginx-ssl.conf`), bound to `${SIMULATION_PORT:-8001}` on all interfaces and reverse-proxying to `simulation:8001` on the internal network. That block explicitly returns `403` for `/admin/` and `/simulate/` — simulation's management API — so only target endpoints are reachable through it; the dashboard UI's own `/simulate/` proxy on the main port (used for starting/stopping scenarios from the trusted frontend) is unaffected. All `*_PORT` values and `DOMAIN` are configured via `.env`.*
 
 ---
 

@@ -36,6 +36,10 @@ async def init(redis: Redis, default_workers: int) -> None:
     """
     if not await redis.exists(_LOCK_KEY):
         await redis.set(_CURRENT_KEY, str(default_workers))
+        logger.info("Worker scaler initialized: starting with %d workers", default_workers)
+    else:
+        current = await redis.get(_CURRENT_KEY)
+        logger.info("Worker scaler initialized: scaler lock already held, %s workers currently running", current)
 
 
 async def run(
@@ -92,16 +96,18 @@ async def run(
                     continue
 
                 delta = target - current
+                direction = "up" if delta > 0 else "down"
                 sig = _SIGTTIN if delta > 0 else _SIGTTOU
                 logger.info(
-                    "Scaling workers %d → %d (gunicorn pid=%d, %d x %s)",
-                    current, target, master_pid, abs(delta), sig,
+                    "Scaling %s: %d → %d workers (gunicorn pid=%d, %d x %s)",
+                    direction, current, target, master_pid, abs(delta), sig,
                 )
                 for _ in range(abs(delta)):
                     os.kill(master_pid, sig)
                     await asyncio.sleep(0.1)  # let gunicorn drain its signal queue between sends
 
                 await redis.set(_CURRENT_KEY, str(target))
+                logger.info("Scaled %s: now running %d workers", direction, target)
 
             held = False  # broke out of inner loop normally; lock was lost or expired
 

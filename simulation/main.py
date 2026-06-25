@@ -19,6 +19,7 @@ from infrastructure.middleware.access_control import AccessControlMiddleware
 from infrastructure.middleware.http_log import HttpLogMiddleware
 from presentation.routers import simulation_router, access_control_router, target_router
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 container = Container()

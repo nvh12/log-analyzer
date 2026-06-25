@@ -67,6 +67,13 @@ class Settings(BaseSettings):
     TRAFFIC_Z_SCORE_VARIANCE_FLOOR: float = 5.0
     TRAFFIC_IQR_VARIANCE_FLOOR: float = 5.0
     TRAFFIC_EMA_VARIANCE_FLOOR: float = 5.0
+    # Effective floor is max(absolute, pct * recent baseline mean): at a baseline well
+    # above the absolute floor, traffic that happens to be steadier than calibration
+    # assumed (e.g. std well under the absolute floor) no longer gets an ordinary few-
+    # percent fluctuation amplified into a spike just because the absolute floor clamps it.
+    TRAFFIC_Z_SCORE_VARIANCE_FLOOR_PCT: float = 0.03
+    TRAFFIC_IQR_VARIANCE_FLOOR_PCT: float = 0.03
+    TRAFFIC_EMA_VARIANCE_FLOOR_PCT: float = 0.03
     TRAFFIC_SEASONAL_SCALE_FLOOR: float = 5.0
     TRAFFIC_LOW_VOLUME_JUMP_MULTIPLIER: float = 3.0
 

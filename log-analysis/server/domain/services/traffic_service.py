@@ -8,7 +8,8 @@ def _z_score(values: np.ndarray, thresholds: TrafficThresholds) -> float:
     history = values[:-1]
     if len(history) < 2:
         return 0.0
-    std = max(history.std(ddof=1), thresholds.z_score_variance_floor)
+    floor = max(thresholds.z_score_variance_floor, thresholds.z_score_variance_floor_pct * history.mean())
+    std = max(history.std(ddof=1), floor)
     if std == 0.0:
         return 0.0
     return float((values[-1] - history.mean()) / std)
@@ -20,7 +21,8 @@ def _iqr_flag(values: np.ndarray, thresholds: TrafficThresholds) -> bool:
     if len(history) < 4:
         return False
     q1, q3 = np.percentile(history, [25, 75])
-    iqr = max(q3 - q1, thresholds.iqr_variance_floor)
+    floor = max(thresholds.iqr_variance_floor, thresholds.iqr_variance_floor_pct * history.mean())
+    iqr = max(q3 - q1, floor)
     upper = q3 + thresholds.iqr_multiplier * iqr
     return bool(values[-1] > upper)
 
@@ -53,7 +55,8 @@ def _ema_deviation(
 
     if len(history) < 2:
         return 0.0, updated_ema
-    std = max(np.std(history, ddof=1), thresholds.ema_variance_floor)
+    floor = max(thresholds.ema_variance_floor, thresholds.ema_variance_floor_pct * history.mean())
+    std = max(np.std(history, ddof=1), floor)
     return float((current_count - prev_ema) / std), updated_ema
 
 

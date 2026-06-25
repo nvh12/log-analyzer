@@ -89,3 +89,17 @@ When `BruteForceAttacker` or `WebAttacker` receives a `403`, the Locust user sto
 ## Lift a block (manual override)
 
 From the Dashboard **Reactions** page, click **Lift block** on the blocked IP to clear it from Redis and resume normal responses. Re-running the attacker class will trigger a new detection/block cycle.
+
+---
+
+## Other scripts
+
+| Script | Purpose |
+|---|---|
+| `locust_web_attack_demo.py` | Standalone, web-attack-only demo (SQLi/XSS/path-traversal against target routes, no NormalBrowser/BruteForceAttacker noise). Stops itself on first `403`. Same payloads as `locustfile.py`'s `WebAttacker`, mirroring `simulation/domain/services/log_generator.py`'s own attack signatures. |
+| `locust_access_control_demo.py` | Manual demo for the admin blocklist/rate-limit endpoints (`/admin/blocklist`, `/admin/ratelimit`). Auto-detects the source IP via `/admin/whoami`, exposes a `/manual` control panel in the Locust web UI for one-off block/unblock/rate-limit actions, and cleans up on test stop. Requires `--admin-key`. |
+
+```bash
+locust -f locust_web_attack_demo.py -H http://localhost:8001 \
+       --users 5 --spawn-rate 1 --run-time 60s --headless
+```

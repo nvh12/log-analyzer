@@ -425,15 +425,15 @@ Khi click vào một dòng trong bảng, drawer trượt ra từ phải:
 │  ┌──────────────────────────────────┐  ┌───────────────────────────────┐    │
 │  │ RABBITMQ QUEUES                   │  │ DETECTION SERVICE CONFIG       │    │
 │  │ ─────────────────────────────     │  │ ─────────────────────────────  │    │
-│  │ http_log_queue:       1,204       │  │ {                              │    │
-│  │ flow_log_queue:         892       │  │   "thresholds": {              │    │
-│  │ detection_result_queue:   3       │  │     "traffic": {...},          │    │
+│  │ log.normalized.http:  1,204       │  │ {                              │    │
+│  │ log.normalized.flow:    892       │  │   "thresholds": {              │    │
+│  │ detection.results.reaction: 3     │  │     "traffic": {...},          │    │
 │  │ ─────────────────────────────     │  │     "ddos": {...}              │    │
-│  │ REDIS                             │  │   }                            │    │
+│  │ WORKER SCALE                      │  │   }                            │    │
 │  │ ─────────────────────────────     │  │ }                              │    │
-│  │ Hits:      48,302                 │  │ ← Monospace, scrollable        │    │
-│  │ Misses:     1,204                 │  │                                │    │
-│  │ Hit Rate:   97.6%                 │  │                                │    │
+│  │ Current:   3   Target:   3        │  │ ← Monospace, scrollable        │    │
+│  │ Min: 1         Max: 8             │  │                                │    │
+│  │ 5 more workers available          │  │                                │    │
 │  └──────────────────────────────────┘  └───────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```

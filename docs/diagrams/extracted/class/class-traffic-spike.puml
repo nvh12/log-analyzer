@@ -8,13 +8,13 @@ class TrafficUseCase {
     - _result_repository: ResultRepositoryPort
     
     + __init__(publisher: PublisherPort, thresholds: TrafficThresholds, result_repository: ResultRepositoryPort)
-    + execute(input_data: TrafficInput, seasonal_summaries: list[tuple[float, float]]): None {async}
+    + execute(input_data: TrafficInput, seasonal_summaries: list[tuple[float, float]], prev_ema: float): float {async}
 }
 
 ' Explanations:
-' _thresholds: Configuration parameters including weights for the 4 detectors, standard deviation multipliers, and EMA alpha parameters.
+' _thresholds: Configuration parameters including weights for the 4 detectors, standard deviation multipliers, EMA alpha, and per-detector variance floors (z-score/IQR/EMA/seasonal each have their own *_VARIANCE_FLOOR).
 ' _publisher: Port adapter publishing traffic anomaly alerts to RabbitMQ.
 ' _result_repository: Postgres detection result repository.
-' execute(): Calls the static detect function to run statistical calculations, registers anomalies using weighted voting from 4 detectors, and persists/publishes anomalies when triggered.
+' execute(): Calls the static detect function to run statistical calculations, registers anomalies using weighted voting from 4 detectors, and persists/publishes anomalies when triggered. prev_ema carries the EMA forward across ticks instead of re-seeding it per window; returns the updated EMA for the caller to persist (HistoryPort.update_ema_state()).
 
 @enduml

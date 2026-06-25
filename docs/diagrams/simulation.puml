@@ -157,11 +157,14 @@ Container --> RabbitMQPublisherAdapter
 Container --> Settings
 
 ' ---- main.py lifespan orchestration ----
-' Owns startup (FlowStatsLoader/init_flow_stats), the scaler background task, and
-' shutdown — only the worker that actually won the baseline lock calls baseline stop().
+' Owns startup (FlowStatsLoader/init_flow_stats), the scaler background task, and a
+' baseline watchdog task that re-attempts start() if no worker currently owns the
+' baseline (e.g. the original owner was reaped by scale-down) — ownership can move
+' between workers after boot. Shutdown calls baseline stop() only if this worker
+' currently owns the baseline at that moment, not just whoever won the race at boot.
 Main --> Container
 Main --> FlowStatsLoader
 Main --> Scaler
-Main --> SimulationUseCase : baseline_use_case\n(start/stop, lock-ownership-aware)
+Main --> SimulationUseCase : baseline_use_case\n(start/stop, current-ownership-aware)
 
 @enduml

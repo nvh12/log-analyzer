@@ -24,6 +24,13 @@ class TrafficThresholds(BaseModel):
     ema_variance_floor: float = Field(default=5.0, ge=0)
     seasonal_scale_floor: float = Field(default=5.0, ge=0)
     low_volume_jump_multiplier: float = Field(default=3.0, gt=0)
+    # Effective floor is max(absolute floor, pct * recent baseline mean), so the floor
+    # scales up at higher baselines instead of staying pinned to the absolute value —
+    # otherwise unusually steady traffic at a high baseline gets an ordinary few-percent
+    # fluctuation amplified past threshold once the absolute floor clamps the measured std.
+    z_score_variance_floor_pct: float = Field(default=0.03, ge=0)
+    iqr_variance_floor_pct: float = Field(default=0.03, ge=0)
+    ema_variance_floor_pct: float = Field(default=0.03, ge=0)
 
 
     @model_validator(mode="after")

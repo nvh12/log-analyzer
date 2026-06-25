@@ -5,6 +5,6 @@ import java.util.Map;
 
 public interface SystemMetricsPort {
     List<Map<String, Object>> queueDepths();
-    Map<String, Object> redisInfo();
+    Map<String, Object> workerScale();
     String detectionConfig();
 }

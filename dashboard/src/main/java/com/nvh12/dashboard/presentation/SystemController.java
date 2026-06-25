@@ -20,7 +20,7 @@ public class SystemController {
     public Map<String, Object> health() {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("queue_depths", systemMetricsPort.queueDepths());
-        result.put("redis", systemMetricsPort.redisInfo());
+        result.put("workers", systemMetricsPort.workerScale());
         return result;
     }
 

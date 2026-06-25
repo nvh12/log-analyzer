@@ -189,6 +189,7 @@ def test_partial_votes_severity_is_medium(thresholds):
         "z_score_flag": 1000.0,
         "ema_dev_threshold": 1000.0,
         "iqr_variance_floor": 0.0,
+        "iqr_variance_floor_pct": 0.0,
     })
     history = [100.0] * 9
     # IQR on 9 identical values → IQR=0, upper=100; value 101 > 100 → fires.
@@ -346,7 +347,7 @@ JITTERY_HISTORY = [99.0, 101.0, 99.0, 101.0, 99.0, 101.0, 99.0, 101.0, 99.0]
 def test_z_score_variance_floor_stifles_small_variations(thresholds):
     window = make_window(JITTERY_HISTORY + [103.0])
 
-    loose = thresholds.model_copy(update={"z_score_variance_floor": 0.1})
+    loose = thresholds.model_copy(update={"z_score_variance_floor": 0.1, "z_score_variance_floor_pct": 0.0})
     floored = thresholds.model_copy(update={"z_score_variance_floor": 5.0})
 
     assert traffic_service.detect(window, loose)[0].method_flags["z_score"] is True
@@ -360,7 +361,7 @@ def test_ema_variance_floor_stifles_small_variations(thresholds):
     # ema axis actually evaluates a deviation here instead of cold-starting
     # at 0.0. Silence z-score and IQR so only the EMA axis is under test.
     base = thresholds.model_copy(update={"z_score_flag": 1000.0, "iqr_multiplier": 1000.0})
-    loose = base.model_copy(update={"ema_variance_floor": 0.1})
+    loose = base.model_copy(update={"ema_variance_floor": 0.1, "ema_variance_floor_pct": 0.0})
     floored = base.model_copy(update={"ema_variance_floor": 5.0})
 
     assert traffic_service.detect(window, loose, prev_ema=100.0)[0].method_flags["ema"] is True
@@ -381,6 +382,60 @@ def test_detector_variance_floors_are_independent(thresholds):
     assert result.method_flags["iqr"] is True
     assert result.method_flags["z_score"] is False
     assert result.method_flags["ema"] is False
+
+
+def test_relative_floor_stifles_steady_high_baseline_false_positive(thresholds):
+    # Regression for a real alert: baseline ~300 req/min, history unusually steady
+    # (std ~1.0, far tighter than calibration assumed), current tick = 320. With a
+    # flat absolute floor of 5.0 this is a ~4.3 sigma "spike" on all three non-
+    # seasonal detectors even though it's a benign ~4% bump. A floor that scales
+    # with the baseline (pct=0.03 here -> floor ~9) keeps it from firing.
+    steady_history = [298.0, 299.0, 297.0, 300.0, 298.0, 299.0, 300.0, 298.0, 297.0, 299.0,
+                       298.0, 300.0, 299.0, 298.0, 300.0, 299.0, 298.0, 297.0, 299.0, 300.0]
+    window = make_window(steady_history + [310.0])
+
+    prod_like = thresholds.model_copy(update={
+        "z_score_flag": 3.328,
+        "iqr_multiplier": 2.288,
+        "ema_dev_threshold": 3.190,
+        "min_history": 20,
+        "z_score_variance_floor_pct": 0.03,
+        "iqr_variance_floor_pct": 0.03,
+        "ema_variance_floor_pct": 0.03,
+    })
+
+    result, _ = traffic_service.detect(window, prod_like, prev_ema=298.65)
+
+    assert result.method_flags["z_score"] is False
+    assert result.method_flags["iqr"] is False
+    assert result.method_flags["ema"] is False
+    assert result.anomaly is False
+
+
+def test_relative_floor_does_not_suppress_a_real_spike_at_high_baseline(thresholds):
+    # Same steady ~300 baseline, but a genuine spike (300 -> 900, 3x) must still
+    # fire even with the relative floor in place — the fix narrows false positives
+    # without blinding the detectors to real spikes at high baselines.
+    steady_history = [298.0, 299.0, 297.0, 300.0, 298.0, 299.0, 300.0, 298.0, 297.0, 299.0,
+                       298.0, 300.0, 299.0, 298.0, 300.0, 299.0, 298.0, 297.0, 299.0, 300.0]
+    window = make_window(steady_history + [900.0])
+
+    prod_like = thresholds.model_copy(update={
+        "z_score_flag": 3.328,
+        "iqr_multiplier": 2.288,
+        "ema_dev_threshold": 3.190,
+        "min_history": 20,
+        "z_score_variance_floor_pct": 0.03,
+        "iqr_variance_floor_pct": 0.03,
+        "ema_variance_floor_pct": 0.03,
+    })
+
+    result, _ = traffic_service.detect(window, prod_like, prev_ema=298.65)
+
+    assert result.method_flags["z_score"] is True
+    assert result.method_flags["iqr"] is True
+    assert result.method_flags["ema"] is True
+    assert result.anomaly is True
 
 
 def test_idle_baseline_large_jump_still_alerts(thresholds):

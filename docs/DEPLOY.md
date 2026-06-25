@@ -61,8 +61,9 @@ Optional overrides (sensible defaults are baked into `compose-deploy.yml`):
 | `POSTGRES_DB` | `log-analyzer` | |
 | `MINIO_BUCKET` | `models` | |
 | `MINIO_SECURE` | `false` | Set `true` if MinIO itself is fronted by TLS |
-| `*_PORT` (`POSTGRES_PORT`, `RABBITMQ_PORT`, `RABBITMQ_MGMT_PORT`, `REDIS_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `APP_PORT`, `DETECTION_PORT`, `SIMULATION_PORT`, `REACTION_PORT`, `DASHBOARD_PORT`) | see `.env.example` | All bound to `127.0.0.1` only — not reachable from outside the host |
-| `FRONTEND_PORT` / `FRONTEND_HTTP_PORT` | `443` / `80` | The only ports `dashboard-fe` (Nginx) exposes publicly |
+| `*_PORT` (`POSTGRES_PORT`, `RABBITMQ_PORT`, `RABBITMQ_MGMT_PORT`, `REDIS_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `APP_PORT`, `DETECTION_PORT`, `REACTION_PORT`, `DASHBOARD_PORT`) | see `.env.example` | All bound to `127.0.0.1` only — not reachable from outside the host |
+| `SIMULATION_PORT` | see `.env.example` | `simulation` itself has no published port; this is the host port `dashboard-fe`'s nginx publishes for its `listen 8001` target-only proxy block, bound on all interfaces. Only target endpoints reach `simulation` through it — nginx returns `403` for `/admin/*` and `/simulate/*` at this port before they ever reach the container |
+| `FRONTEND_PORT` / `FRONTEND_HTTP_PORT` | `443` / `80` | `dashboard-fe` (Nginx)'s main ports, serving the dashboard UI/API/admin `/simulate/` proxy |
 
 Alert channel (pick one via `ALERT_PROVIDER`):
 
@@ -139,13 +140,13 @@ Total cold-start time is typically 3–5 minutes.
 
 ## 5. Verify
 
-After `run.sh` exits, check all service health endpoints from the server itself (these ports are bound to `127.0.0.1`, so they are not reachable remotely):
+After `run.sh` exits, check all service health endpoints from the server itself (these ports are bound to `127.0.0.1` so they are not reachable remotely, except `SIMULATION_PORT`, which goes through `dashboard-fe`'s nginx and is reachable remotely by design — see §6):
 
 ```bash
 # Application services (use your configured *_PORT values, defaults shown)
 curl http://localhost:8080/actuator/health   # log-processing (APP_PORT)
 curl http://localhost:8000/health            # log-analysis   (DETECTION_PORT)
-curl http://localhost:8001/health            # simulation     (SIMULATION_PORT)
+curl http://localhost:8001/health            # simulation     (via dashboard-fe's nginx proxy on SIMULATION_PORT; /health isn't blocked, unlike /admin/* and /simulate/*)
 curl http://localhost:8082/actuator/health   # reaction       (REACTION_PORT)
 curl http://localhost:8083/actuator/health   # dashboard      (DASHBOARD_PORT)
 ```
@@ -162,14 +163,15 @@ open https://yourdomain.com   # FRONTEND_PORT (default 443); port 80 redirects t
 
 ## 6. Public Exposure & Firewall
 
-`dashboard-fe` (Nginx) is the single public entrypoint. It terminates TLS using the certificate mounted from `/etc/letsencrypt/live/${DOMAIN}/` (see step 2a), redirects HTTP → HTTPS, and reverse-proxies `/api/` to `dashboard` and `/simulate/` to `simulation`. Every other service is bound to `127.0.0.1` and is not reachable externally.
+`dashboard-fe` (Nginx) is the public entrypoint for everything, including simulation's target endpoints — `simulation` itself has no published port. On `FRONTEND_PORT`/`FRONTEND_HTTP_PORT`, nginx terminates TLS using the certificate mounted from `/etc/letsencrypt/live/${DOMAIN}/` (see step 2a), redirects HTTP → HTTPS, and reverse-proxies `/api/` to `dashboard` and `/simulate/` to `simulation` (the dashboard UI's own scenario start/stop controls). Separately, on plain-HTTP `SIMULATION_PORT`, nginx runs a second `listen 8001` server block that proxies everything to `simulation:8001` *except* `/admin/*` and `/simulate/*`, which it rejects with `403` before the request ever reaches the container — so traffic-generator tools can reach the simulated website's target endpoints without also gaining access to simulation's management API. Every other service is bound to `127.0.0.1` and is not reachable externally.
 
-Open only `FRONTEND_HTTP_PORT` (80) and `FRONTEND_PORT` (443) on the host firewall:
+Open `FRONTEND_HTTP_PORT` (80), `FRONTEND_PORT` (443), and `SIMULATION_PORT` (8001 by default) on the host firewall:
 
 ```bash
 # Example with ufw
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
+sudo ufw allow 8001/tcp
 ```
 
 Make sure `CORS_ORIGINS` in `.env` matches the public URL (e.g. `https://yourdomain.com`), then restart the dashboard service if you change it:
