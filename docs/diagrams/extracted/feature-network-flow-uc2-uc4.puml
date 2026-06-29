@@ -1,8 +1,4 @@
 @startuml feature-network-flow-uc2-uc4
-' Note: DDoSService, BruteForceService, and FlowClassifier are modules with module-level
-' functions (domain/services/ddos_service.py::detect(), brute_force_service.py::detect(),
-' _flow_classifier.py::run_flow_classifier()), not classes. Shown as boxes here purely to
-' depict logical responsibility/data flow at the package level.
 top to bottom direction
 
 skinparam packageStyle folder
@@ -73,7 +69,6 @@ together {
   }
 }
 
-' ---- Layer Order ----
 "presentation.consumers" -[hidden]down- "application"
 "application" -[hidden]down- "application.ports"
 "application.ports" -[hidden]down- "domain.services"
@@ -81,7 +76,6 @@ together {
 
 "domain.services" -[hidden]right- "domain.models"
 
-' ---- Interactions / Relationships ----
 FlowConsumer o-- DDoSUseCase
 FlowConsumer o-- BruteForceUseCase
 

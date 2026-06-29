@@ -14,9 +14,15 @@ class RedisHistoryAdapter(HistoryPort):
     History keys expire automatically after `history_ttl_seconds` of inactivity.
     """
 
-    def __init__(self, key_prefix: str = "history:", history_ttl_seconds: int = 7 * 24 * 3600):
+    def __init__(
+        self,
+        key_prefix: str = "history:",
+        history_ttl_seconds: int = 7 * 24 * 3600,
+        seasonal_window_days: int = 28,
+    ):
         self._prefix = key_prefix
         self._ttl = history_ttl_seconds
+        self._seasonal_window_seconds = seasonal_window_days * 24 * 3600
 
     def _get_key(self, key: str) -> str:
         return f"{self._prefix}{key}"
@@ -49,9 +55,12 @@ class RedisHistoryAdapter(HistoryPort):
         current_hour = current_dt.hour
         current_is_weekend = current_dt.weekday() >= 5
 
+        cutoff = current_ts - self._seasonal_window_seconds
         results = []
         for entry in json.loads(raw):
             try:
+                if entry["t"] < cutoff:
+                    continue
                 dt = datetime.fromtimestamp(entry["t"], tz=timezone.utc)
                 if dt.hour == current_hour and (dt.weekday() >= 5) == current_is_weekend:
                     if "m" in entry and "i" in entry:

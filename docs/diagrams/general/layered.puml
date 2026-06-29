@@ -16,11 +16,6 @@ skinparam packageFontSize 12
 hide circle
 hide empty members
 
-' =====================================================
-' Generic Layered architecture
-' Used by: reaction
-' =====================================================
-
 package presentation {
   class " " as _presentationA
   class " " as _presentationB
@@ -92,30 +87,11 @@ package infrastructure {
   "infrastructure.persistence" -[hidden]right- "infrastructure.service"
 }
 
-' =====================================================
-' Calls flow top-down through the layers; infrastructure
-' depends on service (infrastructure.service.impl implements
-' ports and uses DTOs declared in service, infrastructure.mq
-' implements ReactionEventPort), never the reverse.
-' =====================================================
-
 presentation ..> service
 
 infrastructure ..> service
 
-' =====================================================
-' Layout hints
-' =====================================================
-
 presentation -[hidden]down- service
 service -[hidden]down- infrastructure
-
-' No dedicated domain/application split: business rules, DTOs, and
-' orchestration (ReactionTemplate, the collaborator port interfaces,
-' and their dto sub-packages) live under "service", which declares
-' collaborator ports (e.g. ReactionEventPort, AlertService) that
-' infrastructure.service.impl implements alongside the Redis/JPA/MQ/
-' external-API adapters and config beans. Call flow is otherwise
-' top-down: presentation -> service -> infrastructure.
 
 @enduml

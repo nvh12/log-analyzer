@@ -113,6 +113,7 @@ Both fields exist in `LogMessage` and the `Log` domain model but are always at t
 | `user_agent` | TEXT | Yes | |
 | `referer` | TEXT | Yes | |
 | `processed_at` | TIMESTAMPTZ | No | Default `NOW()`, set by DB |
+| `source_log_id` | VARCHAR(64) | Yes | Added by `V2__add_source_log_id.sql`; the originating `RawLog.id` UUID; partial unique index (WHERE NOT NULL) used for idempotent retry deduplication |
 
 **Dashboard reads this table** but its `NormalizedHttpEntity` does not map the `headers` column — it is silently dropped for all dashboard views.
 
@@ -145,6 +146,7 @@ Serialized as JSON with `@JsonNaming(SnakeCaseStrategy.class)`.
 | `dest_port` | INT | Yes | Nullable in DB |
 | `features` | JSONB | No | NOT NULL constraint |
 | `processed_at` | TIMESTAMPTZ | No | Default `NOW()` |
+| `source_log_id` | VARCHAR(64) | Yes | Added by `V2__add_source_log_id.sql`; partial unique index for idempotent retry deduplication |
 
 ---
 
@@ -229,9 +231,7 @@ Built from each `Log` in the sliding window by the detection job.
 
 ## Hop 7 — `detection.results` fanout exchange (log-analysis → reaction + dashboard)
 
-**Only anomalies are published.** All four use cases call `publish()` only when `result.anomaly is True`. Non-anomaly results are persisted to `detection_results` if anomaly is true; otherwise they are discarded entirely.
-
-Actually, re-reading the use cases: only anomalies are persisted AND published. `if result.anomaly: save(); publish()`. Non-anomaly results are dropped completely — not saved to DB, not published.
+**Only qualifying results are persisted and published.** UC2/UC3/UC4 save and publish when `result.anomaly is True`; non-anomaly results are dropped completely (not saved to DB, not published). UC1 (TRAFFIC) has an additional guard: `result.anomaly AND result.scored AND current_count >= absolute_min_floor` — when `scored` is `False` (not enough seasonal history yet) or the window count is below the floor, neither save nor publish fires.
 
 Published as `result.model_dump_json()`. The discriminator field is `detection_type`.
 
@@ -252,9 +252,10 @@ Published as `result.model_dump_json()`. The discriminator field is `detection_t
 
 | JSON key | Type | Nullable | Notes |
 |---|---|---|---|
-| `anomaly` | bool | No | Always `true` (only published when true) |
+| `anomaly` | bool | No | Always `true` (only published when anomaly is true and scored is true and count ≥ floor) |
 | `confidence` | float | No | Weighted vote aggregate score |
 | `method_flags` | object | No | `{"z_score": bool, "iqr": bool, "ema": bool, "seasonal": bool}` |
+| `scored` | bool | No | `true` when enough seasonal history exists; `false` until then. When `false`, the detection service skips saving and publishing — so this field is always `true` on any message that actually arrives here |
 
 ### UC2 — DDOS extra fields
 
@@ -293,7 +294,7 @@ Same shape as UC2 (DDOS).
 | `severity` | VARCHAR(10) | No | |
 | `anomaly` | BOOLEAN | No | Always true (non-anomalies not saved) |
 | `confidence` | DOUBLE PRECISION | Yes | Null if not provided (shouldn't occur in practice) |
-| `network_layer` | VARCHAR(5) | No | Written as lowercase `"http"` or `"flow"` by log-analysis |
+| `network_layer` | VARCHAR(5) | No | Written as `"HTTP"` or `"FLOW"` (uppercase) by log-analysis — see note below |
 | `source_ip` | VARCHAR(45) | Yes | Null for TRAFFIC detections |
 | `dest_ip` | VARCHAR(45) | Yes | Null for HTTP-track detections (TRAFFIC, WEB_ATTACK) |
 | `dest_port` | INTEGER | Yes | Null for HTTP-track detections |

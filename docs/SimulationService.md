@@ -98,7 +98,7 @@ All routes below are mounted under `/admin` and gated by the `X-Admin-Key` heade
 -   **Rate limit**: `GET /admin/ratelimit` scans `ratelimit:ip:*:limit` keys and reports each IP's rpm/TTL/window-end; `POST /admin/ratelimit/{ip}` sets a severity-based rpm cap (30/10/3/1 for LOW/MEDIUM/HIGH/CRITICAL) with a matching TTL; `DELETE /admin/ratelimit/{ip}` clears all three of that IP's rate-limit keys.
 -   **Brute-force tracking**: `GET /admin/brute` lists all tracked IPs' attempt counts (scans `brute:attempts:*`); `GET /admin/brute/{ip}` returns one IP's count (404 if untracked); `DELETE /admin/brute/{ip}` resets it.
 -   **`GET /admin/whoami`**: returns the raw `request.client.host` plus its normalized form, so an admin caller behind Docker port-forwarding can find the IP `AccessControlMiddleware` actually sees (which may differ from the IP the client thinks it's connecting from).
--   The dashboard-fe frontend calls the whitelist endpoints directly through the `/simulate` Vite proxy (not through the dashboard backend).
+-   The dashboard-fe frontend calls whitelist read (`GET /api/reactions/whitelist`) and replace (`PUT /api/reactions/whitelist`) through the **Dashboard backend** (the `/api` axios client in `api.js`). Only simulation control routes — `POST /simulate/start`, `POST /simulate/stop`, `GET /simulate/status`, `POST /simulate/replay`, `GET /simulate/baseline` — go directly through the `/simulate` Vite proxy / nginx location, bypassing the dashboard backend.
 -   The **Reaction service** has no direct access to the whitelist Redis key — it checks whitelist status via an HTTP call to `GET /admin/whitelist` (`SimulationWhitelistClient`), failing open (treats the IP as not whitelisted) if Simulation is unreachable.
 
 ---

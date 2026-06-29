@@ -1,0 +1,95 @@
+@startuml rabbitmq-topology
+
+left to right direction
+skinparam shadowing false
+skinparam defaultFontName "Sans"
+skinparam ArrowColor #444444
+skinparam ArrowFontSize 10
+
+skinparam component {
+  BackgroundColor #EFF3FB
+  BorderColor #2C4E8A
+  FontStyle bold
+  FontSize 11
+}
+
+skinparam rectangle {
+  BackgroundColor<<fanout>> #C8E4FB
+  BorderColor<<fanout>>     #0D6EFD
+  BackgroundColor<<direct>> #FFE5B4
+  BorderColor<<direct>>     #D9680A
+  FontSize 10
+}
+
+skinparam queue {
+  BackgroundColor #D4EDDA
+  BorderColor     #198754
+  FontSize        10
+}
+
+skinparam queue<<dlq>> {
+  BackgroundColor #F8D7DA
+  BorderColor     #C62828
+  FontSize        10
+}
+
+skinparam note {
+  BackgroundColor #FFFDE7
+  BorderColor     #F9A825
+  FontSize 9
+}
+
+[Simulation]     as SIM
+[Log Processing] as PROC
+[Log Analysis]   as DET
+[Reaction]       as REACT
+[Dashboard]      as DASH
+
+rectangle "detection.results\n<<fanout>>" <<fanout>> as EX_DET
+rectangle "reaction.results\n<<fanout>>"  <<fanout>> as EX_REA
+rectangle "log.dlx\n<<direct>>"          <<direct>>  as EX_LDLX
+rectangle "reaction.dlx\n<<direct>>"     <<direct>>  as EX_RDLX
+
+queue "log.raw"                    as Q_RAW
+queue "log.normalized.http"        as Q_HTTP
+queue "log.normalized.flow"        as Q_FLOW
+queue "detection.results.reaction" as Q_DR
+queue "amq.gen-** (detect)"       as Q_DASH_DET
+queue "amq.gen-** (react)"        as Q_DASH_REA
+
+queue "log.raw.dlq"                    <<dlq>> as Q_RDLQ
+queue "log.normalized.http.dlq"        <<dlq>> as Q_HDLQ
+queue "log.normalized.flow.dlq"        <<dlq>> as Q_FDLQ
+queue "detection.results.reaction.dlq" <<dlq>> as Q_DRDLQ
+
+SIM   --> Q_RAW  : publish\n(default exchange)
+PROC  --> Q_HTTP : publish\n(default exchange)
+PROC  --> Q_FLOW : publish\n(default exchange)
+DET   --> EX_DET : publish
+REACT --> EX_REA : publish
+
+EX_DET --> Q_DR       : bind
+EX_DET --> Q_DASH_DET : bind (anon)
+EX_REA --> Q_DASH_REA : bind (anon)
+
+Q_RAW      --> PROC  : consume\n(manual ack)
+Q_HTTP     --> DET   : consume\n(manual ack)
+Q_FLOW     --> DET   : consume\n(manual ack)
+Q_DR       --> REACT : consume\n(manual ack)
+Q_DASH_DET --> DASH  : consume
+Q_DASH_REA --> DASH  : consume
+
+Q_RAW  ..> EX_LDLX : nack / reject
+Q_HTTP ..> EX_LDLX : nack / reject
+Q_FLOW ..> EX_LDLX : nack / reject
+Q_DR   ..> EX_RDLX : nack (no requeue)
+
+EX_LDLX --> Q_RDLQ  : rk: log.raw.dlq
+EX_LDLX --> Q_HDLQ  : rk: log.normalized.http.dlq
+EX_LDLX --> Q_FDLQ  : rk: log.normalized.flow.dlq
+EX_RDLX --> Q_DRDLQ : rk: detection.results.reaction.dlq
+
+Q_RDLQ  --> PROC  : DeadLetterConsumer\n(auto ack)
+Q_DRDLQ --> REACT : ReactionDeadLetterConsumer\n(auto ack)
+
+@enduml

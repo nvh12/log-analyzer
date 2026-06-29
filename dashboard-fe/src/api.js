@@ -17,6 +17,7 @@ export const api = {
   getWhitelist: () => client.get('/reactions/whitelist').then(r => r.data),
   replaceWhitelist: (ips) => client.put('/reactions/whitelist', ips),
   liftBlocks: (ips) => client.post('/reactions/blocks/lift', ips),
+  clearRateLimit: (ip) => client.delete(`/reactions/ratelimit/${encodeURIComponent(ip)}`),
   getSystemHealth: () => client.get('/system/health').then(r => r.data),
   getSystemConfig: () => client.get('/system/config').then(r => r.data),
 

@@ -60,6 +60,12 @@ public class ReactionController {
         return ResponseEntity.ok().build();
     }
 
+    @DeleteMapping("/ratelimit/{ip}")
+    public ResponseEntity<?> clearRateLimit(@PathVariable String ip) {
+        ipBlockPort.liftRateLimit(ip);
+        return ResponseEntity.ok().build();
+    }
+
     @GetMapping("/whitelist")
     public List<String> listWhitelist() {
         return whitelistPort.listWhitelistedIps();

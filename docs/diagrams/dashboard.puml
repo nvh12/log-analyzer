@@ -10,7 +10,6 @@ skinparam DefaultFontSize 23
 hide circle
 hide empty members
 
-' ---- Layout / Together groups ----
 together {
   package domain {
     class DetectionType
@@ -181,7 +180,6 @@ together {
   }
 }
 
-' ---- Layer Order ----
 domain -[hidden]down- application
 application -[hidden]down- presentation
 presentation -[hidden]down- "infrastructure.mq"
@@ -198,7 +196,6 @@ application -[hidden]right- "application.port"
 "infrastructure.web" -[hidden]right- "infrastructure.monitoring"
 "infrastructure.persistence.entity" -[hidden]right- "infrastructure.persistence.mapper"
 
-' ---- presentation -> application.port ----
 DetectionController --> DetectionRepository
 LogController --> HttpLogRepository
 LogController --> FlowLogRepository
@@ -208,39 +205,30 @@ ReactionController --> WhitelistPort
 SseController --> SseRegistrar
 SystemController --> SystemMetricsPort
 
-' ---- application ----
 ThroughputService --> HttpLogRepository
 ThroughputService --> FlowLogRepository
 ThroughputService --> BroadcastPort
 
-' ---- application.port -> application (views, package-level) ----
 "application.port" ..> application : returns
 
-' ---- domain usage (package-level) ----
 "application.port" ..> domain : uses
 
-' ---- infrastructure.mq ----
 DetectionResultListener --> BroadcastPort
 ReactionResultListener --> BroadcastPort
 "infrastructure.mq" ..> "infrastructure.mq.dto" : uses
 
-' ---- infrastructure.redis ----
 IpBlockStore ..|> IpBlockPort
 
-' ---- infrastructure.sse ----
 SseEmitterRegistry ..|> BroadcastPort
 SseEmitterRegistry ..|> SseRegistrar
 
-' ---- infrastructure.web ----
 SimulationWhitelistAdapter ..|> WhitelistPort
 SimulationWhitelistAdapter --> SimulationProperties
 
-' ---- infrastructure.monitoring ----
 SystemMetricsAdapter ..|> SystemMetricsPort
 SystemMetricsAdapter --> DashboardProperties
 SystemMetricsAdapter --> SimulationProperties
 
-' ---- infrastructure.persistence.repository ----
 DetectionRepositoryImpl ..|> DetectionRepository
 DetectionRepositoryImpl --> JpaDetectionResultRepository
 DetectionRepositoryImpl --> DetectionMapper
@@ -257,13 +245,11 @@ ReactionRepositoryImpl ..|> ReactionRepository
 ReactionRepositoryImpl --> JpaReactionLogRepository
 ReactionRepositoryImpl --> ReactionMapper
 
-' ---- jpa -> entity ----
 JpaDetectionResultRepository --> DetectionResultEntity
 JpaHttpLogRepository --> NormalizedHttpEntity
 JpaFlowLogRepository --> NormalizedFlowEntity
 JpaReactionLogRepository --> ReactionLogEntity
 
-' ---- mapper -> entity (package-level) ----
 "infrastructure.persistence.mapper" ..> "infrastructure.persistence.entity" : maps
 
 @enduml

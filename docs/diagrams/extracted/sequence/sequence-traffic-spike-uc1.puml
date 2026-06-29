@@ -19,17 +19,14 @@ participant "ResultRepositoryPort" as ResultRepo
 participant "PublisherPort" as Publisher
 
 Runner -> UseCase : execute(TrafficInput, seasonal_summaries, prev_ema)
-note right: prev_ema is read from HistoryPort.get_ema_state()\nby Runner before this call
 UseCase -> UseCase : detect(TrafficInput, thresholds, seasonal_summaries, prev_ema)\n(Statistical Z-score, IQR, EMA, & Robust Seasonal voting;\nEMA carried across ticks instead of re-seeded per window)\nreturns (TrafficResult, updated_ema)
 
 alt anomaly == True AND scored == True AND current_count >= absolute_min_floor
-    note right: scored is False until enough seasonal\nhistory exists; floor re-checked here even though\ndetect() already enforces it internally
     UseCase -> ResultRepo : save(TrafficResult)
     ResultRepo --> UseCase : saved
     UseCase -> Publisher : publish(TrafficResult)
     Publisher --> UseCase : published
 end
 UseCase --> Runner : updated_ema
-note right: Runner persists updated_ema via\nHistoryPort.update_ema_state() for the next tick
 
 @enduml

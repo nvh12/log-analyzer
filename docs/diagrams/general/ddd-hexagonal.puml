@@ -16,12 +16,6 @@ skinparam packageFontSize 12
 hide circle
 hide empty members
 
-' =====================================================
-' Generic DDD / Hexagonal (Ports & Adapters) layout
-' Used by: log-processing, log-analysis-server,
-'          simulation, dashboard (backend)
-' =====================================================
-
 package presentation {
   class " " as _presentationA
   class " " as _presentationB
@@ -86,44 +80,13 @@ package infrastructure {
   "infrastructure.mq" -[hidden]right- "infrastructure.config"
 }
 
-' =====================================================
-' Dependency directions (dependency inversion: arrows
-' point INWARD, toward domain/application; adapters
-' implement the ports defined by the inner layers)
-' =====================================================
-
 presentation ..> application
 application ..> domain
 infrastructure ..> domain
 infrastructure ..> application
 
-' =====================================================
-' Layout hints
-' =====================================================
-
 presentation -[hidden]down- application
 application -[hidden]down- domain
 domain -[hidden]down- infrastructure
-
-' Ports may be declared alongside domain services in domain.service
-' (e.g. log-processing's QueueService / *Repository interfaces sit
-' next to LogProcessingService) or in application.port
-' (log-analysis-server's application.ports, simulation's
-' application.ports, dashboard's application.port); either way
-' infrastructure adapters implement them so dependencies always
-' point inward.
-'
-' presentation holds whichever inbound adapters a service needs:
-' REST controllers (simulation's presentation.routers, dashboard's
-' presentation controllers) and/or RabbitMQ listeners
-' (log-processing's presentation consumers, log-analysis-server's
-' presentation.consumers); a given service does not necessarily have
-' both.
-'
-' Adapter sub-package names vary too: dashboard splits
-' infrastructure.mq / infrastructure.persistence; log-processing
-' keeps its queue + event adapters under infrastructure.service;
-' log-analysis-server and simulation group adapters under
-' infrastructure.ports.
 
 @enduml

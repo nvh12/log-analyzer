@@ -1,10 +1,4 @@
 @startuml feature-web-attack-uc3
-' Note: WebAttackService, RuleEngine, and FlowClassifier are not classes — they represent
-' domain/services/web_attack_service.py, a single module. RuleEngine corresponds to the
-' private _rule_engine() helper and FlowClassifier to the inline XGBoost scoring block
-' inside the same module's detect() function (UC3 does not share _flow_classifier.py,
-' which is UC2/UC4-only). Shown as separate boxes here only to depict the two logical
-' layers (Layer 1 regex, Layer 2 XGBoost).
 top to bottom direction
 
 skinparam packageStyle folder
@@ -77,7 +71,6 @@ together {
   }
 }
 
-' ---- Layer Order ----
 "presentation.consumers" -[hidden]down- "application"
 "application" -[hidden]down- "application.ports"
 "application.ports" -[hidden]down- "domain.services"
@@ -85,7 +78,6 @@ together {
 
 "domain.services" -[hidden]right- "domain.models"
 
-' ---- Interactions / Relationships ----
 HttpLogConsumer o-- WindowPort
 
 DetectionJobRunner o-- WindowPort
@@ -96,8 +88,8 @@ WebAttackUseCase o-- ModelRepository
 WebAttackUseCase o-- PublisherPort
 WebAttackUseCase o-- ResultRepositoryPort
 
-WebAttackService o-- RuleEngine : Layer 1 Signature check
-WebAttackService o-- FlowClassifier : Layer 2 XGBoost classification
+WebAttackService o-- RuleEngine
+WebAttackService o-- FlowClassifier
 
 RedisWindowAdapter ..|> WindowPort
 RabbitMQPublisherAdapter ..|> PublisherPort

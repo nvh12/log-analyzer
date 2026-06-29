@@ -10,7 +10,6 @@ skinparam DefaultFontSize 23
 hide circle
 hide empty members
 
-' ---- Layout / Together groups ----
 together {
   package "domain.service" {
     interface QueueService
@@ -119,7 +118,6 @@ together {
   }
 }
 
-' ---- Layer Order ----
 "domain.service" -[hidden]down- application
 application -[hidden]down- presentation
 presentation -[hidden]down- "infrastructure.polling"
@@ -130,12 +128,10 @@ presentation -[hidden]down- "infrastructure.polling"
 "infrastructure.polling" -[hidden]right- "infrastructure.service"
 "infrastructure.persistence.repository" -[hidden]right- "infrastructure.persistence.entity"
 
-' ---- presentation -> application & domain.service ----
 RawLogConsumer --> QueueService
 DeadLetterConsumer --> DropAuditRepository
 DeadLetterConsumer --> FailedLogRepository
 
-' ---- application -> domain.service ----
 LogProcessingWorker --> LogProcessingService
 LogProcessingWorker --> EventService
 LogProcessingWorker --> ProcessedLogRepository
@@ -147,15 +143,12 @@ DlqRetryScheduler --> EventService
 DlqRetryScheduler --> ProcessedLogRepository
 DlqRetryScheduler --> DropAuditRepository
 
-' ---- domain.service -> domain.model (package-level, kept minimal) ----
 "domain.service" ..> "domain.model" : uses
 
-' ---- infrastructure.polling -> application & domain.service ----
 LogProcessingPoller --> QueueService
 LogProcessingPoller --> LogProcessingWorker
 LogProcessingPoller --> LogProcessingProperties
 
-' ---- infrastructure implementations of domain.service ----
 RedisQueueService ..|> QueueService
 EventServiceImpl ..|> EventService
 RedisDlqRepository ..|> FailedLogRepository
@@ -165,11 +158,9 @@ PostgresProcessedLogRepository ..|> ProcessedLogRepository
 RedisQueueService --> DropAuditRepository
 RedisDlqRepository --> DropAuditRepository
 
-' ---- infrastructure -> config ----
 RedisQueueService --> LogProcessingProperties
 RedisDlqRepository --> LogProcessingProperties
 
-' ---- repository -> entity ----
 PostgresDropAuditRepository --> DropAuditJpaRepository
 PostgresDropAuditRepository --> DropAuditEntity
 PostgresProcessedLogRepository --> NormalizedHttpJpaRepository
@@ -177,7 +168,6 @@ PostgresProcessedLogRepository --> NormalizedFlowJpaRepository
 PostgresProcessedLogRepository ..> NormalizedHttpEntity
 PostgresProcessedLogRepository ..> NormalizedFlowEntity
 
-' ---- config ----
 ApplicationBeans ..> ValidationLimits : creates
 ApplicationBeans ..> DlqRetryScheduler : creates Config
 

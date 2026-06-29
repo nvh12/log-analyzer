@@ -1,7 +1,4 @@
 @startuml package-diagram-system-level
-' ============================================================
-' Biểu đồ gói mức hệ thống — log-analyzer
-' ============================================================
 
 skinparam shadowing false
 skinparam packageStyle rectangle
@@ -11,18 +8,11 @@ skinparam ArrowColor #555555
 skinparam packageBorderColor #333333
 skinparam padding 10
 
-' ↓ Make package names smaller
 skinparam packageFontSize 11
 
-' -----------------------------
-' Message contract (conceptual)
-' -----------------------------
 package "message-contracts\n«conceptual»" as MC #EEF3FB {
 }
 
-' -----------------------------
-' Microservices (logical layer)
-' -----------------------------
 package "simulation"               as SIM
 package "processing"              as PROC
 package "detection\n(log-analysis)" as DET
@@ -30,29 +20,17 @@ package "reaction"                as REACT
 package "dashboard"              as DASH
 package "dashboard-fe"           as DASHFE
 
-' -----------------------------
-' Conceptual dependencies
-' -----------------------------
 SIM   ..> MC : «use»
 PROC  ..> MC : «use»
 DET   ..> MC : «use»
 REACT ..> MC : «use»
 DASH  ..> MC : «use»
 
-' -----------------------------
-' Client -> backend calls
-' -----------------------------
 DASHFE ...> DASH
 DASHFE ...> SIM
 
-' -----------------------------
-' Service -> service calls (REST)
-' -----------------------------
 REACT ..> SIM : «use»\n(whitelist check)
 
-' -----------------------------
-' Horizontal layout constraint
-' -----------------------------
 SIM   -[hidden]right- PROC
 PROC  -[hidden]right- DET
 DET   -[hidden]right- REACT

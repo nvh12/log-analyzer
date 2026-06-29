@@ -84,7 +84,7 @@ def _seasonal_flag(
 
     # 0.7413 * IQR is the standard robust estimator for standard deviation
     scale = 0.7413 * max(avg_iqr, thresholds.seasonal_scale_floor)
-    robust_z = float((current_count - baseline) / (scale + 1e-6))
+    robust_z = float((current_count - baseline) / scale)
 
     return robust_z > thresholds.seasonal_z_threshold, robust_z
 

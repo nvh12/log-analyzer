@@ -11,10 +11,4 @@ class WebAttackUseCase {
     + execute(input_data: WebAttackInput, window_start: datetime, window_end: datetime): None {async}
 }
 
-' Explanations:
-' _repository: MinIO Model Repository wrapper that supplies vocabulary and model artifacts for Layer 2.
-' _publisher: MQ alerting publisher adapter.
-' _result_repository: Postgres detection result database repository.
-' execute(): Orchestrates Web Attack detection by passing inputs to detect which runs Layer 1 regex signatures and Layer 2 XGBoost classification, and saves/publishes verified anomalies.
-
 @enduml

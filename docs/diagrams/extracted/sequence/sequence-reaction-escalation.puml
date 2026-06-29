@@ -57,7 +57,6 @@ alt action != WHITELISTED
     ReactionSvc -> AlertSvc : enqueue(Alert)
     AlertSvc --> ReactionSvc : done
 else action == WHITELISTED
-    note right of ReactionSvc : alert skipped — only the\nWHITELISTED log row is written
 end
 
 ReactionSvc --> Consumer : done

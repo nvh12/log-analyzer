@@ -93,7 +93,6 @@ together {
   }
 }
 
-' ---- Layer Order ----
 "presentation" -[hidden]down- "application"
 "application" -[hidden]down- "domain.service"
 "domain.service" -[hidden]down- "infrastructure.polling"
@@ -103,7 +102,6 @@ together {
 "infrastructure.polling" -[hidden]right- "infrastructure.service"
 "infrastructure.persistence.repository" -[hidden]right- "infrastructure.persistence.entity"
 
-' ---- Interactions / Relationships ----
 RawLogConsumer o-- QueueService
 DeadLetterConsumer o-- DropAuditRepository
 DeadLetterConsumer o-- FailedLogRepository

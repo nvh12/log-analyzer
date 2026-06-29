@@ -48,17 +48,9 @@ package "api.js" as api {
   _apiA -[hidden]right- _apiB
 }
 
-' =====================================================
-' Layout
-' =====================================================
-
 pages -[hidden]down- components
 components -[hidden]down- hooks
 hooks -[hidden]right- api
-
-' =====================================================
-' Dependencies
-' =====================================================
 
 pages ..> components
 components ..> hooks

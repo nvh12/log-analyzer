@@ -30,10 +30,11 @@ export default function Reactions() {
   const [toast, setToast]   = useState(null)
 
   // pending state for batch apply
-  const [liftChecked, setLiftChecked] = useState(new Set())
-  const [pendingWl, setPendingWl]     = useState(null) // null = no whitelist changes yet
-  const [wlAddIp, setWlAddIp]         = useState('')
-  const [applying, setApplying]       = useState(false)
+  const [liftChecked, setLiftChecked]     = useState(new Set())
+  const [rlLiftChecked, setRlLiftChecked] = useState(new Set())
+  const [pendingWl, setPendingWl]         = useState(null) // null = no whitelist changes yet
+  const [wlAddIp, setWlAddIp]             = useState('')
+  const [applying, setApplying]           = useState(false)
 
   const { data, loading, error, reload } = useData(
     () => api.getReactions({ action: action || undefined, from: toISO(from), to: toISO(to), page, size: 20 }),
@@ -50,7 +51,7 @@ export default function Reactions() {
 
   // effective whitelist = pending state (if any changes) or server state
   const effectiveWl     = pendingWl ?? new Set(whitelistIps)
-  const hasPendingChanges = pendingWl !== null || liftChecked.size > 0
+  const hasPendingChanges = pendingWl !== null || liftChecked.size > 0 || rlLiftChecked.size > 0
 
   function showToast(message, type = 'success') {
     setToast({ message, type })
@@ -93,14 +94,24 @@ export default function Reactions() {
     setWlAddIp('')
   }
 
+  function toggleRlLift(ip) {
+    setRlLiftChecked(prev => {
+      const next = new Set(prev)
+      if (next.has(ip)) next.delete(ip); else next.add(ip)
+      return next
+    })
+  }
+
   async function handleApply() {
     setApplying(true)
     try {
       await Promise.all([
         api.replaceWhitelist(Array.from(effectiveWl)),
         api.liftBlocks(Array.from(liftChecked)),
+        ...Array.from(rlLiftChecked).map(ip => api.clearRateLimit(ip)),
       ])
       setLiftChecked(new Set())
+      setRlLiftChecked(new Set())
       setPendingWl(null)
       reloadActive()
       reloadWhitelist()
@@ -186,18 +197,30 @@ export default function Reactions() {
           )}
         </Card>
 
-        {/* Rate Limits — read only */}
-        <Card title="Rate Limits">
+        {/* Rate Limits — lift checkbox */}
+        <Card title={`Rate Limits (${rateLimits.length})`}>
           {rateLimits.length === 0 ? <Empty message="No rate-limited IPs" /> : (
             <ul className="divide-y divide-gray-800/50">
-              {rateLimits.map((entry, i) => (
-                <li key={i} className="flex items-center justify-between px-4 py-2 text-xs mono">
-                  <span className="text-orange-300">{entry.ip ?? entry}</span>
-                  <span className="text-gray-500">
-                    {entry.requests_per_minute != null && `${entry.requests_per_minute} req/min`}
-                  </span>
-                </li>
-              ))}
+              {rateLimits.map((entry, i) => {
+                const ip = entry.ip ?? entry
+                return (
+                  <li key={i} className="flex items-center gap-2 px-3 py-2 text-xs mono">
+                    <label className="flex items-center gap-1 cursor-pointer select-none shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={rlLiftChecked.has(ip)}
+                        onChange={() => toggleRlLift(ip)}
+                        className="accent-red-500"
+                      />
+                      <span className="text-red-400">Lift</span>
+                    </label>
+                    <span className="text-orange-300 flex-1 truncate">{ip}</span>
+                    <span className="text-gray-500 shrink-0">
+                      {entry.requests_per_minute != null && `${entry.requests_per_minute} req/min`}
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </Card>

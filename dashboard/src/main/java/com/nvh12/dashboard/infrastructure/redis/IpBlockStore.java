@@ -68,6 +68,15 @@ public class IpBlockStore implements IpBlockPort {
         log.info("Lifted IP block for {}", ip);
     }
 
+    public void liftRateLimit(String ip) {
+        redisTemplate.delete(List.of(
+                RATE_LIMIT_PREFIX + ip + RATE_LIMIT_SUFFIX,
+                RATE_LIMIT_PREFIX + ip,
+                RATE_LIMIT_PREFIX + ip + ":window_end"
+        ));
+        log.info("Cleared rate limit for {}", ip);
+    }
+
     private Integer parseSafeInt(String value) {
         try { return Integer.parseInt(value.trim()); } catch (NumberFormatException e) { return null; }
     }

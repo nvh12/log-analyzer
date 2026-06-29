@@ -10,7 +10,6 @@ skinparam DefaultFontSize 23
 hide circle
 hide empty members
 
-' ---- Layout / Together groups ----
 together {
   package "service.dto" {
     class ReactionInput
@@ -148,7 +147,6 @@ together {
   }
 }
 
-' ---- Layer Order ----
 "service.dto" -[hidden]down- service
 service -[hidden]down- presentation
 presentation -[hidden]down- "infrastructure.service.impl"
@@ -158,18 +156,14 @@ presentation -[hidden]down- "infrastructure.service.impl"
 "infrastructure.persistence.repository" -[hidden]right- "infrastructure.persistence.entity"
 "infrastructure.persistence.entity" -[hidden]right- config
 
-' ---- presentation -> service ----
 DetectionResultConsumer --> ReactionService
 ReactionDeadLetterConsumer --> DroppedReactionService
 
-' ---- service -> service.dto (package-level, kept minimal) ----
 service ..> "service.dto" : uses
 
-' ---- service abstractions ----
 ReactionService --> AlertService
 ReactionService --> ReactionLogService
 
-' ---- infrastructure.service.impl reaction hierarchy ----
 EscalatingIpReactionService --|> ReactionService
 EscalatingIpReactionService --> IpBlockService
 EscalatingIpReactionService --> RateLimitService
@@ -185,7 +179,6 @@ WebAttackReactionService --|> ReactionService
 WebAttackReactionService --> IpBlockService
 WebAttackReactionService --> WhitelistService
 
-' ---- alert services ----
 CompositeAlertService ..|> AlertService
 CompositeAlertService --> AlertChannel
 
@@ -196,7 +189,6 @@ DiscordAlertService --> AlertHtmlTemplate
 ResendAlertService --> AlertHtmlTemplate
 SmtpAlertService --> AlertHtmlTemplate
 
-' ---- redis-backed services ----
 RedisIpBlockService ..|> IpBlockService
 RedisRateLimitService ..|> RateLimitService
 RedisScaleService ..|> ScaleService
@@ -207,11 +199,9 @@ RedisIpBlockService --> WhitelistService
 RedisRateLimitService --> WhitelistService
 RedisIpBlockService --> EscalatingIpReactionService : uses ALL_ATTEMPT_KEY_PREFIXES
 
-' ---- simulation whitelist client ----
 SimulationWhitelistClient ..|> WhitelistService
 SimulationWhitelistClient --> SimulationProperties
 
-' ---- reaction log + mq ----
 JpaReactionLogService ..|> ReactionLogService
 JpaReactionLogService --> ReactionEventPort
 JpaReactionLogService --> ReactionLogRepository
@@ -221,11 +211,9 @@ JpaDroppedReactionService --> DroppedReactionRepository
 
 ReactionResultPublisher ..|> ReactionEventPort
 
-' ---- persistence ----
 ReactionLogRepository --> ReactionLogEntity
 DroppedReactionRepository --> DroppedReactionEntity
 
-' ---- config ----
 DiscordAlertService --> AlertProperties
 ResendAlertService --> AlertProperties
 SmtpAlertService --> AlertProperties

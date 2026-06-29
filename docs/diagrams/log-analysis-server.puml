@@ -1,9 +1,4 @@
 @startuml log-analysis-server
-' Note: HttpLogConsumer, FlowConsumer, MigrationRunner, Postgres, Rabbitmq, and Redis are
-' modules with module-level functions/globals (presentation/consumers/consumer.py::handle_message(),
-' flow_consumer.py::handle_flow_message(), infrastructure/migrations/runner.py::run(),
-' infrastructure/config/{postgres,rabbitmq,redis}.py::connect()/close()), not classes.
-' Shown as boxes here purely to depict logical responsibility/data flow at the package level.
 top to bottom direction
 
 skinparam packageStyle folder
@@ -14,10 +9,6 @@ skinparam DefaultFontSize 23
 
 hide circle
 hide empty members
-
-' =====================================================
-' PRESENTATION
-' =====================================================
 
 together {
 
@@ -32,10 +23,6 @@ together {
   }
 
 }
-
-' =====================================================
-' APPLICATION
-' =====================================================
 
 together {
 
@@ -64,10 +51,6 @@ together {
   }
 
 }
-
-' =====================================================
-' DOMAIN
-' =====================================================
 
 together {
 
@@ -154,10 +137,6 @@ together {
 
 }
 
-' =====================================================
-' INFRASTRUCTURE
-' =====================================================
-
 together {
 
   package "infrastructure.jobs" {
@@ -180,7 +159,6 @@ together {
       class PostgresDetectionResultRepository
     }
 
-    
   }
 
   package "infrastructure.model_store" {
@@ -207,13 +185,7 @@ together {
     class Container
   }
   
-  
-
 }
-
-' =====================================================
-' LAYER ORDER
-' =====================================================
 
 "presentation.consumers" -[hidden]down- application
 application -[hidden]down- "domain.services"
@@ -232,20 +204,12 @@ application -[hidden]right- "application.ports"
 "infrastructure.config" -[hidden]down- "infrastructure.migrations"
 "infrastructure.migrations" -[hidden]down- dependencies
 
-' =====================================================
-' PRESENTATION
-' =====================================================
-
 HttpLogConsumer --> WindowPort
 
 FlowConsumer --> BruteForceUseCase
 FlowConsumer --> DDoSUseCase
 
 "presentation.consumers" ..> "presentation.schemas" : uses
-
-' =====================================================
-' APPLICATION
-' =====================================================
 
 BruteForceUseCase --> BruteForceService
 BruteForceUseCase --> ModelRepository
@@ -268,16 +232,8 @@ WebAttackUseCase --> ResultRepositoryPort
 
 application ..> "domain.models" : uses
 
-' =====================================================
-' DOMAIN
-' =====================================================
-
 BruteForceService --> FlowClassifier
 DDoSService --> FlowClassifier
-
-' =====================================================
-' JOB ORCHESTRATION
-' =====================================================
 
 DetectionJobRunner --> WindowPort
 DetectionJobRunner --> HistoryPort
@@ -288,10 +244,6 @@ DetectionJobRunner --> WebAttackUseCase
 
 DetectionJobRunner --> LogWindowAggregator
 
-' =====================================================
-' ADAPTERS
-' =====================================================
-
 RedisWindowAdapter ..|> WindowPort
 RedisHistoryAdapter ..|> HistoryPort
 RedisLockAdapter ..|> LockPort
@@ -301,10 +253,6 @@ RabbitMQPublisherAdapter ..|> PublisherPort
 PostgresDetectionResultRepository ..|> ResultRepositoryPort
 
 MinIOModelStore ..|> ModelRepository
-
-' =====================================================
-' DEPENDENCY INJECTION
-' =====================================================
 
 Container --> DetectionJobRunner
 

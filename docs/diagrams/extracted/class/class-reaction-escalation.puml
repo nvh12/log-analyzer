@@ -23,37 +23,12 @@ abstract class EscalatingIpReactionService {
     - ipBlockService: IpBlockService
     - rateLimitService: RateLimitService
     - redisTemplate: RedisTemplate<String, String>
-    - whitelistService: WhitelistService
 
-    # EscalatingIpReactionService(type: DetectionType, alertService: AlertService, reactionLogService: ReactionLogService, ipBlockService: IpBlockService, rateLimitService: RateLimitService, redisTemplate: RedisTemplate<String, String>, whitelistService: WhitelistService)
+    # EscalatingIpReactionService(type: DetectionType,\n  alertService: AlertService,\n  reactionLogService: ReactionLogService,\n  ipBlockService: IpBlockService,\n  rateLimitService: RateLimitService,\n  redisTemplate: RedisTemplate<String, String>)
     # {abstract} attemptsKeyPrefix(): String
     # doHandle(input: ReactionInput): ReactionAction
 }
 
-interface WhitelistService {
-    + isWhitelisted(ip: String): boolean
-}
-
-class RedisIpBlockService {
-    + block(ip: String, severity: Severity): void
-    + isBlocked(ip: String): boolean
-    + liftBlock(ip: String): void
-}
-
 ReactionService <|-- EscalatingIpReactionService
-EscalatingIpReactionService --> WhitelistService
-RedisIpBlockService --> EscalatingIpReactionService : uses ALL_ATTEMPT_KEY_PREFIXES
-
-' Explanations:
-' INCR_WITH_EXPIRE: Static Redis Lua script to increment attempts and set an expiration window atomically on the first count.
-' ATTEMPT_WINDOW: Time window (10 minutes) during which malicious activity triggers escalation blocks.
-' ESCALATION_THRESHOLD: Maximum attempts allowed (3) before escalating a rate-limit action to an IP block.
-' DDOS_ATTEMPTS_PREFIX / BRUTE_FORCE_ATTEMPTS_PREFIX: Single source of truth for each subclass's Redis key prefix, returned by their attemptsKeyPrefix() overrides.
-' ALL_ATTEMPT_KEY_PREFIXES: Both prefixes together, consumed by RedisIpBlockService.liftBlock() to clear every subclass's escalation counter without depending on the subclasses directly.
-' ipBlockService / rateLimitService: Concrete action executors interacting with Redis IP tables.
-' whitelistService: Checked first via HTTP call to the simulation service; a hit short-circuits straight to WHITELISTED, skipping the attempt counter.
-' attemptsKeyPrefix(): Abstract method subclass hooks (e.g. brute:attempts: or ddos:attempts:) to namespaces.
-' doHandle(): Checks the whitelist, then implements the stateful counter logic and executes firewalls/rate-limit blocks based on thresholds.
-' liftBlock(ip): Removes the block metadata key and set membership, and also clears the IP's escalation-attempt counters (ddos:attempts:, brute:attempts:) so a lifted IP doesn't immediately re-escalate.
 
 @enduml

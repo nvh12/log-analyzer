@@ -77,7 +77,11 @@ class Container(containers.DeclarativeContainer):
     )
     publisher_adapter = providers.Singleton(RabbitMQPublisherAdapter, exchange_name=settings.QUEUE_OUT)
     result_repository_adapter = providers.Singleton(PostgresDetectionResultRepository)
-    history_adapter = providers.Singleton(RedisHistoryAdapter, history_ttl_seconds=settings.HISTORY_TTL_SECONDS)
+    history_adapter = providers.Singleton(
+        RedisHistoryAdapter,
+        history_ttl_seconds=settings.HISTORY_TTL_SECONDS,
+        seasonal_window_days=settings.TRAFFIC_SEASONAL_WINDOW_DAYS,
+    )
     lock_adapter = providers.Singleton(RedisLockAdapter, key_prefix=f"{settings.REDIS_NAMESPACE}:lock:")
 
     # Use case providers

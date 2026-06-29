@@ -305,6 +305,6 @@ The following components provide shared state and data persistence for the core 
 | **Ingestion** | Java / Spring Boot | Strong concurrency models and enterprise-grade RabbitMQ integration. |
 | **Detection** | Python / FastAPI | Native support for ML libraries (scikit-learn, statsmodels) and high-performance async IO. |
 | **Message Broker** | RabbitMQ | Reliable message delivery and flexible routing (fanout exchanges for multi-consumer event streams). |
-| **Dashboard Backend** | Java / Spring Boot | REST + SSE (`SseEmitter`) for live UI, JdbcTemplate for PostgreSQL reads. |
+| **Dashboard Backend** | Java / Spring Boot | REST + SSE (`SseEmitter`) for live UI, Spring Data JPA for PostgreSQL reads. |
 | **Frontend** | Vite / React | Dynamic, real-time data visualization with native `EventSource` for SSE. |
 

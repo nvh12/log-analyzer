@@ -3,9 +3,9 @@ top to bottom direction
 
 skinparam packageStyle folder
 skinparam linetype ortho
-skinparam ranksep 100
-skinparam nodesep 40
-skinparam DefaultFontSize 23
+skinparam ranksep 120
+skinparam nodesep 55
+skinparam DefaultFontSize 27
 
 hide circle
 hide empty members
@@ -64,16 +64,20 @@ together {
     BruteForceReactionService -[hidden]down- DDoSReactionService
     DDoSReactionService -[hidden]down- TrafficReactionService
     TrafficReactionService -[hidden]down- WebAttackReactionService
-    WebAttackReactionService -[hidden]down- CompositeAlertService
+
     CompositeAlertService -[hidden]down- DiscordAlertService
     DiscordAlertService -[hidden]down- ResendAlertService
     ResendAlertService -[hidden]down- SmtpAlertService
-    SmtpAlertService -[hidden]down- RedisIpBlockService
+
     RedisIpBlockService -[hidden]down- RedisRateLimitService
     RedisRateLimitService -[hidden]down- RedisScaleService
-    RedisScaleService -[hidden]down- JpaReactionLogService
+
     JpaReactionLogService -[hidden]down- JpaDroppedReactionService
     JpaDroppedReactionService -[hidden]down- SimulationWhitelistClient
+
+    EscalatingIpReactionService -[hidden]right- CompositeAlertService
+    CompositeAlertService -[hidden]right- RedisIpBlockService
+    RedisIpBlockService -[hidden]right- JpaReactionLogService
   }
 }
 
@@ -94,13 +98,11 @@ together {
   }
 }
 
-' ---- Layer Order ----
 "presentation" -[hidden]down- "service"
 "service" -[hidden]down- "infrastructure.service.impl"
 "infrastructure.service.impl" -[hidden]down- "infrastructure.mq"
 "infrastructure.mq" -[hidden]right- "infrastructure.persistence"
 
-' ---- Interactions / Relationships ----
 DetectionResultConsumer o-- ReactionService
 ReactionDeadLetterConsumer o-- DroppedReactionService
 
@@ -130,7 +132,7 @@ ResendAlertService ..|> AlertChannel
 SmtpAlertService ..|> AlertChannel
 
 RedisIpBlockService ..|> IpBlockService
-RedisIpBlockService --> EscalatingIpReactionService : uses ALL_ATTEMPT_KEY_PREFIXES
+RedisIpBlockService ..> EscalatingIpReactionService
 RedisRateLimitService ..|> RateLimitService
 RedisScaleService ..|> ScaleService
 

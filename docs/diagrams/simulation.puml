@@ -10,7 +10,6 @@ skinparam DefaultFontSize 23
 hide circle
 hide empty members
 
-' ---- Layout / Together groups ----
 together {
   package "domain.services" {
     class "log_generator" as LogGenerator <<module>>
@@ -108,7 +107,6 @@ together {
   }
 }
 
-' ---- Layer Order ----
 "domain.services" -[hidden]down- application
 application -[hidden]down- "presentation.routers"
 "presentation.routers" -[hidden]down- "infrastructure.ports"
@@ -121,24 +119,19 @@ application -[hidden]right- "application.ports"
 "infrastructure.ports" -[hidden]right- "infrastructure.middleware"
 infrastructure -[hidden]right- "infrastructure.config"
 
-' ---- presentation ----
 SimulationRouter --> SimulationUseCase
 SimulationRouter --> ReplayLoader
 AccessControlRouter --> AdminAuth
 "presentation.routers" ..> "presentation.schemas" : uses
 
-' ---- application ----
 SimulationUseCase --> PublishPort
 SimulationUseCase --> LogGenerator
 SimulationUseCase --> RedisLock
 
-' ---- domain ----
 "domain.services" ..> "domain.models" : uses
 
-' ---- infrastructure adapters ----
 RabbitMQPublisherAdapter ..|> PublishPort
 
-' ---- infrastructure -> config ----
 RabbitMQPublisherAdapter --> Rabbitmq
 AccessControlRouter --> Redis
 AccessControlMiddleware --> Redis
@@ -147,21 +140,11 @@ ReplayLoader ..> Settings : configured via
 Scaler --> Redis
 Scaler --> RedisLock
 
-' ---- DI container wiring ----
-' Container declares two independent singleton SimulationUseCase providers,
-' each with its own namespaced RedisLock (simulation:lock vs baseline:lock):
-' simulation_use_case (namespace "simulation") and baseline_use_case (namespace "baseline").
 Container --> SimulationUseCase : simulation_use_case
 Container --> SimulationUseCase : baseline_use_case
 Container --> RabbitMQPublisherAdapter
 Container --> Settings
 
-' ---- main.py lifespan orchestration ----
-' Owns startup (FlowStatsLoader/init_flow_stats), the scaler background task, and a
-' baseline watchdog task that re-attempts start() if no worker currently owns the
-' baseline (e.g. the original owner was reaped by scale-down) — ownership can move
-' between workers after boot. Shutdown calls baseline stop() only if this worker
-' currently owns the baseline at that moment, not just whoever won the race at boot.
 Main --> Container
 Main --> FlowStatsLoader
 Main --> Scaler

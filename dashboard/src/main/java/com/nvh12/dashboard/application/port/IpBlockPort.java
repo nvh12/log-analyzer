@@ -7,4 +7,5 @@ public interface IpBlockPort {
     List<Map<String, Object>> listBlockedIps();
     List<Map<String, Object>> listRateLimitedIps();
     void liftBlock(String ip);
+    void liftRateLimit(String ip);
 }

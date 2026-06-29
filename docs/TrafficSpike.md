@@ -277,9 +277,9 @@ While short-window detectors (EMA, Z-Score, IQR) excel at finding sudden bursts 
 
 4. **Robust Z-Score**:
    $$
-   Robust\_Z_t = \frac{x_t - \text{median}(h\_median[\text{bucket}_t, \text{last } N \text{ days}])}{0.7413 \times \max(\text{median}(h\_iqr[\ldots]), \text{scale\_floor}) + \epsilon}
+   Robust\_Z_t = \frac{x_t - \text{median}(h\_median[\text{bucket}_t, \text{last } N \text{ days}])}{0.7413 \times \max(\text{median}(h\_iqr[\ldots]), \text{scale\_floor})}
    $$
-   *The factor 0.7413 = 1 / (2 × 0.6745) scales the IQR to be a consistent estimator of the standard deviation for normally distributed data.*
+   *The factor 0.7413 = 1 / (2 × 0.6745) scales the IQR to be a consistent estimator of the standard deviation for normally distributed data. The `scale_floor` (not an additive ε) guards the denominator against near-zero: the floor is applied before the multiplication, so the denominator is always at least `0.7413 × scale_floor > 0`.*
 
 5. **Spike Rule**:
    $$
@@ -382,7 +382,7 @@ For evaluation, we use a combination of real-world datasets and synthetic simula
 ---
 
 ### Project Implementation Note
-The **log-analyzer** implementation for **UC1** specifically utilizes the **Ensemble Rule Engine** combining **EMA**, **Z-Score**, **IQR**, and **Seasonal Baseline (V2)** methods aggregated by **weighted-axis voting**. The system emits per-minute `TrafficResult` records to the `detection.results` fanout exchange (only when an anomaly is declared) with the schema: `anomaly` (binary alert), `confidence` (weighted-vote ratio in [0, 1], i.e. weighted_votes / 3.0), `method_flags` (per-detector booleans — `z_score`, `iqr`, `ema`, `seasonal`), `scored` (false until enough seasonal history exists, in which case Reaction skips alerting), and `severity` (5-level, derived from the weighted-vote magnitude, not a raw flag count). The per-detector continuous scores and the raw weighted-vote total are computed internally by `domain/services/traffic_service.py::detect()` but are not separately persisted — only the boolean `method_flags` and the derived `confidence`/`severity` are. The chosen operating threshold (`min_weighted_chosen`) and the per-detector thresholds/weights are loaded from the `trafficspike/ensemble_calibration.json` calibration artifact in MinIO at startup (falling back to hardcoded `Settings` defaults if the artifact key is absent).
+The **log-analyzer** implementation for **UC1** specifically utilizes the **Ensemble Rule Engine** combining **EMA**, **Z-Score**, **IQR**, and **Seasonal Baseline (V2)** methods aggregated by **weighted-axis voting**. The system emits per-minute `TrafficResult` records to the `detection.results` fanout exchange (only when an anomaly is declared) with the schema: `anomaly` (binary alert), `confidence` (weighted-vote ratio in [0, 1], i.e. weighted_votes / 3.0), `method_flags` (per-detector booleans — `z_score`, `iqr`, `ema`, `seasonal`), `scored` (false until enough seasonal history exists, in which case the detection service skips saving and publishing the result — so Reaction never receives it), and `severity` (5-level, derived from the weighted-vote magnitude, not a raw flag count). The per-detector continuous scores and the raw weighted-vote total are computed internally by `domain/services/traffic_service.py::detect()` but are not separately persisted — only the boolean `method_flags` and the derived `confidence`/`severity` are. The chosen operating threshold (`min_weighted_chosen`) and the per-detector thresholds/weights are loaded from the `trafficspike/ensemble_calibration.json` calibration artifact in MinIO at startup (falling back to hardcoded `Settings` defaults if the artifact key is absent).
 
 # Method Comparison
 
